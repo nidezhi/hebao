@@ -7,7 +7,7 @@ import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.infrastructure.utils.CookieUtil;
 import com.example.dzcom.infrastructure.utils.JwtUtil;
 import com.example.dzcom.application.common.context.UserContext;
-import com.example.dzcom.infrastructure.dao.entity.User;
+import com.example.dzcom.domain.model.User;
 import com.example.dzcom.interfaces.vo.request.LoginRequest;
 import com.example.dzcom.interfaces.vo.response.UserInfoVO;
 import com.example.dzcom.application.service.UserService;
@@ -22,7 +22,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 认证控制器
+ * 认证管理控制器（Interfaces层）
+ * <p>
+ * 提供用户认证相关的 RESTful API 接口，包括登录、登出、获取当前用户信息等功能
+ * 使用 Cookie + JWT + Redis 的认证方案，支持主动登出和 Token 自动过期
+ * </p>
+ *
+ * @author dzcom
+ * @version 1.0
+ * @since 2026-05-30
  */
 @RestController
 @RequestMapping("/api/auth")
