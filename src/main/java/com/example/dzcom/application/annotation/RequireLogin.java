@@ -1,4 +1,4 @@
-package com.example.dzcom.common.annotation;
+package com.example.dzcom.application.annotation;
 
 import java.lang.annotation.*;
 

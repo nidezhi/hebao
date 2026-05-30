@@ -1,4 +1,4 @@
-package com.example.dzcom.config;
+package com.example.dzcom.infrastructure.config;
 
 import com.example.dzcom.interceptor.LoginInterceptor;
 import lombok.RequiredArgsConstructor;

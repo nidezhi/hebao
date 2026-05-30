@@ -1,5 +1,6 @@
-package com.example.dzcom.common.exception;
+package com.example.dzcom.application.common.exception;
 
+import com.example.dzcom.application.common.enums.ResultCode;
 import lombok.Getter;
 
 /**
@@ -20,7 +21,7 @@ public class BusinessException extends RuntimeException {
         this.code = code;
     }
     
-    public BusinessException(com.example.dzcom.common.enums.ResultCode resultCode) {
+    public BusinessException(ResultCode resultCode) {
         super(resultCode.getMessage());
         this.code = resultCode.getCode();
     }

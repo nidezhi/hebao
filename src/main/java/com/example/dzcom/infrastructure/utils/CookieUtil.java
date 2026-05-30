@@ -1,4 +1,4 @@
-package com.example.dzcom.common.utils;
+package com.example.dzcom.infrastructure.utils;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;

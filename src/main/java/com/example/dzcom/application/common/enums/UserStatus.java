@@ -1,4 +1,4 @@
-package com.example.dzcom.common.enums;
+package com.example.dzcom.application.common.enums;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

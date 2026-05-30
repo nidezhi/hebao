@@ -1,4 +1,4 @@
-package com.example.dzcom.common.utils;
+package com.example.dzcom.infrastructure.utils;
 
 import com.alibaba.fastjson2.JSON;
 

@@ -1,4 +1,4 @@
-package com.example.dzcom.common.utils;
+package com.example.dzcom.infrastructure.utils;
 
 import com.alibaba.excel.EasyExcel;
 import jakarta.servlet.http.HttpServletResponse;

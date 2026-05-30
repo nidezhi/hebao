@@ -1,4 +1,4 @@
-package com.example.dzcom.context;
+package com.example.dzcom.application.common.context;
 
 import lombok.Builder;
 import lombok.Data;

@@ -1,4 +1,4 @@
-package com.example.dzcom.common.constant;
+package com.example.dzcom.domain.constant;
 
 /**
  * Redis键前缀常量

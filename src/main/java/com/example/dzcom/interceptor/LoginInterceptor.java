@@ -1,12 +1,12 @@
 package com.example.dzcom.interceptor;
 
 import cn.hutool.core.util.StrUtil;
-import com.example.dzcom.common.annotation.IgnoreLogin;
-import com.example.dzcom.common.constant.RedisKeyConstant;
-import com.example.dzcom.common.exception.BusinessException;
-import com.example.dzcom.common.utils.CookieUtil;
-import com.example.dzcom.common.utils.JwtUtil;
-import com.example.dzcom.context.UserContext;
+import com.example.dzcom.application.annotation.IgnoreLogin;
+import com.example.dzcom.domain.constant.RedisKeyConstant;
+import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.infrastructure.utils.CookieUtil;
+import com.example.dzcom.infrastructure.utils.JwtUtil;
+import com.example.dzcom.application.common.context.UserContext;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

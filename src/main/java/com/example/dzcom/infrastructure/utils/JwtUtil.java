@@ -1,4 +1,4 @@
-package com.example.dzcom.common.utils;
+package com.example.dzcom.infrastructure.utils;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

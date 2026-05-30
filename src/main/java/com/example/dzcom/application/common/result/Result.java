@@ -1,4 +1,4 @@
-package com.example.dzcom.common.result;
+package com.example.dzcom.application.common.result;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

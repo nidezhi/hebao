@@ -1,12 +1,12 @@
 package com.example.dzcom.interfaces.controller;
 
 import cn.hutool.core.bean.BeanUtil;
-import com.example.dzcom.common.annotation.IgnoreLogin;
-import com.example.dzcom.common.constant.RedisKeyConstant;
-import com.example.dzcom.common.result.Result;
-import com.example.dzcom.common.utils.CookieUtil;
-import com.example.dzcom.common.utils.JwtUtil;
-import com.example.dzcom.context.UserContext;
+import com.example.dzcom.application.annotation.IgnoreLogin;
+import com.example.dzcom.domain.constant.RedisKeyConstant;
+import com.example.dzcom.application.common.result.Result;
+import com.example.dzcom.infrastructure.utils.CookieUtil;
+import com.example.dzcom.infrastructure.utils.JwtUtil;
+import com.example.dzcom.application.common.context.UserContext;
 import com.example.dzcom.infrastructure.dao.entity.User;
 import com.example.dzcom.interfaces.vo.request.LoginRequest;
 import com.example.dzcom.interfaces.vo.response.UserInfoVO;

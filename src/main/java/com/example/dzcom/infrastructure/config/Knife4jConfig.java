@@ -1,4 +1,4 @@
-package com.example.dzcom.config;
+package com.example.dzcom.infrastructure.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
