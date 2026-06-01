@@ -1,13 +1,12 @@
 package com.example.dzcom.infrastructure.dao.repository;
 
 import cn.hutool.core.bean.BeanUtil;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.dzcom.domain.model.User;
 import com.example.dzcom.domain.repository.UserRepository;
 import com.example.dzcom.infrastructure.dao.entity.UserEntity;
-import com.example.dzcom.infrastructure.dao.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -18,7 +17,7 @@ import java.util.stream.Collectors;
  * 用户仓储实现（Infrastructure层）
  * <p>
  * 实现领域层定义的 UserRepository 接口，负责用户数据的持久化操作
- * 使用 MyBatis-Plus 进行数据库访问，完成实体与领域模型的转换
+ * 使用 Spring Data JPA 进行数据库访问，完成实体与领域模型的转换
  * </p>
  *
  * @author dzcom
@@ -28,12 +27,12 @@ import java.util.stream.Collectors;
 @Repository
 @RequiredArgsConstructor
 public class UserRepositoryImpl implements UserRepository {
-    
+
     /**
-     * 用户数据访问接口
+     * 用户JPA仓储接口
      */
-    private final UserMapper userMapper;
-    
+    private final UserJpaRepository userJpaRepository;
+
     /**
      * 根据业务ID查询用户
      *
@@ -42,10 +41,10 @@ public class UserRepositoryImpl implements UserRepository {
      */
     @Override
     public Optional<User> findById(String bizId) {
-        UserEntity entity = userMapper.selectById(bizId);
-        return Optional.ofNullable(convertToDomain(entity));
+        return userJpaRepository.findById(bizId)
+            .map(this::convertToDomain);
     }
-    
+
     /**
      * 根据用户名查询用户
      *
@@ -54,13 +53,10 @@ public class UserRepositoryImpl implements UserRepository {
      */
     @Override
     public Optional<User> findByUsername(String username) {
-        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserEntity::getUsername, username)
-               .eq(UserEntity::getIsDeleted, 0);
-        UserEntity entity = userMapper.selectOne(wrapper);
-        return Optional.ofNullable(convertToDomain(entity));
+        return userJpaRepository.findByUsernameAndIsDeleted(username, 0)
+            .map(this::convertToDomain);
     }
-    
+
     /**
      * 根据邮箱查询用户
      *
@@ -69,13 +65,10 @@ public class UserRepositoryImpl implements UserRepository {
      */
     @Override
     public Optional<User> findByEmail(String email) {
-        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserEntity::getEmail, email)
-               .eq(UserEntity::getIsDeleted, 0);
-        UserEntity entity = userMapper.selectOne(wrapper);
-        return Optional.ofNullable(convertToDomain(entity));
+        return userJpaRepository.findByEmailAndIsDeleted(email, 0)
+            .map(this::convertToDomain);
     }
-    
+
     /**
      * 根据手机号查询用户
      *
@@ -84,13 +77,10 @@ public class UserRepositoryImpl implements UserRepository {
      */
     @Override
     public Optional<User> findByPhone(String phone) {
-        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserEntity::getPhone, phone)
-               .eq(UserEntity::getIsDeleted, 0);
-        UserEntity entity = userMapper.selectOne(wrapper);
-        return Optional.ofNullable(convertToDomain(entity));
+        return userJpaRepository.findByPhoneAndIsDeleted(phone, 0)
+            .map(this::convertToDomain);
     }
-    
+
     /**
      * 根据用户编号查询用户
      *
@@ -99,13 +89,10 @@ public class UserRepositoryImpl implements UserRepository {
      */
     @Override
     public Optional<User> findByUserNo(String userNo) {
-        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserEntity::getUserNo, userNo)
-               .eq(UserEntity::getIsDeleted, 0);
-        UserEntity entity = userMapper.selectOne(wrapper);
-        return Optional.ofNullable(convertToDomain(entity));
+        return userJpaRepository.findByUserNoAndIsDeleted(userNo, 0)
+            .map(this::convertToDomain);
     }
-    
+
     /**
      * 保存新用户
      *
@@ -114,11 +101,11 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public void save(User user) {
         UserEntity entity = convertToEntity(user);
-        userMapper.insert(entity);
+        userJpaRepository.save(entity);
         // 回填生成的ID
         user.setBizId(entity.getBizId());
     }
-    
+
     /**
      * 更新用户信息
      *
@@ -127,9 +114,9 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public void update(User user) {
         UserEntity entity = convertToEntity(user);
-        userMapper.updateById(entity);
+        userJpaRepository.save(entity);
     }
-    
+
     /**
      * 删除用户（逻辑删除）
      *
@@ -138,12 +125,13 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public void deleteById(String bizId) {
         // 逻辑删除：设置 is_deleted = 1
-        UserEntity entity = new UserEntity();
-        entity.setBizId(bizId);
-        entity.setIsDeleted(1);
-        userMapper.updateById(entity);
+        findById(bizId).ifPresent(user -> {
+            user.setIsDeleted(1);
+            UserEntity entity = convertToEntity(user);
+            userJpaRepository.save(entity);
+        });
     }
-    
+
     /**
      * 分页查询所有用户
      *
@@ -153,17 +141,20 @@ public class UserRepositoryImpl implements UserRepository {
      */
     @Override
     public List<User> findAll(int pageNum, int pageSize) {
-        Page<UserEntity> page = new Page<>(pageNum, pageSize);
-        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserEntity::getIsDeleted, 0)
-               .orderByDesc(UserEntity::getCreatedAt);
+        PageRequest pageRequest = PageRequest.of(
+            pageNum - 1, 
+            pageSize, 
+            Sort.by(Sort.Direction.DESC, "createdAt")
+        );
         
-        Page<UserEntity> resultPage = userMapper.selectPage(page, wrapper);
-        return resultPage.getRecords().stream()
+        return userJpaRepository.findAllByIsDeletedOrderByCreatedAtDesc(0)
+            .stream()
+            .skip((long) (pageNum - 1) * pageSize)
+            .limit(pageSize)
             .map(this::convertToDomain)
             .collect(Collectors.toList());
     }
-    
+
     /**
      * 统计用户总数
      *
@@ -171,11 +162,9 @@ public class UserRepositoryImpl implements UserRepository {
      */
     @Override
     public long count() {
-        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserEntity::getIsDeleted, 0);
-        return userMapper.selectCount(wrapper);
+        return userJpaRepository.countByIsDeleted(0);
     }
-    
+
     /**
      * 领域模型转实体对象
      * <p>
@@ -191,7 +180,7 @@ public class UserRepositoryImpl implements UserRepository {
         }
         return BeanUtil.copyProperties(domain, UserEntity.class);
     }
-    
+
     /**
      * 实体对象转领域模型
      * <p>

@@ -2,12 +2,18 @@ package com.example.dzcom.interfaces.vo.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 创建用户请求
  */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CreateUserRequest {
     
     @NotBlank(message = "用户名不能为空")

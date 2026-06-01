@@ -14,11 +14,12 @@ package com.example.dzcom.docs_new;
  * 3) 代码开发规范
  * 4) 认证与安全规范（本项目特定）
  * 5) API 设计规范（本项目特定）
- * 6) AI 代码生成规范（边界、幻觉、冗余等限制与缓解策略）
- * 7) 工具链与校验要求
- * 8) PR 与评审检查清单
- * 9) 快速参考（Do / Don't）
- * 10) 参考资料
+ * 6) 对象建模与编码风格规范（本项目特定）
+ * 7) AI 代码生成规范（边界、幻觉、冗余等限制与缓解策略）
+ * 8) 工具链与校验要求
+ * 9) PR 与评审检查清单
+ * 10) 快速参考（Do / Don't）
+ * 11) 参考资料
  *
  * 1) 原则与目标
  * - 高可用性：设计上考虑故障隔离、自动降级与快速恢复；避免单点故障（SPOF）。
@@ -133,7 +134,41 @@ package com.example.dzcom.docs_new;
  *   - 使用 MyBatis-Plus 分页插件
  *   - 返回 Page<T> 对象，包含 total、pages、current、size 等信息
  *
- * 6) AI 代码生成规范（关键限制与缓解策略）
+ * 6) 对象建模与编码风格规范（本项目特定）
+ * - 业务包名组织
+ *   - 按业务域划分子包，避免所有类堆在顶层
+ *   - 示例结构：
+ *     - com.example.dzcom.domain.user (用户聚合根、值对象、仓储接口)
+ *     - com.example.dzcom.application.user.service (用户应用服务)
+ *     - com.example.dzcom.infrastructure.dao.user (用户实体、Mapper、Repository实现)
+ *     - com.example.dzcom.interfaces.controller.user (用户Controller)
+ *   - 当项目超过 3 个业务聚合或单个包文件超过 20 个时，必须按业务分包
+ * - 实体类命名规范
+ *   - Infrastructure 层的数据库实体必须以 Entity 结尾，便于与 Domain 层区分
+ *   - 示例：UserEntity（数据库实体）、User（领域模型）、UserResponse（响应VO）
+ *   - 禁止同名类在不同包中混用，使用完全限定类名或重命名变量
+ * - Builder 模式流转
+ *   - 所有领域对象、DTO、实体类必须支持 Builder 模式
+ *   - 创建对象时优先使用 Builder，避免冗长的构造函数
+ *   - 示例：User.builder().bizId(id).username(name).build()
+ *   - Lombok 注解组合：@Data + @Builder + @NoArgsConstructor + @AllArgsConstructor
+ * - Stream 流式编程
+ *   - 集合转换优先使用 Stream API，提升代码可读性
+ *   - 示例：list.stream().map(this::convertToVO).collect(Collectors.toList())
+ *   - 避免传统的 for 循环进行集合转换
+ * - 注释规范
+ *   - 类级别：说明职责、分层位置、使用的技术、作者信息
+ *   - 方法级别：参数说明、返回值说明、业务流程、异常说明
+ *   - 字段级别：枚举值详细说明、业务规则说明
+ *   - 关键代码行：添加行内注释解释业务逻辑
+ *   - JavaDoc 标准格式：@param、@return、@throws
+ * - 对象转换规范
+ *   - Domain ↔ Infrastructure：使用 BeanUtil.copyProperties 或 MapStruct
+ *   - Domain → Response VO：在 Service 层转换
+ *   - Request DTO → Domain：在 Service 层转换
+ *   - 禁止在 Controller 层进行复杂的对象转换
+ *
+ * 7) AI 代码生成规范（关键限制与缓解策略）
  * 总体原则：将 AI 视作辅助工具，而非自动决策者。所有 AI 生成内容必须由人为复核并通过测试。
  *
  * - 可用场景
@@ -162,14 +197,14 @@ package com.example.dzcom.docs_new;
  * - 持续改进
  *   - 统计 AI 使用指标（生成 PR 数、引入缺陷、节省时间、评审成本），并据此持续优化流程与限制。
  *
- * 7) 工具链与校验要求
+ * 8) 工具链与校验要求
  * - 格式化/静态检查：google-java-format、Checkstyle、SpotBugs、ErrorProne。
  * - 依赖与安全扫描：Dependabot、Snyk 或企业白名单工具。
  * - CI 流水线门禁：编译、测试、格式化、静态分析、许可检查与 AI 元数据检查（PR 模板），必须全部通过才允许合并。
  * - 合约测试：跨服务通信场景可使用 Pact 等合约测试工具。
  * - 可观测性：关键流程必须上报指标与 Trace，缺失关键指标将作为评审失败项。
  *
- * 8) PR 与评审检查清单（简要）
+ * 9) PR 与评审检查清单（简要）
  * - 变更是否使用统一语言并放在正确的有界上下文包中？
  * - 领域规则是否在领域层实现并有单元测试覆盖？
  * - 外部边界（DB/HTTP）是否有集成测试与错误场景处理？
@@ -180,7 +215,7 @@ package com.example.dzcom.docs_new;
  * - 认证相关变更是否经过安全审查？
  * - API 变更是否更新了 Swagger 文档？
  *
- * 9) 快速参考（Do / Don't）
+ * 10) 快速参考（Do / Don't）
  * DO:
  * - 将业务规则保持在领域层并编写单元测试。
  * - 使用描述性命名与小函数，保持代码可读。
@@ -190,6 +225,10 @@ package com.example.dzcom.docs_new;
  * - 使用 UserContext.getCurrentUserId() 获取当前用户。
  * - 使用 Result.success/error 统一响应格式。
  * - 使用 @IgnoreLogin 标记公开接口。
+ * - 使用 Builder 模式创建对象，提升代码可读性。
+ * - 使用 Stream API 进行集合转换，避免传统 for 循环。
+ * - 实体类以 Entity 结尾，明确区分领域模型和数据库实体。
+ * - 按业务域组织包结构，避免所有类堆在顶层。
  * DON'T:
  * - 将密钥/凭据提交到版本库。
  * - 未经审查直接信任 AI 生成代码。
@@ -199,7 +238,7 @@ package com.example.dzcom.docs_new;
  * - 直接操作 HttpServletRequest 获取用户信息（应使用 UserContext）。
  * - 在 Controller 中捕获异常（应由 GlobalExceptionHandler 统一处理）。
  *
- * 10) 参考资料（建议阅读）
+ * 11) 参考资料（建议阅读）
  * - Eric Evans，《Domain-Driven Design》
  * - Vaughn Vernon，《Implementing Domain-Driven Design》
  * - Robert C. Martin，《Clean Code》《Clean Architecture》

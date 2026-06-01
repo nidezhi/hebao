@@ -35,17 +35,15 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-# MyBatis-Plus配置
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-  global-config:
-    db-config:
-      id-type: ASSIGN_UUID
-      logic-delete-field: isDeleted
-      logic-delete-value: 1
-      logic-not-delete-value: 0
+# JPA配置
+spring.jpa:
+  hibernate:
+    ddl-auto: validate  # 生产环境使用validate，开发环境可使用update
+  show-sql: true
+  properties:
+    hibernate:
+      format_sql: true
+      dialect: org.hibernate.dialect.MySQLDialect
 
 # JWT配置
 jwt:
@@ -73,4 +71,5 @@ knife4j:
 logging:
   level:
     com.example.dzcom: DEBUG
-    com.baomidou.mybatisplus: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

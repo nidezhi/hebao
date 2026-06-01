@@ -1,4 +1,4 @@
-package com.example.dzcom.interceptor;
+package com.example.dzcom.infrastructure.config.interceptor;
 
 import cn.hutool.core.util.StrUtil;
 import com.example.dzcom.application.annotation.IgnoreLogin;
