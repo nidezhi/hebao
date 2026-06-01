@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8511
 
 spring:
   application:
@@ -8,7 +8,7 @@ spring:
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/ai_wealth?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/dz_database?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
     password: Nqj##361
     type: com.alibaba.druid.pool.DruidDataSource
@@ -50,22 +50,38 @@ jwt:
   secret: YWlXZWFsdGhTZWNyZXRLZXkyMDI2QEludmVzdA==  # Base64编码的密钥
   expiration: 604800  # 7天（秒）
 
-# Knife4j配置
+# SpringDoc & Swagger UI 配置
 springdoc:
   api-docs:
+    enabled: true
     path: /v3/api-docs
   swagger-ui:
+    enabled: true
     path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
   group-configs:
     - group: 'default'
       paths-to-match: '/api/**'
       packages-to-scan: com.example.dzcom.interfaces.controller
 
+# Knife4j 增强配置
 knife4j:
   enable: true
+  production: false  # 生产环境建议关闭
   setting:
-    language: zh_cn
+    language: zh_cn  # 中文界面
     swagger-model-name: 实体类列表
+    enable-swagger-models: true  # 显示实体类列表
+    enable-document-manage: true  # 启用文档管理
+    enable-home-custom: true  # 启用自定义主页
+    enable-search: true  # 启用搜索功能
+    enable-footer: false  # 隐藏底部信息
+    enable-footer-custom: false  # 禁用自定义底部
+    enable-dynamic-parameter: true  # 启用动态参数
+    enable-debug: true  # 启用调试功能
+    enable-open-api: true  # 启用OpenAPI
+    enable-group: true  # 启用分组
 
 # 日志配置
 logging:

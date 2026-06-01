@@ -112,6 +112,6 @@ public class UserEntity {
      * 逻辑删除标识
      * 0: 未删除, 1: 已删除
      */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "TINYINT")
     private Integer isDeleted;
 }

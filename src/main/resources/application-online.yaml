@@ -1,3 +1,15 @@
 spring:
   application:
-    name: dzcom
+    name: ai-wealth-platform
+
+# SpringDoc & Swagger UI 配置（生产环境禁用）
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# Knife4j 配置（生产环境禁用）
+knife4j:
+  enable: false
+  production: true

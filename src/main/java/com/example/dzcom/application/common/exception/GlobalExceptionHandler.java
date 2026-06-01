@@ -6,6 +6,7 @@ import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理器
@@ -47,6 +48,17 @@ public class GlobalExceptionHandler {
             .orElse("参数绑定失败");
         log.warn("参数绑定异常: {}", message);
         return Result.error(400, message);
+    }
+    
+    /**
+     * 处理静态资源未找到异常（如 favicon.ico）
+     * 这类异常通常是浏览器自动请求导致的，不需要记录为错误
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public Result<Void> handleNoResourceFoundException(NoResourceFoundException e) {
+        // 仅在 debug 级别记录，避免日志污染
+        log.debug("静态资源未找到: {}", e.getResourcePath());
+        return Result.error(404, "资源不存在");
     }
     
     /**
