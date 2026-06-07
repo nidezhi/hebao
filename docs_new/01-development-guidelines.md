@@ -45,31 +45,51 @@
 
 ## 4. 包结构要求
 
-- 采用 DDD 分层，并按业务域继续细分子包。
-- 新增业务代码使用“业务域优先”的组织方式，不再把所有类堆在顶层目录。
+- 第一层必须体现 DDD 领域层级：`domain`、`application`、`infrastructure`、`interfaces`、`common`。
+- 领域层级内部按结构职责拆分，结构职责内部再按业务域拆分。
+- 示例：`domain/model/account` 表示领域模型结构下的账户业务，不能简化为顶层 `model/account`。
+- 禁止以业务域作为第一层复制整套架构，也禁止丢失领域层级直接建立顶层 `entity`、`service`、`controller`。
 
 推荐结构：
 
 ```text
 src/main/java/com/example/dzcom/
-├── application/<context>/
-├── domain/<context>/
-├── interfaces/<context>/
-└── infrastructure/<context>/
+├── domain/
+│   ├── model/<context>/
+│   ├── repository/<context>/
+│   ├── service/<context>/
+│   ├── event/<context>/
+│   └── enums/<context>/
+├── application/
+│   ├── service/<context>/
+│   ├── command/<context>/
+│   ├── query/<context>/
+│   ├── dto/<context>/
+│   └── assembler/<context>/
+├── infrastructure/
+│   ├── persistence/entity/<context>/
+│   ├── persistence/repository/<context>/
+│   ├── security/<context>/
+│   ├── session/<context>/
+│   └── config/
+├── interfaces/
+│   ├── controller/<context>/
+│   ├── request/<context>/
+│   └── response/<context>/
+└── common/
 ```
 
-通用模块仅保留真正跨域复用的能力，例如：
-
-- `application/common`
-- `infrastructure/config`
-- `infrastructure/utils`
+`common` 仅保留真正跨领域复用的异常、响应、分页、常量和稳定能力契约。
 
 ## 5. 编码要求
 
 - 使用明确、完整的业务命名，避免无语义缩写。
+- 类、公共方法、关键字段、业务规则和复杂流程必须有详尽中文注释；注释说明职责、约束、边界或原因，禁止只翻译代码。
 - 单个方法保持单一职责，复杂逻辑拆成清晰的私有方法或领域行为。
 - 值对象优先不可变，在构造时完成校验。
 - 领域对象优先表达行为，不做贫血数据模型。
+- Entity、领域对象、Command、DTO、Request 和 Response 优先提供 Builder，业务代码避免直接调用长参数构造器。
+- 集合的筛选、转换、分组、去重和汇总优先使用 Stream；涉及副作用、事务写入顺序、异常短路或可读性下降时使用命令式代码。
 - 日志记录关键状态变更、失败原因和关联 ID，禁止输出密码、Token、密钥等敏感数据。
 - 配置项一律外置，仓库中不保留明文生产凭据。
 - 默认持久化方案为 Spring Data JPA + Flyway；如需新增 MyBatis 或其他持久化技术，必须先过架构评审。

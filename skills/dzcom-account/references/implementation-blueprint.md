@@ -4,28 +4,27 @@
 
 ```text
 com.example.dzcom
-├── domain/account/
-│   ├── model/
-│   ├── valueobject/
-│   ├── enums/
-│   ├── repository/
-│   └── service/
-├── application/account/
-│   ├── command/
-│   ├── query/
-│   ├── service/
-│   └── assembler/
-├── interfaces/account/
-│   ├── controller/
-│   ├── request/
-│   └── response/
-└── infrastructure/account/
-    ├── persistence/
-    │   ├── entity/
-    │   ├── repository/
-    │   └── mapper/
-    ├── security/
-    └── session/
+├── domain/
+│   ├── model/account/
+│   ├── repository/account/
+│   ├── service/account/
+│   └── enums/account/
+├── application/
+│   ├── service/account/
+│   ├── command/account/
+│   ├── query/account/
+│   ├── dto/account/
+│   └── assembler/account/
+├── infrastructure/
+│   ├── persistence/entity/account/
+│   ├── persistence/repository/account/
+│   ├── security/account/
+│   └── session/account/
+├── interfaces/
+│   ├── controller/account/
+│   ├── request/account/
+│   └── response/account/
+└── common/
 ```
 
 ## 2. 应用服务

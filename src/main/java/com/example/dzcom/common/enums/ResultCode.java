@@ -1,4 +1,4 @@
-package com.example.dzcom.application.common.enums;
+package com.example.dzcom.common.enums;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -39,6 +39,8 @@ public enum ResultCode {
      * 资源不存在
      */
     NOT_FOUND(404, "资源不存在"),
+
+    CONFLICT(409, "资源冲突"),
     
     /**
      * 业务异常

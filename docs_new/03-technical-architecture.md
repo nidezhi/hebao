@@ -55,26 +55,39 @@
 
 ## 5. 代码组织约束
 
-新增业务模块按上下文组织，示例：
+新增业务模块先按 DDD 领域层级组织，再按结构职责和上下文拆分，示例：
 
 ```text
 src/main/java/com/example/dzcom/
-├── application/
-│   └── account/
 ├── domain/
-│   └── account/
+│   ├── model/account/
+│   ├── repository/account/
+│   ├── service/account/
+│   └── enums/account/
+├── application/
+│   ├── service/account/
+│   ├── command/account/
+│   ├── dto/account/
+│   └── assembler/account/
+├── infrastructure/
+│   ├── persistence/entity/account/
+│   ├── persistence/repository/account/
+│   ├── security/account/
+│   └── session/account/
 ├── interfaces/
-│   └── account/
-└── infrastructure/
-    └── account/
+│   ├── controller/account/
+│   ├── request/account/
+│   └── response/account/
+└── common/
 ```
 
 规则：
 
-- `domain/<context>` 只放该业务域的核心规则。
-- `application/<context>` 只放 use case 编排。
-- `interfaces/<context>` 只放 API 协议适配。
-- `infrastructure/<context>` 只放该域的数据访问和外部集成实现。
+- 顶层目录表达 DDD 领域层级，不得省略。
+- `domain/model/<context>` 放领域对象和业务行为。
+- `domain/repository/<context>` 定义仓储端口，`infrastructure/persistence/repository/<context>` 提供实现。
+- `application/service/<context>` 负责编排用例和事务。
+- `interfaces/controller/<context>` 与 `interfaces/request/<context>` 负责 API 协议适配。
 - `common` 目录只存真正跨域复用的能力。
 
 ## 6. 数据与存储架构
