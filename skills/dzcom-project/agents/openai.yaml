@@ -1,0 +1,4 @@
+interface:
+  display_name: "DZCOM 项目"
+  short_description: "用于 DZCOM 项目开发规范、技术架构、数据库设计与迭代交付"
+  default_prompt: "使用 $dzcom-project，依据项目权威文档和开发节奏完成当前任务。"
