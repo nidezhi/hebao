@@ -7,9 +7,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface JpaUserIdentityRepository extends JpaRepository<UserIdentityEntity, String> {
-    Optional<UserIdentityEntity> findByIdentityTypeAndNormalizedValueAndStatusAndDeletedFalse(
-        String identityType, String normalizedValue, int status);
-    Optional<UserIdentityEntity> findByUserBizIdAndIdentityTypeAndDeletedFalse(String userBizId, String identityType);
-    List<UserIdentityEntity> findAllByUserBizIdAndDeletedFalse(String userBizId);
+    Optional<UserIdentityEntity> findByIdentityTypeAndNormalizedValueAndStatusAndDeleted(
+        String identityType, String normalizedValue, int status, int deleted);
+    Optional<UserIdentityEntity> findByUserBizIdAndIdentityTypeAndDeleted(
+        String userBizId, String identityType, int deleted);
+    List<UserIdentityEntity> findAllByUserBizIdAndDeleted(String userBizId, int deleted);
     List<UserIdentityEntity> findAllByUserBizId(String userBizId);
 }

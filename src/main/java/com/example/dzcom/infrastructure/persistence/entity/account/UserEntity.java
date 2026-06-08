@@ -32,7 +32,7 @@ public class UserEntity {
     private String userNo;
 
     /** 账户状态编码：0-禁用，1-正常，2-锁定。 */
-    @Column(nullable = false, columnDefinition = "TINYINT(1)")
+    @Column(nullable = false, columnDefinition = "TINYINT")
     private int status;
 
     /** JPA 乐观锁版本，防止并发更新覆盖。 */
@@ -65,7 +65,7 @@ public class UserEntity {
     private String updatedBy;
 
     /** 逻辑删除标记，删除后常规查询必须排除。 */
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT")
     private int deleted;
 
     /** 执行逻辑删除的 UTC 时间。 */

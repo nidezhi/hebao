@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local secrets ###
+# 本机数据库、Redis 或第三方服务凭据只允许写入该文件，不得提交到版本库。
+/config/application-secrets.yaml

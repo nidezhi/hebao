@@ -4,13 +4,16 @@ server:
 spring:
   application:
     name: ai-wealth-platform
+  config:
+    # 开发机凭据从 Git 忽略的本地文件读取，CI/CD 可继续使用环境变量覆盖。
+    import: optional:file:./config/application-secrets.yaml
 
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${DB_URL:jdbc:mysql://localhost:3306/dz_database?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
-    username: root
-    password: Nqj##361
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       initial-size: 5

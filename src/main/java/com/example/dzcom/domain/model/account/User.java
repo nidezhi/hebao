@@ -68,6 +68,16 @@ public class User {
         return deleted == 0 && status == AccountStatus.ACTIVE;
     }
 
+    /**
+     * 返回用户是否已被逻辑删除。
+     *
+     * <p>领域调用方使用布尔语义判断生命周期，避免在业务代码中传播数据库使用的
+     * {@code 0/1} 存储约定。</p>
+     */
+    public boolean isDeleted() {
+        return deleted == 1;
+    }
+
     /** 由管理或安全用例变更账户状态。 */
     public void changeStatus(AccountStatus target, LocalDateTime now) {
         if (deleted == 1) {

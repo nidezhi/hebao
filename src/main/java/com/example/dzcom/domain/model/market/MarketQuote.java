@@ -1,0 +1,74 @@
+package com.example.dzcom.domain.model.market;
+
+import com.example.dzcom.domain.enums.market.QuoteStatus;
+import lombok.Builder;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * 单个产品在指定数据源、周期和时点的 OHLCV 行情。
+ *
+ * <p>同一业务键的数据由基础设施层执行覆盖式修正，领域对象负责保证价格区间、
+ * 非负成交量以及时间完整性。行情是只追加/修正数据，不与产品聚合建立对象关系。</p>
+ */
+@Builder
+public record MarketQuote(
+    String bizId,
+    String productBizId,
+    String sourceCode,
+    String interval,
+    LocalDateTime quoteTime,
+    BigDecimal openPrice,
+    BigDecimal highPrice,
+    BigDecimal lowPrice,
+    BigDecimal closePrice,
+    BigDecimal previousClosePrice,
+    BigDecimal volume,
+    BigDecimal turnoverAmount,
+    QuoteStatus status,
+    LocalDateTime receivedAt,
+    LocalDateTime createdAt
+) {
+    public MarketQuote {
+        if (productBizId == null || productBizId.isBlank()) {
+            throw new IllegalArgumentException("行情产品业务标识不能为空");
+        }
+        if (sourceCode == null || sourceCode.isBlank()) {
+            throw new IllegalArgumentException("行情数据源不能为空");
+        }
+        if (interval == null || interval.isBlank()) {
+            throw new IllegalArgumentException("行情周期不能为空");
+        }
+        if (quoteTime == null || closePrice == null || closePrice.signum() < 0) {
+            throw new IllegalArgumentException("行情时间和非负收盘价不能为空");
+        }
+        validateNonNegative("开盘价", openPrice);
+        validateNonNegative("最高价", highPrice);
+        validateNonNegative("最低价", lowPrice);
+        validateNonNegative("前收盘价", previousClosePrice);
+        validateNonNegative("成交数量", volume);
+        validateNonNegative("成交金额", turnoverAmount);
+        if (highPrice != null && lowPrice != null && highPrice.compareTo(lowPrice) < 0) {
+            throw new IllegalArgumentException("最高价不能低于最低价");
+        }
+        validateWithinRange("开盘价", openPrice, lowPrice, highPrice);
+        validateWithinRange("收盘价", closePrice, lowPrice, highPrice);
+    }
+
+    private static void validateNonNegative(String field, BigDecimal value) {
+        if (value != null && value.signum() < 0) {
+            throw new IllegalArgumentException(field + "不能为负数");
+        }
+    }
+
+    private static void validateWithinRange(String field, BigDecimal value,
+                                            BigDecimal low, BigDecimal high) {
+        if (value != null && low != null && value.compareTo(low) < 0) {
+            throw new IllegalArgumentException(field + "不能低于最低价");
+        }
+        if (value != null && high != null && value.compareTo(high) > 0) {
+            throw new IllegalArgumentException(field + "不能高于最高价");
+        }
+    }
+}

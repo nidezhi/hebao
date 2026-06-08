@@ -7,8 +7,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface JpaUserPreferenceRepository extends JpaRepository<UserPreferenceEntity, String> {
-    Optional<UserPreferenceEntity> findByUserBizIdAndPreferenceKeyAndDeletedFalse(String userBizId, String key);
+    Optional<UserPreferenceEntity> findByUserBizIdAndPreferenceKeyAndDeleted(
+        String userBizId, String key, int deleted);
     Optional<UserPreferenceEntity> findByUserBizIdAndPreferenceKey(String userBizId, String key);
-    List<UserPreferenceEntity> findAllByUserBizIdAndDeletedFalseOrderByPreferenceKey(String userBizId);
+    List<UserPreferenceEntity> findAllByUserBizIdAndDeletedOrderByPreferenceKey(String userBizId, int deleted);
     List<UserPreferenceEntity> findAllByUserBizId(String userBizId);
 }

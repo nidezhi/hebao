@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
 public interface JpaUserRiskProfileRepository extends JpaRepository<UserRiskProfileEntity, String> {
-    Optional<UserRiskProfileEntity> findByUserBizIdAndDeletedFalse(String userBizId);
+    Optional<UserRiskProfileEntity> findByUserBizIdAndDeleted(String userBizId, int deleted);
     Optional<UserRiskProfileEntity> findByUserBizId(String userBizId);
 }

@@ -57,7 +57,7 @@ public class AccountStoreAdapter implements AccountStore {
 
     @Override
     public Optional<User> findUser(String bizId) {
-        return users.findByBizIdAndDeletedFalse(bizId).map(this::toDomain);
+        return users.findByBizIdAndDeleted(bizId, 0).map(this::toDomain);
     }
 
     @Override
@@ -98,18 +98,21 @@ public class AccountStoreAdapter implements AccountStore {
 
     @Override
     public Optional<LoginIdentity> findIdentity(IdentityType type, String normalizedValue) {
-        return identities.findByIdentityTypeAndNormalizedValueAndStatusAndDeletedFalse(type.name(), normalizedValue, 1)
+        return identities.findByIdentityTypeAndNormalizedValueAndStatusAndDeleted(
+                type.name(), normalizedValue, 1, 0)
             .map(this::toDomain);
     }
 
     @Override
     public Optional<LoginIdentity> findIdentity(String userBizId, IdentityType type) {
-        return identities.findByUserBizIdAndIdentityTypeAndDeletedFalse(userBizId, type.name()).map(this::toDomain);
+        return identities.findByUserBizIdAndIdentityTypeAndDeleted(userBizId, type.name(), 0)
+            .map(this::toDomain);
     }
 
     @Override
     public List<LoginIdentity> findIdentities(String userBizId) {
-        return identities.findAllByUserBizIdAndDeletedFalse(userBizId).stream().map(this::toDomain).toList();
+        return identities.findAllByUserBizIdAndDeleted(userBizId, 0)
+            .stream().map(this::toDomain).toList();
     }
 
     @Override
@@ -138,7 +141,8 @@ public class AccountStoreAdapter implements AccountStore {
 
     @Override
     public Optional<UserCredential> findPasswordCredential(String userBizId) {
-        return credentials.findByUserBizIdAndCredentialTypeAndDeletedFalse(userBizId, "PASSWORD").map(this::toDomain);
+        return credentials.findByUserBizIdAndCredentialTypeAndDeleted(userBizId, "PASSWORD", 0)
+            .map(this::toDomain);
     }
 
     @Override
@@ -165,7 +169,7 @@ public class AccountStoreAdapter implements AccountStore {
 
     @Override
     public Optional<UserProfile> findProfile(String userBizId) {
-        return profiles.findByUserBizIdAndDeletedFalse(userBizId).map(this::toDomain);
+        return profiles.findByUserBizIdAndDeleted(userBizId, 0).map(this::toDomain);
     }
 
     @Override
@@ -193,7 +197,7 @@ public class AccountStoreAdapter implements AccountStore {
 
     @Override
     public Optional<UserRiskProfile> findRiskProfile(String userBizId) {
-        return riskProfiles.findByUserBizIdAndDeletedFalse(userBizId).map(this::toDomain);
+        return riskProfiles.findByUserBizIdAndDeleted(userBizId, 0).map(this::toDomain);
     }
 
     @Override
@@ -218,7 +222,7 @@ public class AccountStoreAdapter implements AccountStore {
 
     @Override
     public List<UserRole> findRoles(String userBizId) {
-        return roles.findAllByUserBizIdAndDeletedFalse(userBizId).stream().map(this::toDomain).toList();
+        return roles.findAllByUserBizIdAndDeleted(userBizId, 0).stream().map(this::toDomain).toList();
     }
 
     @Override
@@ -245,13 +249,13 @@ public class AccountStoreAdapter implements AccountStore {
     public Optional<UserPreference> findPreference(String userBizId, String key, boolean includeDeleted) {
         Optional<UserPreferenceEntity> result = includeDeleted
             ? preferences.findByUserBizIdAndPreferenceKey(userBizId, key)
-            : preferences.findByUserBizIdAndPreferenceKeyAndDeletedFalse(userBizId, key);
+            : preferences.findByUserBizIdAndPreferenceKeyAndDeleted(userBizId, key, 0);
         return result.map(this::toDomain);
     }
 
     @Override
     public List<UserPreference> findPreferences(String userBizId) {
-        return preferences.findAllByUserBizIdAndDeletedFalseOrderByPreferenceKey(userBizId)
+        return preferences.findAllByUserBizIdAndDeletedOrderByPreferenceKey(userBizId, 0)
             .stream().map(this::toDomain).toList();
     }
 
