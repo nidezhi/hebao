@@ -18,6 +18,6 @@ public record LoginIdentity(
     boolean verified,
     boolean active,
     LocalDateTime createdAt,
-    boolean deleted
+    int deleted
 ) {
 }

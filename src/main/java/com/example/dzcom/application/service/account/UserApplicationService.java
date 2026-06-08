@@ -123,7 +123,7 @@ public class UserApplicationService {
                 .normalizedValue(normalized)
                 .verified(existing.verified() && existing.normalizedValue().equals(normalized))
                 .active(true)
-                .deleted(false)
+                .deleted(0)
                 .build())
             .orElseGet(() -> LoginIdentity.builder()
                 .bizId(idGenerator.newBizId())
@@ -134,7 +134,7 @@ public class UserApplicationService {
                 .verified(false)
                 .active(true)
                 .createdAt(clock.now())
-                .deleted(false)
+                .deleted(0)
                 .build());
         store.saveIdentity(identity);
     }

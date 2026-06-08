@@ -15,7 +15,7 @@ public record UserCredential(
     int failedAttempts,
     LocalDateTime lockedUntil,
     LocalDateTime changedAt,
-    boolean deleted
+    int deleted
 ) {
     /** 记录一次认证失败，并按调用方计算结果更新锁定截止时间。 */
     public UserCredential failed(LocalDateTime lockedUntil) {

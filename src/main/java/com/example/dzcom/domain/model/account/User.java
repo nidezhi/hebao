@@ -23,13 +23,13 @@ public class User {
     private LocalDateTime lastLoginAt;
     private final LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private boolean deleted;
+    private int deleted;
     private LocalDateTime deletedAt;
 
     private User(String bizId, String userNo, AccountStatus status, int version,
                  LocalDateTime registeredAt, LocalDateTime lastLoginAt,
                  LocalDateTime createdAt, LocalDateTime updatedAt,
-                 boolean deleted, LocalDateTime deletedAt) {
+                 int deleted, LocalDateTime deletedAt) {
         this.bizId = bizId;
         this.userNo = userNo;
         this.status = status;
@@ -52,7 +52,7 @@ public class User {
             .registeredAt(now)
             .createdAt(now)
             .updatedAt(now)
-            .deleted(false)
+            .deleted(0)
             .build();
     }
 
@@ -65,12 +65,12 @@ public class User {
 
     /** 返回当前账户是否满足登录所需的生命周期状态。 */
     public boolean canLogin() {
-        return !deleted && status == AccountStatus.ACTIVE;
+        return deleted == 0 && status == AccountStatus.ACTIVE;
     }
 
     /** 由管理或安全用例变更账户状态。 */
     public void changeStatus(AccountStatus target, LocalDateTime now) {
-        if (deleted) {
+        if (deleted == 1) {
             throw new IllegalStateException("用户不存在");
         }
         status = target;
@@ -85,8 +85,8 @@ public class User {
 
     /** 幂等执行逻辑删除，同时将账户置为禁用状态。 */
     public void delete(LocalDateTime now) {
-        if (!deleted) {
-            deleted = true;
+        if (deleted == 0) {
+            deleted = 1;
             deletedAt = now;
             status = AccountStatus.DISABLED;
             updatedAt = now;

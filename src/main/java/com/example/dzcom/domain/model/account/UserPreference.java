@@ -13,6 +13,6 @@ public record UserPreference(
     String valueType,
     String jsonValue,
     LocalDateTime updatedAt,
-    boolean deleted
+    int deleted
 ) {
 }

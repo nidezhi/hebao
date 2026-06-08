@@ -33,6 +33,6 @@ public class UserProfileEntity {
     private LocalDateTime createdAt;
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-    @Column(name = "is_deleted", nullable = false)
-    private boolean deleted;
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT(1)")
+    private int deleted;
 }

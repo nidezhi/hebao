@@ -4,13 +4,13 @@ server:
 spring:
   application:
     name: ai-wealth-platform
-  
+
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${DB_URL:jdbc:mysql://localhost:3306/ai_wealth?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/dz_database?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: root
+    password: Nqj##361
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       initial-size: 5
@@ -20,7 +20,7 @@ spring:
       stat-view-servlet:
         enabled: true
         url-pattern: /druid/*
-  
+
   # Redis配置
   data:
     redis:
@@ -28,7 +28,7 @@ spring:
       port: 6379
       database: 0
       timeout: 3000ms
-  
+
   # Flyway配置
   flyway:
     enabled: true
@@ -64,3 +64,4 @@ logging:
   level:
     com.example.dzcom: DEBUG
     org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

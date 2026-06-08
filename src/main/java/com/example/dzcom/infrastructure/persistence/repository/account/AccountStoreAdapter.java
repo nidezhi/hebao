@@ -49,7 +49,7 @@ public class AccountStoreAdapter implements AccountStore {
             .lastLoginAt(user.getLastLoginAt())
             .createdAt(user.getCreatedAt())
             .updatedAt(user.getUpdatedAt())
-            .deleted(user.isDeleted())
+            .deleted(user.getDeleted())
             .deletedAt(user.getDeletedAt())
             .build();
         return toDomain(users.save(entity));
@@ -257,12 +257,12 @@ public class AccountStoreAdapter implements AccountStore {
 
     @Override
     public void softDeleteAccountData(String userBizId) {
-        identities.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(true));
-        credentials.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(true));
-        profiles.findByUserBizId(userBizId).ifPresent(entity -> entity.setDeleted(true));
-        riskProfiles.findByUserBizId(userBizId).ifPresent(entity -> entity.setDeleted(true));
-        roles.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(true));
-        preferences.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(true));
+        identities.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(1));
+        credentials.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(1));
+        profiles.findByUserBizId(userBizId).ifPresent(entity -> entity.setDeleted(1));
+        riskProfiles.findByUserBizId(userBizId).ifPresent(entity -> entity.setDeleted(1));
+        roles.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(1));
+        preferences.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(1));
     }
 
     private User toDomain(UserEntity entity) {
@@ -275,7 +275,7 @@ public class AccountStoreAdapter implements AccountStore {
             .lastLoginAt(entity.getLastLoginAt())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
-            .deleted(entity.isDeleted())
+            .deleted(entity.getDeleted())
             .deletedAt(entity.getDeletedAt())
             .build();
     }
@@ -290,7 +290,7 @@ public class AccountStoreAdapter implements AccountStore {
             .verified(entity.isVerified())
             .active(entity.getStatus() == 1)
             .createdAt(entity.getCreatedAt())
-            .deleted(entity.isDeleted())
+            .deleted(entity.getDeleted())
             .build();
     }
 
@@ -304,7 +304,7 @@ public class AccountStoreAdapter implements AccountStore {
             .failedAttempts(entity.getFailedAttempts())
             .lockedUntil(entity.getLockedUntil())
             .changedAt(entity.getChangedAt())
-            .deleted(entity.isDeleted())
+            .deleted(entity.getDeleted())
             .build();
     }
 
@@ -316,7 +316,7 @@ public class AccountStoreAdapter implements AccountStore {
             .avatarUrl(entity.getAvatarUrl())
             .locale(entity.getLocale())
             .timezone(entity.getTimezone())
-            .deleted(entity.isDeleted())
+            .deleted(entity.getDeleted())
             .build();
     }
 
@@ -329,7 +329,7 @@ public class AccountStoreAdapter implements AccountStore {
             .assessmentVersion(entity.getAssessmentVersion())
             .assessedAt(entity.getAssessedAt())
             .kycReviewedAt(entity.getKycReviewedAt())
-            .deleted(entity.isDeleted())
+            .deleted(entity.getDeleted())
             .build();
     }
 
@@ -341,7 +341,7 @@ public class AccountStoreAdapter implements AccountStore {
             .scopeCode(entity.getScopeCode())
             .effectiveFrom(entity.getEffectiveFrom())
             .effectiveTo(entity.getEffectiveTo())
-            .deleted(entity.isDeleted())
+            .deleted(entity.getDeleted())
             .build();
     }
 
@@ -353,7 +353,7 @@ public class AccountStoreAdapter implements AccountStore {
             .valueType(entity.getValueType())
             .jsonValue(entity.getPreferenceValue())
             .updatedAt(entity.getUpdatedAt())
-            .deleted(entity.isDeleted())
+            .deleted(entity.getDeleted())
             .build();
     }
 

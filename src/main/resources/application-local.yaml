@@ -8,9 +8,9 @@ spring:
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${DB_URL:jdbc:mysql://localhost:3306/ai_wealth?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/dz_database?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: root
+    password: Nqj##361
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       initial-size: 5

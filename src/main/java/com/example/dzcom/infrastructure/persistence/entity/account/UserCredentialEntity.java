@@ -69,6 +69,6 @@ public class UserCredentialEntity {
     private LocalDateTime updatedAt;
 
     /** 逻辑删除标记。 */
-    @Column(name = "is_deleted", nullable = false)
-    private boolean deleted;
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT(1)")
+    private int deleted;
 }

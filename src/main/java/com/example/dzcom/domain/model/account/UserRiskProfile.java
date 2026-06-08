@@ -15,7 +15,7 @@ public record UserRiskProfile(
     String assessmentVersion,
     LocalDateTime assessedAt,
     LocalDateTime kycReviewedAt,
-    boolean deleted
+    int deleted
 ) {
     /** 更新 KYC 状态并记录审核时间。 */
     public UserRiskProfile changeKycStatus(KycStatus target, LocalDateTime now) {

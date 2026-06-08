@@ -31,6 +31,6 @@ public class UserRoleEntity {
     private LocalDateTime createdAt;
     @Column(name = "created_by", length = 64)
     private String createdBy;
-    @Column(name = "is_deleted", nullable = false)
-    private boolean deleted;
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT(1)")
+    private int deleted;
 }

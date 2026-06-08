@@ -58,7 +58,7 @@ public class AccountRegistrationService {
                 .credentialVersion(1)
                 .failedAttempts(0)
                 .changedAt(now)
-                .deleted(false)
+                .deleted(0)
                 .build());
             store.saveProfile(UserProfile.builder()
                 .bizId(idGenerator.newBizId())
@@ -66,14 +66,14 @@ public class AccountRegistrationService {
                 .nickname(command.nickname())
                 .locale("zh-CN")
                 .timezone("Asia/Shanghai")
-                .deleted(false)
+                .deleted(0)
                 .build());
             store.saveRiskProfile(UserRiskProfile.builder()
                 .bizId(idGenerator.newBizId())
                 .userBizId(user.getBizId())
                 .kycStatus(KycStatus.UNVERIFIED)
                 .riskLevel(1)
-                .deleted(false)
+                .deleted(0)
                 .build());
             store.saveRole(UserRole.builder()
                 .bizId(idGenerator.newBizId())
@@ -81,7 +81,7 @@ public class AccountRegistrationService {
                 .roleCode(command.initialRole() == null ? "USER" : command.initialRole())
                 .scopeCode("GLOBAL")
                 .effectiveFrom(now)
-                .deleted(false)
+                .deleted(0)
                 .build());
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(HttpStatus.CONFLICT, "用户名、邮箱或手机号已存在");
@@ -115,7 +115,7 @@ public class AccountRegistrationService {
             .verified(type == IdentityType.USERNAME)
             .active(true)
             .createdAt(now)
-            .deleted(false)
+            .deleted(0)
             .build());
     }
 

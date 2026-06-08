@@ -52,7 +52,7 @@ public class UserPreferenceApplicationService {
             .valueType(valueType(value))
             .jsonValue(value.toString())
             .updatedAt(clock.now())
-            .deleted(false)
+            .deleted(0)
             .build();
         return toView(store.savePreference(preference));
     }
@@ -62,7 +62,7 @@ public class UserPreferenceApplicationService {
         validateKey(key);
         String userBizId = currentOperator.required().userBizId();
         store.findPreference(userBizId, key, false).ifPresent(existing ->
-            store.savePreference(existing.toBuilder().updatedAt(clock.now()).deleted(true).build()));
+            store.savePreference(existing.toBuilder().updatedAt(clock.now()).deleted(1).build()));
     }
 
     private PreferenceView toView(UserPreference preference) {

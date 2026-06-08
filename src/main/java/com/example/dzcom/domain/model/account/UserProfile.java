@@ -11,6 +11,6 @@ public record UserProfile(
     String avatarUrl,
     String locale,
     String timezone,
-    boolean deleted
+    int deleted
 ) {
 }

@@ -13,6 +13,6 @@ public record UserRole(
     String scopeCode,
     LocalDateTime effectiveFrom,
     LocalDateTime effectiveTo,
-    boolean deleted
+    int deleted
 ) {
 }
