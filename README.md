@@ -62,3 +62,9 @@ spring:
 ```bash
 ./mvnw test
 ```
+
+使用 `local` 或 `dev` profile 启动后，可访问：
+
+- Knife4j：`http://localhost:8511/doc.html`
+- Swagger UI：`http://localhost:8511/swagger-ui.html`
+- OpenAPI JSON：`http://localhost:8511/v3/api-docs`

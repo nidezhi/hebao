@@ -19,9 +19,9 @@ public class UserRiskProfileEntity {
     private String bizId;
     @Column(name = "user_biz_id", nullable = false, length = 36)
     private String userBizId;
-    @Column(name = "kyc_status", nullable = false)
+    @Column(name = "kyc_status", nullable = false, columnDefinition = "TINYINT")
     private int kycStatus;
-    @Column(name = "risk_level", nullable = false)
+    @Column(name = "risk_level", nullable = false, columnDefinition = "TINYINT")
     private int riskLevel;
     @Column(name = "assessment_version", length = 32)
     private String assessmentVersion;

@@ -8,3 +8,7 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+# 生产环境默认关闭 Knife4j，避免无意暴露接口结构和调试入口。
+knife4j:
+  enable: false

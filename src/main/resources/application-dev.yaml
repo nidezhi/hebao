@@ -62,6 +62,10 @@ springdoc:
       paths-to-match: '/api/**'
       packages-to-scan: com.example.dzcom.interfaces.controller
 
+# Knife4j 独立 UI 开关；OpenAPI 数据由 SpringDoc 3 生成。
+knife4j:
+  enable: true
+
 # 日志配置
 logging:
   level:

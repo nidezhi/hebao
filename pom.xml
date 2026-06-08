@@ -33,6 +33,8 @@
         <easyexcel.version>3.3.3</easyexcel.version>
         <druid.version>1.2.20</druid.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <knife4j.version>4.5.0</knife4j.version>
+        <springdoc.version>3.0.3</springdoc.version>
     </properties>
     <dependencies>
         <!-- ========== Web & MVC ========== -->
@@ -51,11 +53,21 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
-        <!-- ========== API Documentation: use springdoc starter compatible with Spring Boot 4 -->
+        <!-- ========== API Documentation ========== -->
+        <!--
+            Knife4j 4.5 的后端增强模块依赖 SpringDoc 2.x API，与 SpringDoc 3 不兼容。
+            Spring Boot 4 项目仅引入独立 UI，由兼容的 SpringDoc 3 继续生成 OpenAPI。
+        -->
+        <dependency>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>knife4j-openapi3-ui</artifactId>
+            <version>${knife4j.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>3.0.3</version>
+            <version>${springdoc.version}</version>
         </dependency>
 
         <!-- ========== Database ========== -->

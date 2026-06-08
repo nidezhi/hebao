@@ -63,6 +63,11 @@ springdoc:
       paths-to-match: '/api/**'
       packages-to-scan: com.example.dzcom.interfaces.controller
 
+# Knife4j 独立 UI 开关。
+# Spring Boot 4 使用 SpringDoc 3 生成文档数据，Knife4j 提供 /doc.html 展示界面。
+knife4j:
+  enable: true
+
 # 日志配置
 logging:
   level:

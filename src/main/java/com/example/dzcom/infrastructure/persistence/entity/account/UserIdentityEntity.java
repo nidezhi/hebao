@@ -30,11 +30,11 @@ public class UserIdentityEntity {
     private String identityValue;
     @Column(name = "normalized_value", nullable = false, length = 256)
     private String normalizedValue;
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TINYINT")
     private boolean verified;
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TINYINT")
     private int status;
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
