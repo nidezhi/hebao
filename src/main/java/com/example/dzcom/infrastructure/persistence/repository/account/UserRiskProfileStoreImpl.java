@@ -4,7 +4,7 @@ import com.example.dzcom.domain.enums.account.KycStatus;
 import com.example.dzcom.domain.model.account.UserRiskProfile;
 import com.example.dzcom.domain.repository.account.UserRiskProfileStore;
 import com.example.dzcom.infrastructure.persistence.entity.account.UserRiskProfileEntity;
-import jakarta.persistence.EntityManager;
+import com.example.dzcom.infrastructure.persistence.mapper.account.UserRiskProfileMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -17,8 +17,8 @@ import java.util.Optional;
 @Repository
 @RequiredArgsConstructor
 public class UserRiskProfileStoreImpl implements UserRiskProfileStore {
-    /** JPA 实体管理器。 */
-    private final EntityManager entityManager;
+    /** MyBatis 风险画像执行器。 */
+    private final UserRiskProfileMapper mapper;
 
     /**
      * 保存用户风险画像。
@@ -28,7 +28,7 @@ public class UserRiskProfileStoreImpl implements UserRiskProfileStore {
      */
     @Override
     public UserRiskProfile save(UserRiskProfile value) {
-        UserRiskProfileEntity existing = entityManager.find(UserRiskProfileEntity.class, value.bizId());
+        UserRiskProfileEntity existing = mapper.selectById(value.bizId());
         LocalDateTime now = LocalDateTime.now();
         UserRiskProfileEntity entity = Optional.ofNullable(existing)
             .map(UserRiskProfileEntity::toBuilder)
@@ -44,7 +44,8 @@ public class UserRiskProfileStoreImpl implements UserRiskProfileStore {
             .updatedAt(now)
             .deleted(value.deleted())
             .build();
-        return toDomain(entityManager.merge(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
@@ -65,10 +66,7 @@ public class UserRiskProfileStoreImpl implements UserRiskProfileStore {
      */
     @Override
     public void softDeleteByUserBizId(String userBizId) {
-        findEntityByUserBizId(userBizId, true)
-            .map(UserRiskProfileEntity::toBuilder)
-            .map(builder -> builder.deleted(1).build())
-            .ifPresent(entityManager::merge);
+        mapper.softDeleteByUserBizId(userBizId);
     }
 
     /**
@@ -79,13 +77,7 @@ public class UserRiskProfileStoreImpl implements UserRiskProfileStore {
      * @return 风险画像实体
      */
     private Optional<UserRiskProfileEntity> findEntityByUserBizId(String userBizId, boolean includeDeleted) {
-        String jpql = includeDeleted
-            ? "select r from UserRiskProfileEntity r where r.userBizId = :userBizId"
-            : "select r from UserRiskProfileEntity r where r.userBizId = :userBizId and r.deleted = 0";
-        return entityManager.createQuery(jpql, UserRiskProfileEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultStream()
-            .findFirst();
+        return Optional.ofNullable(mapper.selectByUserBizId(userBizId, includeDeleted));
     }
 
     /**

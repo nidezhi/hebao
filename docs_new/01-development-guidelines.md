@@ -40,8 +40,8 @@
 ### 3.4 基础设施层
 
 - 提供仓储实现、数据库访问、缓存、消息、外部服务集成、定时任务等技术能力。
-- 可以依赖 JPA、Redis、HTTP Client、消息中间件等技术框架。
-- 不能把 ORM 细节反向泄露到领域模型。
+- 可以依赖 MyBatis、Redis、HTTP Client、消息中间件等技术框架。
+- 不能把数据库访问细节反向泄露到领域模型。
 
 ## 4. 包结构要求
 
@@ -107,7 +107,8 @@ src/main/java/com/example/dzcom/
 - 集合的筛选、转换、分组、去重和汇总优先使用 Stream；涉及副作用、事务写入顺序、异常短路或可读性下降时使用命令式代码。
 - 日志记录关键状态变更、失败原因和关联 ID，禁止输出密码、Token、密钥等敏感数据。
 - 配置项一律外置，仓库中不保留明文生产凭据。
-- 默认持久化方案为 Spring Data JPA + Flyway；如需新增 MyBatis 或其他持久化技术，必须先过架构评审。
+- 默认持久化方案为 MyBatis Mapper XML + Flyway；每个持久化实体必须具有独立 Mapper Java 接口和同名 XML。
+- 禁止使用 JPA、EntityManager、JPQL、QueryWrapper、BaseMapper 内置 CRUD 或在 Java 注解中编写 SQL。
 
 ## 6. API 与安全要求
 

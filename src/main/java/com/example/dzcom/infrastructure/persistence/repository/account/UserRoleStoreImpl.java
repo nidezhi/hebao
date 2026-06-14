@@ -3,7 +3,7 @@ package com.example.dzcom.infrastructure.persistence.repository.account;
 import com.example.dzcom.domain.model.account.UserRole;
 import com.example.dzcom.domain.repository.account.UserRoleStore;
 import com.example.dzcom.infrastructure.persistence.entity.account.UserRoleEntity;
-import jakarta.persistence.EntityManager;
+import com.example.dzcom.infrastructure.persistence.mapper.account.UserRoleMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -17,8 +17,8 @@ import java.util.Optional;
 @Repository
 @RequiredArgsConstructor
 public class UserRoleStoreImpl implements UserRoleStore {
-    /** JPA 实体管理器。 */
-    private final EntityManager entityManager;
+    /** MyBatis 用户角色执行器。 */
+    private final UserRoleMapper mapper;
 
     /**
      * 保存用户角色。
@@ -28,7 +28,7 @@ public class UserRoleStoreImpl implements UserRoleStore {
      */
     @Override
     public UserRole save(UserRole value) {
-        UserRoleEntity existing = entityManager.find(UserRoleEntity.class, value.bizId());
+        UserRoleEntity existing = mapper.selectById(value.bizId());
         LocalDateTime createdAt = Optional.ofNullable(existing)
             .map(UserRoleEntity::getCreatedAt)
             .orElse(value.effectiveFrom());
@@ -44,7 +44,8 @@ public class UserRoleStoreImpl implements UserRoleStore {
             .createdAt(createdAt)
             .deleted(value.deleted())
             .build();
-        return toDomain(entityManager.merge(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
@@ -67,10 +68,7 @@ public class UserRoleStoreImpl implements UserRoleStore {
      */
     @Override
     public void softDeleteByUserBizId(String userBizId) {
-        findEntitiesByUserBizId(userBizId, true).stream()
-            .map(UserRoleEntity::toBuilder)
-            .map(builder -> builder.deleted(1).build())
-            .forEach(entityManager::merge);
+        mapper.softDeleteByUserBizId(userBizId);
     }
 
     /**
@@ -81,12 +79,7 @@ public class UserRoleStoreImpl implements UserRoleStore {
      * @return 用户角色实体列表
      */
     private List<UserRoleEntity> findEntitiesByUserBizId(String userBizId, boolean includeDeleted) {
-        String jpql = includeDeleted
-            ? "select r from UserRoleEntity r where r.userBizId = :userBizId"
-            : "select r from UserRoleEntity r where r.userBizId = :userBizId and r.deleted = 0";
-        return entityManager.createQuery(jpql, UserRoleEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultList();
+        return mapper.selectByUserBizId(userBizId, includeDeleted);
     }
 
     /**

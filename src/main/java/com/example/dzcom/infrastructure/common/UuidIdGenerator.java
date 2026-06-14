@@ -1,6 +1,6 @@
 package com.example.dzcom.infrastructure.common;
 
-import com.example.dzcom.common.service.IdGenerator;
+import com.example.dzcom.application.common.service.IdGenerator;
 import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;

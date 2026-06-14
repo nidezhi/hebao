@@ -1,9 +1,9 @@
 package com.example.dzcom.application.service.account;
 
 import com.example.dzcom.application.dto.account.PreferenceView;
-import com.example.dzcom.common.exception.BusinessException;
-import com.example.dzcom.common.service.ClockProvider;
-import com.example.dzcom.common.service.IdGenerator;
+import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.common.service.ClockProvider;
+import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.domain.model.account.UserPreference;
 import com.example.dzcom.domain.repository.account.UserPreferenceStore;
 import com.fasterxml.jackson.core.JsonProcessingException;

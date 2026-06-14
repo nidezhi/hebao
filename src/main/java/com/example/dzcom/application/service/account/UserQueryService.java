@@ -2,15 +2,14 @@ package com.example.dzcom.application.service.account;
 
 import com.example.dzcom.application.assembler.account.AccountViewAssembler;
 import com.example.dzcom.application.dto.account.UserView;
-import com.example.dzcom.common.exception.BusinessException;
-import com.example.dzcom.common.page.PageQuery;
-import com.example.dzcom.common.page.PageResult;
+import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.common.page.PageQuery;
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.domain.enums.account.AccountStatus;
 import com.example.dzcom.domain.enums.account.KycStatus;
 import com.example.dzcom.domain.model.account.User;
 import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.domain.repository.account.UserSearchCriteria;
-import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

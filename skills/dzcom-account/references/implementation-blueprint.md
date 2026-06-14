@@ -75,7 +75,7 @@ com.example.dzcom
 - `PageQuery` 与 `PageResult`：隔离 Spring Data 分页类型。
 - `IdentityNormalizer`：按用户名、邮箱、手机号类型进行标准化。
 
-禁止创建 `BaseCrudService<T>`、依赖 JPA Entity 的通用业务 Service 和万能动态查询 Service。
+禁止创建 `BaseCrudService<T>`、依赖持久化 Entity 的通用业务 Service 和万能动态查询 Service。
 
 ## 4. 仓储接口
 
@@ -101,11 +101,11 @@ com.example.dzcom
 | `UserRoleEntity` | `aiw_user_role` |
 | `UserPreferenceEntity` | `aiw_user_preference` |
 
-- Entity 之间不使用 `@ManyToOne`、`@OneToMany`、`CascadeType` 或 `orphanRemoval`。
+- Entity 之间不建立持久化对象关系或级联操作。
 - 逻辑关联只映射为 `String userBizId` 等标量字段。
 - 领域对象与 Entity 的映射器位于基础设施层，不使用反射式 Bean Copy。
 - 查询响应由应用层 assembler 组装，不把 Entity 暴露给 Controller。
-- `aiw_user.version` 映射为 JPA `@Version`。
+- `aiw_user.version` 由 Mapper XML 显式读写，不依赖 ORM 乐观锁注解。
 
 ## 6. 关键用例事务
 

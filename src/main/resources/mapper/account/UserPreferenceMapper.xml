@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.account.UserPreferenceMapper">
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserPreferenceEntity">
+        select * from aiw_user_preference where biz_id = #{bizId}
+    </select>
+    <select id="selectByUserBizIdAndKey" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserPreferenceEntity">
+        select * from aiw_user_preference
+        where user_biz_id = #{userBizId} and preference_key = #{key}
+        <if test="!includeDeleted">and is_deleted = 0</if>
+    </select>
+    <select id="selectByUserBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserPreferenceEntity">
+        select * from aiw_user_preference
+        where user_biz_id = #{userBizId} and is_deleted = 0
+        order by preference_key
+    </select>
+    <insert id="save">
+        insert into aiw_user_preference
+        (biz_id, user_biz_id, preference_key, value_type, preference_value,
+         created_at, updated_at, is_deleted)
+        values
+        (#{bizId}, #{userBizId}, #{preferenceKey}, #{valueType}, #{preferenceValue},
+         #{createdAt}, #{updatedAt}, #{deleted})
+        on duplicate key update
+        value_type = values(value_type), preference_value = values(preference_value),
+        updated_at = values(updated_at), is_deleted = values(is_deleted)
+    </insert>
+    <update id="softDeleteByUserBizId">
+        update aiw_user_preference set is_deleted = 1 where user_biz_id = #{userBizId}
+    </update>
+</mapper>

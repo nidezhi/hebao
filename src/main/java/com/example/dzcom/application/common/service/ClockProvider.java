@@ -1,4 +1,4 @@
-package com.example.dzcom.common.service;
+package com.example.dzcom.application.common.service;
 
 import java.time.LocalDateTime;
 

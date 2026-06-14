@@ -2,9 +2,9 @@ package com.example.dzcom.application.service.product;
 
 import com.example.dzcom.application.assembler.product.ProductViewAssembler;
 import com.example.dzcom.application.dto.product.ProductView;
-import com.example.dzcom.common.exception.BusinessException;
-import com.example.dzcom.common.page.PageQuery;
-import com.example.dzcom.common.page.PageResult;
+import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.common.page.PageQuery;
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.domain.enums.product.ProductTradeStatus;
 import com.example.dzcom.domain.enums.product.ProductType;
 import com.example.dzcom.domain.model.product.Product;
@@ -44,7 +44,7 @@ public class ProductQueryService {
     }
 
     /**
-     * 按白名单字段分页查询产品，阻断任意排序字段进入 JPA。
+     * 按白名单字段分页查询产品，阻断任意排序字段进入 Mapper XML。
      *
      * @param keyword 模糊查询关键字
      * @param productType productType 参数

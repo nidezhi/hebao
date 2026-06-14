@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.account.UserRiskProfileMapper">
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserRiskProfileEntity">
+        select * from aiw_user_risk_profile where biz_id = #{bizId}
+    </select>
+    <select id="selectByUserBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserRiskProfileEntity">
+        select * from aiw_user_risk_profile where user_biz_id = #{userBizId}
+        <if test="!includeDeleted">and is_deleted = 0</if>
+    </select>
+    <insert id="save">
+        insert into aiw_user_risk_profile
+        (biz_id, user_biz_id, kyc_status, risk_level, assessment_version, assessed_at,
+         kyc_reviewed_at, created_at, updated_at, is_deleted)
+        values
+        (#{bizId}, #{userBizId}, #{kycStatus}, #{riskLevel}, #{assessmentVersion}, #{assessedAt},
+         #{kycReviewedAt}, #{createdAt}, #{updatedAt}, #{deleted})
+        on duplicate key update
+        kyc_status = values(kyc_status), risk_level = values(risk_level),
+        assessment_version = values(assessment_version), assessed_at = values(assessed_at),
+        kyc_reviewed_at = values(kyc_reviewed_at), updated_at = values(updated_at),
+        is_deleted = values(is_deleted)
+    </insert>
+    <update id="softDeleteByUserBizId">
+        update aiw_user_risk_profile set is_deleted = 1 where user_biz_id = #{userBizId}
+    </update>
+</mapper>

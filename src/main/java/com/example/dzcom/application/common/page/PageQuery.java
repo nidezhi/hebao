@@ -1,6 +1,6 @@
-package com.example.dzcom.common.page;
+package com.example.dzcom.application.common.page;
 
-import com.example.dzcom.common.exception.BusinessException;
+import com.example.dzcom.application.common.exception.BusinessException;
 import org.springframework.http.HttpStatus;
 
 import java.util.Set;

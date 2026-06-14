@@ -1,6 +1,9 @@
 package com.example.dzcom.infrastructure.persistence.entity.account;
 
-import jakarta.persistence.*;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -11,35 +14,24 @@ import java.time.LocalDateTime;
  * <p>{@code normalizedValue} 用于登录查询和唯一性判断，
  * {@code identityValue} 只用于经过权限控制后的展示。</p>
  */
-@Entity
-@Table(name = "aiw_user_identity")
+@TableName("aiw_user_identity")
 @Getter
 @Setter
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class UserIdentityEntity {
-    @Id
-    @Column(name = "biz_id", length = 36)
+    @TableId(value = "biz_id", type = IdType.INPUT)
     private String bizId;
-    @Column(name = "user_biz_id", nullable = false, length = 36)
     private String userBizId;
-    @Column(name = "identity_type", nullable = false, length = 32)
     private String identityType;
-    @Column(name = "identity_value", nullable = false, length = 256)
     private String identityValue;
-    @Column(name = "normalized_value", nullable = false, length = 256)
     private String normalizedValue;
-    @Column(nullable = false, columnDefinition = "TINYINT")
     private boolean verified;
-    @Column(name = "verified_at")
     private LocalDateTime verifiedAt;
-    @Column(nullable = false, columnDefinition = "TINYINT")
     private int status;
-    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
-    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-    @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT")
+    @TableField("is_deleted")
     private int deleted;
 }

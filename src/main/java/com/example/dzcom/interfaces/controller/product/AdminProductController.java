@@ -4,11 +4,12 @@ import com.example.dzcom.application.command.market.SaveMarketQuoteCommand;
 import com.example.dzcom.application.command.product.CreateProductCommand;
 import com.example.dzcom.application.command.product.SaveProductAttributeCommand;
 import com.example.dzcom.application.command.product.UpdateProductCommand;
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.dto.market.MarketQuoteView;
 import com.example.dzcom.application.dto.product.ProductView;
 import com.example.dzcom.application.service.market.MarketQuoteApplicationService;
 import com.example.dzcom.application.service.product.ProductApplicationService;
-import com.example.dzcom.common.result.Result;
+import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.interfaces.request.market.SaveMarketQuoteRequest;
 import com.example.dzcom.interfaces.request.product.CreateProductRequest;
 import com.example.dzcom.interfaces.request.product.ProductAttributeRequest;
@@ -41,7 +42,7 @@ public class AdminProductController {
      *
      * @param request 产品基础资料和交易参数
      * @return 创建后的产品信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品编码冲突或参数不符合规则时抛出
+     * @throws BusinessException 当产品编码冲突或参数不符合规则时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -70,7 +71,7 @@ public class AdminProductController {
      *
      * @param request 产品业务标识和待更新资料
      * @return 更新后的产品信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品不存在或参数不符合规则时抛出
+     * @throws BusinessException 当产品不存在或参数不符合规则时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -95,7 +96,7 @@ public class AdminProductController {
      *
      * @param request 产品业务标识和目标交易状态
      * @return 状态变更后的产品信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品不存在或状态转换不合法时抛出
+     * @throws BusinessException 当产品不存在或状态转换不合法时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -110,7 +111,7 @@ public class AdminProductController {
      *
      * @param request 产品业务标识和扩展属性内容
      * @return 保存属性后的产品信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品不存在或属性值不合法时抛出
+     * @throws BusinessException 当产品不存在或属性值不合法时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -131,7 +132,7 @@ public class AdminProductController {
      *
      * @param request 产品业务标识和标准行情数据
      * @return 保存后的行情信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品不存在或行情数据不合法时抛出
+     * @throws BusinessException 当产品不存在或行情数据不合法时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -159,7 +160,7 @@ public class AdminProductController {
      *
      * @param request 产品业务标识请求
      * @return 无业务数据的成功结果
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品不存在或不允许删除时抛出
+     * @throws BusinessException 当产品不存在或不允许删除时抛出
      * @author dz
      * @date 2026-06-14
      */

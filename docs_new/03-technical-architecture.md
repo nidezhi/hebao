@@ -13,7 +13,7 @@
 - Java 17
 - Spring Boot 4
 - Spring Web MVC
-- Spring Data JPA
+- MyBatis-Plus 3.5
 - Flyway
 - MySQL 8
 - Redis
@@ -98,7 +98,8 @@ src/main/java/com/example/dzcom/
 - 通过 Flyway 管理结构演进。
 - 用户、产品、组合、订单、审计等强一致性数据优先落在 MySQL。
 - 表间仅保存逻辑业务 ID，不建立数据库外键；跨领域一致性通过应用服务和领域事件维护。
-- JPA Entity 使用标量逻辑 ID，禁止通过级联对象图耦合不同领域。
+- 持久化 Entity 使用标量逻辑 ID，禁止通过对象图或级联操作耦合不同领域。
+- 每个持久化 Entity 对应独立 Mapper Java 接口和同名 Mapper XML，所有 SQL 统一维护在 XML。
 
 ### 6.2 缓存与会话
 

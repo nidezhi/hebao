@@ -10,3 +10,9 @@
 8. 领域仓储接口的持久化实现统一命名为 Impl；禁止再拆分 JpaRepository 和 Adapter 两层。
 9. 仓储 Impl 必须直接完成数据库访问、实体转换和接口方法实现，不得依赖同领域的二级仓储接口。
 10. 类、字段、公开方法和复杂私有方法必须编写准确的中文注释，禁止无注释实现和无意义模板注释。
+11. 持久化层全面使用 MyBatis Mapper XML，禁止使用 JPA、EntityManager、JPQL、QueryWrapper 或 BaseMapper 内置 CRUD。
+12. 每个 Mapper 方法必须在对应 XML 中提供 SQL，实现简单查询与复杂查询时均不得把 SQL 写入 Java。
+13. 每个持久化实体必须创建独立的 MyBatis-Plus Mapper 文件；StoreImpl 负责领域转换和仓储契约，Mapper 只负责数据库执行。
+14. Mapper 禁止承担领域对象组装、跨仓储协调和业务判断，必须保持为纯持久化执行层。
+15. 每个 Mapper Java 文件必须存在同名 Mapper XML，接口方法与 XML statement 必须逐一对应。
+16. README、docs_new 和项目 skills 的持久化规范必须与 MyBatis Mapper XML 基线一致，禁止保留会诱导重新引入 JPA 的旧说明。

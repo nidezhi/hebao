@@ -4,7 +4,7 @@ import com.example.dzcom.domain.enums.account.IdentityType;
 import com.example.dzcom.domain.model.account.LoginIdentity;
 import com.example.dzcom.domain.repository.account.LoginIdentityStore;
 import com.example.dzcom.infrastructure.persistence.entity.account.UserIdentityEntity;
-import jakarta.persistence.EntityManager;
+import com.example.dzcom.infrastructure.persistence.mapper.account.LoginIdentityMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -18,8 +18,8 @@ import java.util.Optional;
 @Repository
 @RequiredArgsConstructor
 public class LoginIdentityStoreImpl implements LoginIdentityStore {
-    /** JPA 实体管理器。 */
-    private final EntityManager entityManager;
+    /** MyBatis 登录标识执行器。 */
+    private final LoginIdentityMapper mapper;
 
     /**
      * 保存登录标识。
@@ -29,7 +29,7 @@ public class LoginIdentityStoreImpl implements LoginIdentityStore {
      */
     @Override
     public LoginIdentity save(LoginIdentity value) {
-        UserIdentityEntity existing = entityManager.find(UserIdentityEntity.class, value.bizId());
+        UserIdentityEntity existing = mapper.selectById(value.bizId());
         UserIdentityEntity entity = Optional.ofNullable(existing)
             .map(UserIdentityEntity::toBuilder)
             .orElseGet(UserIdentityEntity::builder)
@@ -44,7 +44,8 @@ public class LoginIdentityStoreImpl implements LoginIdentityStore {
             .updatedAt(LocalDateTime.now())
             .deleted(value.deleted())
             .build();
-        return toDomain(entityManager.merge(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
@@ -56,17 +57,7 @@ public class LoginIdentityStoreImpl implements LoginIdentityStore {
      */
     @Override
     public Optional<LoginIdentity> findByTypeAndNormalizedValue(IdentityType type, String normalizedValue) {
-        return entityManager.createQuery("""
-                select i from UserIdentityEntity i
-                where i.identityType = :type
-                  and i.normalizedValue = :normalizedValue
-                  and i.status = 1
-                  and i.deleted = 0
-                """, UserIdentityEntity.class)
-            .setParameter("type", type.name())
-            .setParameter("normalizedValue", normalizedValue)
-            .getResultStream()
-            .findFirst()
+        return Optional.ofNullable(mapper.selectByTypeAndNormalizedValue(type.name(), normalizedValue))
             .map(this::toDomain);
     }
 
@@ -79,16 +70,7 @@ public class LoginIdentityStoreImpl implements LoginIdentityStore {
      */
     @Override
     public Optional<LoginIdentity> findByUserBizIdAndType(String userBizId, IdentityType type) {
-        return entityManager.createQuery("""
-                select i from UserIdentityEntity i
-                where i.userBizId = :userBizId
-                  and i.identityType = :type
-                  and i.deleted = 0
-                """, UserIdentityEntity.class)
-            .setParameter("userBizId", userBizId)
-            .setParameter("type", type.name())
-            .getResultStream()
-            .findFirst()
+        return Optional.ofNullable(mapper.selectByUserBizIdAndType(userBizId, type.name()))
             .map(this::toDomain);
     }
 
@@ -112,10 +94,7 @@ public class LoginIdentityStoreImpl implements LoginIdentityStore {
      */
     @Override
     public void softDeleteByUserBizId(String userBizId) {
-        findEntitiesByUserBizId(userBizId, true).stream()
-            .map(UserIdentityEntity::toBuilder)
-            .map(builder -> builder.deleted(1).build())
-            .forEach(entityManager::merge);
+        mapper.softDeleteByUserBizId(userBizId);
     }
 
     /**
@@ -126,12 +105,7 @@ public class LoginIdentityStoreImpl implements LoginIdentityStore {
      * @return 登录标识实体列表
      */
     private List<UserIdentityEntity> findEntitiesByUserBizId(String userBizId, boolean includeDeleted) {
-        String jpql = includeDeleted
-            ? "select i from UserIdentityEntity i where i.userBizId = :userBizId"
-            : "select i from UserIdentityEntity i where i.userBizId = :userBizId and i.deleted = 0";
-        return entityManager.createQuery(jpql, UserIdentityEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultList();
+        return mapper.selectByUserBizId(userBizId, includeDeleted);
     }
 
     /**

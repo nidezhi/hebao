@@ -1,6 +1,6 @@
 package com.example.dzcom.infrastructure.config.account;
 
-import com.example.dzcom.common.exception.BusinessException;
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import org.springframework.http.HttpStatus;

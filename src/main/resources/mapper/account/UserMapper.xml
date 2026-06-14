@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.account.UserMapper">
+    <sql id="searchCondition">
+        from aiw_user u
+        where u.is_deleted = 0
+        <if test="criteria.status != null">and u.status = #{criteria.status.code}</if>
+        <if test="criteria.keyword != null and criteria.keyword != ''">
+            and (lower(u.user_no) like concat('%', lower(#{criteria.keyword}), '%')
+            or exists (
+                select 1 from aiw_user_identity i
+                where i.user_biz_id = u.biz_id and i.is_deleted = 0
+                  and lower(i.identity_value) like concat('%', lower(#{criteria.keyword}), '%')
+            ))
+        </if>
+        <if test="criteria.kycStatus != null">
+            and exists (
+                select 1 from aiw_user_risk_profile r
+                where r.user_biz_id = u.biz_id and r.is_deleted = 0
+                  and r.kyc_status = #{criteria.kycStatus.code}
+            )
+        </if>
+        <if test="criteria.riskLevel != null">
+            and exists (
+                select 1 from aiw_user_risk_profile r
+                where r.user_biz_id = u.biz_id and r.is_deleted = 0
+                  and r.risk_level = #{criteria.riskLevel}
+            )
+        </if>
+    </sql>
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserEntity">
+        select * from aiw_user where biz_id = #{bizId}
+    </select>
+    <select id="selectActiveByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserEntity">
+        select * from aiw_user where biz_id = #{bizId} and is_deleted = 0
+    </select>
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserEntity">
+        select u.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+    <insert id="save">
+        insert into aiw_user
+        (biz_id, user_no, status, version, registered_at, last_login_at, created_at,
+         updated_at, is_deleted, deleted_at)
+        values
+        (#{bizId}, #{userNo}, #{status}, #{version}, #{registeredAt}, #{lastLoginAt}, #{createdAt},
+         #{updatedAt}, #{deleted}, #{deletedAt})
+        on duplicate key update
+        status = values(status), version = values(version), last_login_at = values(last_login_at),
+        updated_at = values(updated_at), is_deleted = values(is_deleted), deleted_at = values(deleted_at)
+    </insert>
+</mapper>

@@ -1,4 +1,4 @@
-package com.example.dzcom.common.page;
+package com.example.dzcom.application.common.page;
 
 import lombok.Builder;
 

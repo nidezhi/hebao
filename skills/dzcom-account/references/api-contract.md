@@ -213,7 +213,7 @@
 - `UserPreferenceResponse`
 - `PageResult<T>`
 
-所有响应对象显式列字段，禁止直接返回领域对象或 JPA Entity。
+所有响应对象显式列字段，禁止直接返回领域对象或持久化 Entity。
 
 ## 6. 建议错误码
 

@@ -4,33 +4,33 @@ import com.example.dzcom.domain.enums.market.QuoteStatus;
 import com.example.dzcom.domain.model.market.MarketQuote;
 import com.example.dzcom.domain.repository.market.MarketQuoteStore;
 import com.example.dzcom.infrastructure.persistence.entity.market.MarketQuoteEntity;
+import com.example.dzcom.infrastructure.persistence.mapper.market.MarketQuoteMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-/** 行情仓储的 MySQL/JPA 实现。 */
+/**
+ * 行情仓储实现，直接维护行情点的保存、最新值查询和历史查询。
+ */
 @Repository
 @RequiredArgsConstructor
-public class MarketQuoteStoreAdapter implements MarketQuoteStore {
-    private final JpaMarketQuoteRepository quotes;
+public class MarketQuoteStoreImpl implements MarketQuoteStore {
+    /** MyBatis 行情执行器。 */
+    private final MarketQuoteMapper mapper;
 
     /**
-     * 创建或保存对应的业务数据。
+     * 保存或修正唯一行情点。
      *
-     * @param value 待处理的数据值
-     * @return 方法执行后的结果
-     * @author dz
-     * @date 2026-06-14
+     * @param value 行情领域对象
+     * @return 保存后的行情
      */
     @Override
     public MarketQuote savePoint(MarketQuote value) {
-        Optional<MarketQuoteEntity> existing = quotes
-            .findByProductBizIdAndSourceCodeAndQuoteIntervalAndQuoteTime(
-                value.productBizId(), value.sourceCode(), value.interval(), value.quoteTime());
+        Optional<MarketQuoteEntity> existing = findEntity(
+            value.productBizId(), value.sourceCode(), value.interval(), value.quoteTime());
         MarketQuoteEntity entity = existing
             .map(MarketQuoteEntity::toBuilder)
             .orElseGet(MarketQuoteEntity::builder)
@@ -51,52 +51,64 @@ public class MarketQuoteStoreAdapter implements MarketQuoteStore {
             .receivedAt(value.receivedAt())
             .createdAt(existing.map(MarketQuoteEntity::getCreatedAt).orElse(value.createdAt()))
             .build();
-        return toDomain(quotes.save(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
-     * 根据指定条件查询业务数据。
+     * 查询指定产品、周期和数据源的最新有效行情。
      *
-     * @param productBizId 业务对象的唯一标识
-     * @param interval interval 参数
-     * @param sourceCode sourceCode 参数
-     * @return 查询到的业务数据
-     * @author dz
-     * @date 2026-06-14
+     * @param productBizId 产品业务标识
+     * @param interval 行情周期
+     * @param sourceCode 数据源代码
+     * @return 最新行情
      */
     @Override
     public Optional<MarketQuote> findLatest(String productBizId, String interval, String sourceCode) {
-        return quotes.findLatest(productBizId, interval, sourceCode, PageRequest.of(0, 1))
-            .stream().findFirst().map(this::toDomain);
+        return Optional.ofNullable(mapper.selectLatest(productBizId, interval, sourceCode))
+            .map(this::toDomain);
     }
 
     /**
-     * 根据查询条件获取业务数据列表。
+     * 查询指定时间范围内的有效行情历史。
      *
-     * @param productBizId 业务对象的唯一标识
-     * @param interval interval 参数
-     * @param sourceCode sourceCode 参数
-     * @param from from 参数
-     * @param to to 参数
-     * @param limit 结果数量限制
-     * @return 查询到的业务数据
-     * @author dz
-     * @date 2026-06-14
+     * @param productBizId 产品业务标识
+     * @param interval 行情周期
+     * @param sourceCode 数据源代码
+     * @param from 开始时间
+     * @param to 结束时间
+     * @param limit 最大返回数量
+     * @return 行情历史列表
      */
     @Override
     public List<MarketQuote> findHistory(String productBizId, String interval, String sourceCode,
                                          LocalDateTime from, LocalDateTime to, int limit) {
-        return quotes.findHistory(productBizId, interval, sourceCode, from, to, PageRequest.of(0, limit))
-            .stream().map(this::toDomain).toList();
+        return mapper.selectHistory(productBizId, interval, sourceCode, from, to, limit)
+            .stream()
+            .map(this::toDomain)
+            .toList();
     }
 
     /**
-     * 将源对象转换为目标视图或领域对象。
+     * 根据行情唯一业务键查询行情实体。
      *
-     * @param entity entity 参数
-     * @return 转换后的目标对象
-     * @author dz
-     * @date 2026-06-14
+     * @param productBizId 产品业务标识
+     * @param sourceCode 数据源代码
+     * @param interval 行情周期
+     * @param quoteTime 行情时间
+     * @return 行情实体
+     */
+    private Optional<MarketQuoteEntity> findEntity(String productBizId, String sourceCode,
+                                                   String interval, LocalDateTime quoteTime) {
+        return Optional.ofNullable(mapper.selectByUniqueKey(
+            productBizId, sourceCode, interval, quoteTime));
+    }
+
+    /**
+     * 将行情实体转换为领域对象。
+     *
+     * @param entity 行情实体
+     * @return 行情领域对象
      */
     private MarketQuote toDomain(MarketQuoteEntity entity) {
         return MarketQuote.builder()

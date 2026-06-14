@@ -1,12 +1,13 @@
 package com.example.dzcom.interfaces.controller.product;
 
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.dto.market.MarketQuoteView;
 import com.example.dzcom.application.dto.product.ProductView;
 import com.example.dzcom.application.service.market.MarketQuoteApplicationService;
 import com.example.dzcom.application.service.product.ProductQueryService;
-import com.example.dzcom.common.page.PageQuery;
-import com.example.dzcom.common.page.PageResult;
-import com.example.dzcom.common.result.Result;
+import com.example.dzcom.application.common.page.PageQuery;
+import com.example.dzcom.application.common.page.PageResult;
+import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.interfaces.request.market.LatestMarketQuoteRequest;
 import com.example.dzcom.interfaces.request.market.MarketQuoteHistoryRequest;
 import com.example.dzcom.interfaces.request.product.ProductBizIdRequest;
@@ -41,7 +42,7 @@ public class ProductController {
      *
      * @param request 产品筛选、分页和排序请求
      * @return 产品分页结果
-     * @throws com.example.dzcom.common.exception.BusinessException 当分页参数或排序规则不合法时抛出
+     * @throws BusinessException 当分页参数或排序规则不合法时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -68,7 +69,7 @@ public class ProductController {
      *
      * @param request 产品业务标识请求
      * @return 产品详细信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品不存在时抛出
+     * @throws BusinessException 当产品不存在时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -83,7 +84,7 @@ public class ProductController {
      *
      * @param request 产品标识、行情周期和可选数据源
      * @return 最新有效行情
-     * @throws com.example.dzcom.common.exception.BusinessException 当产品或行情不存在时抛出
+     * @throws BusinessException 当产品或行情不存在时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -102,7 +103,7 @@ public class ProductController {
      *
      * @param request 产品标识、行情周期、时间区间和结果上限
      * @return 按时间排列的历史行情列表
-     * @throws com.example.dzcom.common.exception.BusinessException 当时间区间或查询上限不合法时抛出
+     * @throws BusinessException 当时间区间或查询上限不合法时抛出
      * @author dz
      * @date 2026-06-14
      */

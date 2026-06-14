@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.account.LoginIdentityMapper">
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserIdentityEntity">
+        select * from aiw_user_identity where biz_id = #{bizId}
+    </select>
+    <select id="selectByTypeAndNormalizedValue" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserIdentityEntity">
+        select * from aiw_user_identity
+        where identity_type = #{type} and normalized_value = #{normalizedValue}
+          and status = 1 and is_deleted = 0
+    </select>
+    <select id="selectByUserBizIdAndType" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserIdentityEntity">
+        select * from aiw_user_identity
+        where user_biz_id = #{userBizId} and identity_type = #{type} and is_deleted = 0
+    </select>
+    <select id="selectByUserBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserIdentityEntity">
+        select * from aiw_user_identity where user_biz_id = #{userBizId}
+        <if test="!includeDeleted">and is_deleted = 0</if>
+    </select>
+    <insert id="save">
+        insert into aiw_user_identity
+        (biz_id, user_biz_id, identity_type, identity_value, normalized_value, verified,
+         status, created_at, updated_at, is_deleted)
+        values
+        (#{bizId}, #{userBizId}, #{identityType}, #{identityValue}, #{normalizedValue}, #{verified},
+         #{status}, #{createdAt}, #{updatedAt}, #{deleted})
+        on duplicate key update
+        identity_value = values(identity_value), normalized_value = values(normalized_value),
+        verified = values(verified), status = values(status), updated_at = values(updated_at),
+        is_deleted = values(is_deleted)
+    </insert>
+    <update id="softDeleteByUserBizId">
+        update aiw_user_identity set is_deleted = 1 where user_biz_id = #{userBizId}
+    </update>
+</mapper>

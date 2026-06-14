@@ -1,6 +1,6 @@
-package com.example.dzcom.common.exception;
+package com.example.dzcom.application.common.exception;
 
-import com.example.dzcom.common.result.Result;
+import com.example.dzcom.application.common.result.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.BindException;
 import org.springframework.dao.DataIntegrityViolationException;

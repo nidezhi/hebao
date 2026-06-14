@@ -3,7 +3,7 @@ package com.example.dzcom.infrastructure.persistence.repository.account;
 import com.example.dzcom.domain.model.account.UserProfile;
 import com.example.dzcom.domain.repository.account.UserProfileStore;
 import com.example.dzcom.infrastructure.persistence.entity.account.UserProfileEntity;
-import jakarta.persistence.EntityManager;
+import com.example.dzcom.infrastructure.persistence.mapper.account.UserProfileMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -16,8 +16,8 @@ import java.util.Optional;
 @Repository
 @RequiredArgsConstructor
 public class UserProfileStoreImpl implements UserProfileStore {
-    /** JPA 实体管理器。 */
-    private final EntityManager entityManager;
+    /** MyBatis 用户资料执行器。 */
+    private final UserProfileMapper mapper;
 
     /**
      * 保存用户资料。
@@ -27,7 +27,7 @@ public class UserProfileStoreImpl implements UserProfileStore {
      */
     @Override
     public UserProfile save(UserProfile value) {
-        UserProfileEntity existing = entityManager.find(UserProfileEntity.class, value.bizId());
+        UserProfileEntity existing = mapper.selectById(value.bizId());
         LocalDateTime now = LocalDateTime.now();
         UserProfileEntity entity = Optional.ofNullable(existing)
             .map(UserProfileEntity::toBuilder)
@@ -42,7 +42,8 @@ public class UserProfileStoreImpl implements UserProfileStore {
             .updatedAt(now)
             .deleted(value.deleted())
             .build();
-        return toDomain(entityManager.merge(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
@@ -63,10 +64,7 @@ public class UserProfileStoreImpl implements UserProfileStore {
      */
     @Override
     public void softDeleteByUserBizId(String userBizId) {
-        findEntityByUserBizId(userBizId, true)
-            .map(UserProfileEntity::toBuilder)
-            .map(builder -> builder.deleted(1).build())
-            .ifPresent(entityManager::merge);
+        mapper.softDeleteByUserBizId(userBizId);
     }
 
     /**
@@ -77,13 +75,7 @@ public class UserProfileStoreImpl implements UserProfileStore {
      * @return 用户资料实体
      */
     private Optional<UserProfileEntity> findEntityByUserBizId(String userBizId, boolean includeDeleted) {
-        String jpql = includeDeleted
-            ? "select p from UserProfileEntity p where p.userBizId = :userBizId"
-            : "select p from UserProfileEntity p where p.userBizId = :userBizId and p.deleted = 0";
-        return entityManager.createQuery(jpql, UserProfileEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultStream()
-            .findFirst();
+        return Optional.ofNullable(mapper.selectByUserBizId(userBizId, includeDeleted));
     }
 
     /**

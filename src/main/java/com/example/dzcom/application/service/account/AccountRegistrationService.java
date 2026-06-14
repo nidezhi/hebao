@@ -3,9 +3,9 @@ package com.example.dzcom.application.service.account;
 import com.example.dzcom.application.assembler.account.AccountViewAssembler;
 import com.example.dzcom.application.command.account.RegisterCommand;
 import com.example.dzcom.application.dto.account.UserView;
-import com.example.dzcom.common.exception.BusinessException;
-import com.example.dzcom.common.service.ClockProvider;
-import com.example.dzcom.common.service.IdGenerator;
+import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.common.service.ClockProvider;
+import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.domain.enums.account.IdentityType;
 import com.example.dzcom.domain.enums.account.KycStatus;
 import com.example.dzcom.domain.model.account.*;
@@ -31,7 +31,7 @@ import java.util.stream.Stream;
  * 账户注册应用服务。
  *
  * <p>在单个本地事务中显式创建用户主体、登录标识、密码凭据、资料、
- * 风险画像和默认角色，不依赖 JPA 级联或数据库外键。</p>
+ * 风险画像和默认角色，不依赖持久化级联或数据库外键。</p>
  */
 @Service
 @RequiredArgsConstructor

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.account.UserProfileMapper">
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserProfileEntity">
+        select * from aiw_user_profile where biz_id = #{bizId}
+    </select>
+    <select id="selectByUserBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserProfileEntity">
+        select * from aiw_user_profile where user_biz_id = #{userBizId}
+        <if test="!includeDeleted">and is_deleted = 0</if>
+    </select>
+    <insert id="save">
+        insert into aiw_user_profile
+        (biz_id, user_biz_id, nickname, avatar_url, locale, timezone, created_at, updated_at, is_deleted)
+        values
+        (#{bizId}, #{userBizId}, #{nickname}, #{avatarUrl}, #{locale}, #{timezone},
+         #{createdAt}, #{updatedAt}, #{deleted})
+        on duplicate key update
+        nickname = values(nickname), avatar_url = values(avatar_url), locale = values(locale),
+        timezone = values(timezone), updated_at = values(updated_at), is_deleted = values(is_deleted)
+    </insert>
+    <update id="softDeleteByUserBizId">
+        update aiw_user_profile set is_deleted = 1 where user_biz_id = #{userBizId}
+    </update>
+</mapper>

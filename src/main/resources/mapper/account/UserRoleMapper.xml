@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.account.UserRoleMapper">
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserRoleEntity">
+        select * from aiw_user_role where biz_id = #{bizId}
+    </select>
+    <select id="selectByUserBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserRoleEntity">
+        select * from aiw_user_role where user_biz_id = #{userBizId}
+        <if test="!includeDeleted">and is_deleted = 0</if>
+    </select>
+    <insert id="save">
+        insert into aiw_user_role
+        (biz_id, user_biz_id, role_code, scope_code, effective_from, effective_to, created_at, is_deleted)
+        values
+        (#{bizId}, #{userBizId}, #{roleCode}, #{scopeCode}, #{effectiveFrom}, #{effectiveTo},
+         #{createdAt}, #{deleted})
+        on duplicate key update
+        role_code = values(role_code), scope_code = values(scope_code),
+        effective_from = values(effective_from), effective_to = values(effective_to),
+        is_deleted = values(is_deleted)
+    </insert>
+    <update id="softDeleteByUserBizId">
+        update aiw_user_role set is_deleted = 1 where user_biz_id = #{userBizId}
+    </update>
+</mapper>

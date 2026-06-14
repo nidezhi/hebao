@@ -3,7 +3,7 @@ package com.example.dzcom.infrastructure.persistence.repository.account;
 import com.example.dzcom.domain.model.account.UserPreference;
 import com.example.dzcom.domain.repository.account.UserPreferenceStore;
 import com.example.dzcom.infrastructure.persistence.entity.account.UserPreferenceEntity;
-import jakarta.persistence.EntityManager;
+import com.example.dzcom.infrastructure.persistence.mapper.account.UserPreferenceMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -17,8 +17,8 @@ import java.util.Optional;
 @Repository
 @RequiredArgsConstructor
 public class UserPreferenceStoreImpl implements UserPreferenceStore {
-    /** JPA 实体管理器。 */
-    private final EntityManager entityManager;
+    /** MyBatis 用户偏好执行器。 */
+    private final UserPreferenceMapper mapper;
 
     /**
      * 保存用户偏好。
@@ -28,7 +28,7 @@ public class UserPreferenceStoreImpl implements UserPreferenceStore {
      */
     @Override
     public UserPreference save(UserPreference value) {
-        UserPreferenceEntity existing = entityManager.find(UserPreferenceEntity.class, value.bizId());
+        UserPreferenceEntity existing = mapper.selectById(value.bizId());
         LocalDateTime createdAt = Optional.ofNullable(existing)
             .map(UserPreferenceEntity::getCreatedAt)
             .orElse(value.updatedAt());
@@ -44,7 +44,8 @@ public class UserPreferenceStoreImpl implements UserPreferenceStore {
             .updatedAt(value.updatedAt())
             .deleted(value.deleted())
             .build();
-        return toDomain(entityManager.merge(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
@@ -58,20 +59,7 @@ public class UserPreferenceStoreImpl implements UserPreferenceStore {
     @Override
     public Optional<UserPreference> findByUserBizIdAndKey(String userBizId, String key,
                                                           boolean includeDeleted) {
-        String jpql = includeDeleted
-            ? """
-                select p from UserPreferenceEntity p
-                where p.userBizId = :userBizId and p.preferenceKey = :key
-                """
-            : """
-                select p from UserPreferenceEntity p
-                where p.userBizId = :userBizId and p.preferenceKey = :key and p.deleted = 0
-                """;
-        return entityManager.createQuery(jpql, UserPreferenceEntity.class)
-            .setParameter("userBizId", userBizId)
-            .setParameter("key", key)
-            .getResultStream()
-            .findFirst()
+        return Optional.ofNullable(mapper.selectByUserBizIdAndKey(userBizId, key, includeDeleted))
             .map(this::toDomain);
     }
 
@@ -83,13 +71,8 @@ public class UserPreferenceStoreImpl implements UserPreferenceStore {
      */
     @Override
     public List<UserPreference> findByUserBizId(String userBizId) {
-        return entityManager.createQuery("""
-                select p from UserPreferenceEntity p
-                where p.userBizId = :userBizId and p.deleted = 0
-                order by p.preferenceKey
-                """, UserPreferenceEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultStream()
+        return mapper.selectByUserBizId(userBizId)
+            .stream()
             .map(this::toDomain)
             .toList();
     }
@@ -101,14 +84,7 @@ public class UserPreferenceStoreImpl implements UserPreferenceStore {
      */
     @Override
     public void softDeleteByUserBizId(String userBizId) {
-        entityManager.createQuery(
-                "select p from UserPreferenceEntity p where p.userBizId = :userBizId",
-                UserPreferenceEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultStream()
-            .map(UserPreferenceEntity::toBuilder)
-            .map(builder -> builder.deleted(1).build())
-            .forEach(entityManager::merge);
+        mapper.softDeleteByUserBizId(userBizId);
     }
 
     /**

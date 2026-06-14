@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.product.ProductAttributeMapper">
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductAttributeEntity">
+        select * from aiw_product_attribute where biz_id = #{bizId}
+    </select>
+    <select id="selectOne" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductAttributeEntity">
+        select * from aiw_product_attribute
+        where product_biz_id = #{productBizId} and attribute_key = #{key}
+          and effective_date = #{effectiveDate}
+        <if test="!includeDeleted">and is_deleted = 0</if>
+    </select>
+    <select id="selectByProductBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductAttributeEntity">
+        select * from aiw_product_attribute
+        where product_biz_id = #{productBizId} and is_deleted = 0
+        order by attribute_key asc, effective_date desc
+    </select>
+    <insert id="save">
+        insert into aiw_product_attribute
+        (biz_id, product_biz_id, attribute_key, value_type, attribute_value,
+         effective_date, source_code, created_at, updated_at, is_deleted)
+        values
+        (#{bizId}, #{productBizId}, #{attributeKey}, #{valueType}, #{attributeValue},
+         #{effectiveDate}, #{sourceCode}, #{createdAt}, #{updatedAt}, #{deleted})
+        on duplicate key update
+        value_type = values(value_type), attribute_value = values(attribute_value),
+        source_code = values(source_code), updated_at = values(updated_at), is_deleted = values(is_deleted)
+    </insert>
+</mapper>

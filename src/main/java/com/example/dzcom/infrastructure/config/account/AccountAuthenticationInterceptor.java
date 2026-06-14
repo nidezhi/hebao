@@ -1,6 +1,6 @@
 package com.example.dzcom.infrastructure.config.account;
 
-import com.example.dzcom.common.exception.BusinessException;
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.domain.model.account.User;
 import com.example.dzcom.domain.model.account.UserCredential;
 import com.example.dzcom.domain.repository.account.UserCredentialStore;

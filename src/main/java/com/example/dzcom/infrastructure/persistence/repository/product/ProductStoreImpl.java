@@ -1,43 +1,38 @@
 package com.example.dzcom.infrastructure.persistence.repository.product;
 
-import com.example.dzcom.common.page.PageResult;
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.domain.enums.product.ProductTradeStatus;
 import com.example.dzcom.domain.enums.product.ProductType;
 import com.example.dzcom.domain.model.product.Product;
 import com.example.dzcom.domain.repository.product.ProductSearchCriteria;
 import com.example.dzcom.domain.repository.product.ProductStore;
 import com.example.dzcom.infrastructure.persistence.entity.product.ProductEntity;
+import com.example.dzcom.infrastructure.persistence.mapper.product.ProductMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
-import java.util.Locale;
+import java.util.List;
 import java.util.Optional;
 
 /**
- * 产品仓储 JPA 适配器。
- *
- * <p>负责领域对象与 ORM 实体的显式转换，并集中处理软删除过滤。
- * 应用层不感知 Spring Data 的 Page、Sort 或派生查询命名。</p>
+ * 产品仓储实现，直接负责产品主表查询、分页、保存和领域转换。
  */
 @Repository
 @RequiredArgsConstructor
-public class ProductStoreAdapter implements ProductStore {
-    private final JpaProductRepository products;
+public class ProductStoreImpl implements ProductStore {
+    /** MyBatis 产品执行器。 */
+    private final ProductMapper mapper;
 
     /**
-     * 创建或保存对应的业务数据。
+     * 保存产品。
      *
-     * @param value 待处理的数据值
-     * @return 方法执行后的结果
-     * @author dz
-     * @date 2026-06-14
+     * @param value 产品领域对象
+     * @return 保存后的产品
      */
     @Override
     public Product save(Product value) {
-        ProductEntity entity = products.findById(value.getBizId())
+        ProductEntity existing = mapper.selectById(value.getBizId());
+        ProductEntity entity = Optional.ofNullable(existing)
             .map(ProductEntity::toBuilder)
             .orElseGet(ProductEntity::builder)
             .bizId(value.getBizId())
@@ -64,72 +59,79 @@ public class ProductStoreAdapter implements ProductStore {
             .deleted(value.getDeleted())
             .deletedAt(value.getDeletedAt())
             .build();
-        return toDomain(products.save(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
-     * 根据指定条件查询业务数据。
+     * 根据业务标识查询未删除产品。
      *
-     * @param bizId 业务对象的唯一标识
-     * @return 查询到的业务数据
-     * @author dz
-     * @date 2026-06-14
+     * @param bizId 产品业务标识
+     * @return 产品领域对象
      */
     @Override
     public Optional<Product> findByBizId(String bizId) {
-        return products.findByBizIdAndDeleted(bizId, 0).map(this::toDomain);
+        return Optional.ofNullable(mapper.selectActiveByBizId(bizId))
+            .map(this::toDomain);
     }
 
     /**
-     * 执行 exists by market and code 处理。
+     * 判断市场内是否存在相同产品代码。
      *
-     * @param marketCode marketCode 参数
-     * @param productCode productCode 参数
-     * @return 满足条件时返回 true，否则返回 false
-     * @author dz
-     * @date 2026-06-14
+     * @param marketCode 市场代码
+     * @param productCode 产品代码
+     * @return 存在时返回 true
      */
     @Override
     public boolean existsByMarketAndCode(String marketCode, String productCode) {
-        return products.existsByMarketCodeAndProductCodeAndDeleted(marketCode, productCode, 0);
+        return mapper.countByMarketAndCode(marketCode, productCode) > 0;
     }
 
     /**
-     * 根据查询条件获取业务数据列表。
+     * 根据筛选条件分页查询产品。
      *
-     * @param criteria 查询筛选条件
-     * @return 方法执行后的结果
-     * @author dz
-     * @date 2026-06-14
+     * @param criteria 产品筛选和分页条件
+     * @return 产品分页结果
      */
     @Override
     public PageResult<Product> search(ProductSearchCriteria criteria) {
-        Sort sort = Sort.by(criteria.ascending() ? Sort.Direction.ASC : Sort.Direction.DESC, criteria.sort());
-        PageRequest pageable = PageRequest.of(criteria.page() - 1, criteria.size(), sort);
-        Page<ProductEntity> page = products.search(
-            blankToNull(criteria.keyword()),
-            criteria.productType() == null ? null : criteria.productType().name(),
-            criteria.tradeStatus() == null ? null : criteria.tradeStatus().code(),
-            criteria.riskLevel(),
-            criteria.currency() == null ? null : criteria.currency().trim().toUpperCase(Locale.ROOT),
-            pageable
-        );
+        int offset = (criteria.page() - 1) * criteria.size();
+        List<Product> items = mapper.search(criteria, offset, resolveSortColumn(criteria.sort()))
+            .stream()
+            .map(this::toDomain)
+            .toList();
+        long total = mapper.count(criteria);
         return PageResult.<Product>builder()
-            .items(page.getContent().stream().map(this::toDomain).toList())
-            .total(page.getTotalElements())
+            .items(items)
+            .total(total)
             .page(criteria.page())
             .size(criteria.size())
-            .totalPages(page.getTotalPages())
+            .totalPages((int) Math.ceil((double) total / criteria.size()))
             .build();
     }
 
     /**
-     * 将源对象转换为目标视图或领域对象。
+     * 将接口排序字段转换为固定数据库列，避免动态 SQL 注入。
      *
-     * @param entity entity 参数
-     * @return 转换后的目标对象
-     * @author dz
-     * @date 2026-06-14
+     * @param sort 接口排序字段
+     * @return 数据库排序列
+     */
+    private String resolveSortColumn(String sort) {
+        return switch (sort) {
+            case "productNo" -> "p.product_no";
+            case "productCode" -> "p.product_code";
+            case "productName" -> "p.product_name";
+            case "riskLevel" -> "p.risk_level";
+            case "listingDate" -> "p.listing_date";
+            default -> "p.created_at";
+        };
+    }
+
+    /**
+     * 将产品实体转换为领域对象。
+     *
+     * @param entity 产品实体
+     * @return 产品领域对象
      */
     private Product toDomain(ProductEntity entity) {
         return Product.builder()
@@ -159,15 +161,4 @@ public class ProductStoreAdapter implements ProductStore {
             .build();
     }
 
-    /**
-     * 规范化输入值并返回统一格式。
-     *
-     * @param value 待处理的数据值
-     * @return 方法执行后的结果
-     * @author dz
-     * @date 2026-06-14
-     */
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
 }

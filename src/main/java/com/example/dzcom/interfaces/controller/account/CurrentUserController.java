@@ -1,11 +1,12 @@
 package com.example.dzcom.interfaces.controller.account;
 
 import com.example.dzcom.application.command.account.UpdateIdentitiesCommand;
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.dto.account.PreferenceView;
 import com.example.dzcom.application.dto.account.UserView;
 import com.example.dzcom.application.service.account.UserApplicationService;
 import com.example.dzcom.application.service.account.UserPreferenceApplicationService;
-import com.example.dzcom.common.result.Result;
+import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.interfaces.request.account.ChangePasswordRequest;
 import com.example.dzcom.interfaces.request.account.PreferenceKeyRequest;
 import com.example.dzcom.interfaces.request.account.PreferenceRequest;
@@ -32,7 +33,7 @@ public class CurrentUserController {
      *
      * @param request 待更新的用户资料
      * @return 更新后的当前用户信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当登录标识冲突或用户不存在时抛出
+     * @throws BusinessException 当登录标识冲突或用户不存在时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -50,7 +51,7 @@ public class CurrentUserController {
      *
      * @param request 当前密码和新密码
      * @return 无业务数据的成功结果
-     * @throws com.example.dzcom.common.exception.BusinessException 当当前密码错误或新密码不合法时抛出
+     * @throws BusinessException 当当前密码错误或新密码不合法时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -79,7 +80,7 @@ public class CurrentUserController {
      *
      * @param request 偏好键和值
      * @return 保存后的偏好信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当偏好键或偏好值不合法时抛出
+     * @throws BusinessException 当偏好键或偏好值不合法时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -94,7 +95,7 @@ public class CurrentUserController {
      *
      * @param request 待删除的偏好键
      * @return 无业务数据的成功结果
-     * @throws com.example.dzcom.common.exception.BusinessException 当偏好键不合法时抛出
+     * @throws BusinessException 当偏好键不合法时抛出
      * @author dz
      * @date 2026-06-14
      */

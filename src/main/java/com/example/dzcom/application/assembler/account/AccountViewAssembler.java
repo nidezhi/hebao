@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 /**
  * 将账户域多表数据组装为接口视图。
  *
- * <p>查询服务只调用本组装器，不向 Controller 暴露领域对象或 JPA Entity。</p>
+ * <p>查询服务只调用本组装器，不向 Controller 暴露领域对象或持久化 Entity。</p>
  */
 @Component
 @RequiredArgsConstructor

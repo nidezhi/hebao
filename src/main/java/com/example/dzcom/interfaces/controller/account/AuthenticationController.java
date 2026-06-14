@@ -1,9 +1,10 @@
 package com.example.dzcom.interfaces.controller.account;
 
 import com.example.dzcom.application.command.account.RegisterCommand;
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.dto.account.UserView;
 import com.example.dzcom.application.service.account.AuthenticationApplicationService;
-import com.example.dzcom.common.result.Result;
+import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.infrastructure.config.account.AccountAuthenticationInterceptor;
 import com.example.dzcom.interfaces.request.account.LoginRequest;
 import com.example.dzcom.interfaces.request.account.RegisterRequest;
@@ -34,7 +35,7 @@ public class AuthenticationController {
      *
      * @param request 用户注册请求
      * @return HTTP 201 状态和注册后的用户信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当登录标识冲突或注册规则不满足时抛出
+     * @throws BusinessException 当登录标识冲突或注册规则不满足时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -58,7 +59,7 @@ public class AuthenticationController {
      * @param request 登录凭据
      * @param response 用于写入会话 Cookie 的 HTTP 响应
      * @return 当前登录用户信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当账号密码错误或账户不可登录时抛出
+     * @throws BusinessException 当账号密码错误或账户不可登录时抛出
      * @author dz
      * @date 2026-06-14
      */
@@ -91,7 +92,7 @@ public class AuthenticationController {
      * 查询当前登录用户信息。
      *
      * @return 当前登录用户信息
-     * @throws com.example.dzcom.common.exception.BusinessException 当用户未登录或会话失效时抛出
+     * @throws BusinessException 当用户未登录或会话失效时抛出
      * @author dz
      * @date 2026-06-14
      */

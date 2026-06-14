@@ -1,6 +1,6 @@
 package com.example.dzcom.infrastructure.common;
 
-import com.example.dzcom.common.service.ClockProvider;
+import com.example.dzcom.application.common.service.ClockProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;

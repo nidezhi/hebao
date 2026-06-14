@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.market.MarketQuoteMapper">
+    <select id="selectByUniqueKey" resultType="com.example.dzcom.infrastructure.persistence.entity.market.MarketQuoteEntity">
+        select * from aiw_market_quote
+        where product_biz_id = #{productBizId} and source_code = #{sourceCode}
+          and quote_interval = #{interval} and quote_time = #{quoteTime}
+    </select>
+    <select id="selectLatest" resultType="com.example.dzcom.infrastructure.persistence.entity.market.MarketQuoteEntity">
+        select * from aiw_market_quote
+        where product_biz_id = #{productBizId} and quote_interval = #{interval}
+          and quote_status in (1, 2)
+        <if test="sourceCode != null">and source_code = #{sourceCode}</if>
+        order by quote_time desc limit 1
+    </select>
+    <select id="selectHistory" resultType="com.example.dzcom.infrastructure.persistence.entity.market.MarketQuoteEntity">
+        select * from aiw_market_quote
+        where product_biz_id = #{productBizId} and quote_interval = #{interval}
+          and quote_status in (1, 2) and quote_time between #{from} and #{to}
+        <if test="sourceCode != null">and source_code = #{sourceCode}</if>
+        order by quote_time asc limit #{limit}
+    </select>
+    <insert id="save">
+        insert into aiw_market_quote
+        (biz_id, product_biz_id, source_code, quote_interval, quote_time, open_price, high_price,
+         low_price, close_price, previous_close_price, volume, turnover_amount, quote_status,
+         received_at, created_at)
+        values
+        (#{bizId}, #{productBizId}, #{sourceCode}, #{quoteInterval}, #{quoteTime}, #{openPrice}, #{highPrice},
+         #{lowPrice}, #{closePrice}, #{previousClosePrice}, #{volume}, #{turnoverAmount}, #{quoteStatus},
+         #{receivedAt}, #{createdAt})
+        on duplicate key update
+        open_price = values(open_price), high_price = values(high_price), low_price = values(low_price),
+        close_price = values(close_price), previous_close_price = values(previous_close_price),
+        volume = values(volume), turnover_amount = values(turnover_amount),
+        quote_status = values(quote_status), received_at = values(received_at)
+    </insert>
+</mapper>

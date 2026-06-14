@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.product.ProductMapper">
+    <sql id="searchCondition">
+        from aiw_product p where p.is_deleted = 0
+        <if test="criteria.keyword != null and criteria.keyword != ''">
+            and (lower(p.product_name) like concat('%', lower(#{criteria.keyword}), '%')
+              or lower(p.product_code) like concat('%', lower(#{criteria.keyword}), '%')
+              or lower(p.product_no) like concat('%', lower(#{criteria.keyword}), '%'))
+        </if>
+        <if test="criteria.productType != null">and p.product_type = #{criteria.productType}</if>
+        <if test="criteria.tradeStatus != null">and p.trade_status = #{criteria.tradeStatus.code}</if>
+        <if test="criteria.riskLevel != null">and p.risk_level = #{criteria.riskLevel}</if>
+        <if test="criteria.currency != null and criteria.currency != ''">
+            and p.currency = upper(#{criteria.currency})
+        </if>
+    </sql>
+    <select id="selectById" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductEntity">
+        select * from aiw_product where biz_id = #{bizId}
+    </select>
+    <select id="selectActiveByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductEntity">
+        select * from aiw_product where biz_id = #{bizId} and is_deleted = 0
+    </select>
+    <select id="countByMarketAndCode" resultType="long">
+        select count(*) from aiw_product
+        where market_code = #{marketCode} and product_code = #{productCode} and is_deleted = 0
+    </select>
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductEntity">
+        select p.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+    <insert id="save">
+        insert into aiw_product
+        (biz_id, product_no, product_code, product_name, product_type, market_code, currency,
+         trade_status, risk_level, min_invest_amount, amount_step, quantity_step, fee_rate,
+         listing_date, delisting_date, description, version, created_at, updated_at,
+         created_by, updated_by, is_deleted, deleted_at)
+        values
+        (#{bizId}, #{productNo}, #{productCode}, #{productName}, #{productType}, #{marketCode}, #{currency},
+         #{tradeStatus}, #{riskLevel}, #{minInvestAmount}, #{amountStep}, #{quantityStep}, #{feeRate},
+         #{listingDate}, #{delistingDate}, #{description}, #{version}, #{createdAt}, #{updatedAt},
+         #{createdBy}, #{updatedBy}, #{deleted}, #{deletedAt})
+        on duplicate key update
+        product_name = values(product_name), product_type = values(product_type),
+        market_code = values(market_code), currency = values(currency),
+        trade_status = values(trade_status), risk_level = values(risk_level),
+        min_invest_amount = values(min_invest_amount), amount_step = values(amount_step),
+        quantity_step = values(quantity_step), fee_rate = values(fee_rate),
+        listing_date = values(listing_date), delisting_date = values(delisting_date),
+        description = values(description), version = values(version), updated_at = values(updated_at),
+        updated_by = values(updated_by), is_deleted = values(is_deleted), deleted_at = values(deleted_at)
+    </insert>
+</mapper>

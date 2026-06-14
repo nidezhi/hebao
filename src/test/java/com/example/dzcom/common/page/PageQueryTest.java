@@ -1,6 +1,7 @@
 package com.example.dzcom.common.page;
 
-import com.example.dzcom.common.exception.BusinessException;
+import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.common.page.PageQuery;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;

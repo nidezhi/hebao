@@ -1,6 +1,6 @@
-package com.example.dzcom.common.exception;
+package com.example.dzcom.application.common.exception;
 
-import com.example.dzcom.common.enums.ResultCode;
+import com.example.dzcom.application.common.enums.ResultCode;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 

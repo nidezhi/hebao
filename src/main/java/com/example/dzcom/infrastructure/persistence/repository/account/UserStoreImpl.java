@@ -1,13 +1,12 @@
 package com.example.dzcom.infrastructure.persistence.repository.account;
 
-import com.example.dzcom.common.page.PageResult;
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.domain.enums.account.AccountStatus;
 import com.example.dzcom.domain.model.account.User;
 import com.example.dzcom.domain.repository.account.UserSearchCriteria;
 import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.infrastructure.persistence.entity.account.UserEntity;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
+import com.example.dzcom.infrastructure.persistence.mapper.account.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -20,25 +19,8 @@ import java.util.Optional;
 @Repository
 @RequiredArgsConstructor
 public class UserStoreImpl implements UserStore {
-    /** 用户筛选查询的公共条件。 */
-    private static final String SEARCH_CONDITION = """
-        from UserEntity u
-        where u.deleted = 0
-          and (:status is null or u.status = :status)
-          and (:keyword is null or lower(u.userNo) like lower(concat('%', :keyword, '%'))
-               or exists (select i.bizId from UserIdentityEntity i
-                          where i.userBizId = u.bizId and i.deleted = 0
-                            and lower(i.identityValue) like lower(concat('%', :keyword, '%'))))
-          and (:kycStatus is null or exists (select r.bizId from UserRiskProfileEntity r
-                                             where r.userBizId = u.bizId and r.deleted = 0
-                                               and r.kycStatus = :kycStatus))
-          and (:riskLevel is null or exists (select r.bizId from UserRiskProfileEntity r
-                                             where r.userBizId = u.bizId and r.deleted = 0
-                                               and r.riskLevel = :riskLevel))
-        """;
-
-    /** JPA 实体管理器。 */
-    private final EntityManager entityManager;
+    /** MyBatis 用户执行器。 */
+    private final UserMapper mapper;
 
     /**
      * 保存用户主体。
@@ -48,7 +30,7 @@ public class UserStoreImpl implements UserStore {
      */
     @Override
     public User save(User value) {
-        UserEntity existing = entityManager.find(UserEntity.class, value.getBizId());
+        UserEntity existing = mapper.selectById(value.getBizId());
         UserEntity entity = Optional.ofNullable(existing)
             .map(UserEntity::toBuilder)
             .orElseGet(UserEntity::builder)
@@ -63,7 +45,8 @@ public class UserStoreImpl implements UserStore {
             .deleted(value.getDeleted())
             .deletedAt(value.getDeletedAt())
             .build();
-        return toDomain(entityManager.merge(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
@@ -74,13 +57,7 @@ public class UserStoreImpl implements UserStore {
      */
     @Override
     public Optional<User> findByBizId(String bizId) {
-        return entityManager.createQuery("""
-                select u from UserEntity u
-                where u.bizId = :bizId and u.deleted = 0
-                """, UserEntity.class)
-            .setParameter("bizId", bizId)
-            .getResultStream()
-            .findFirst()
+        return Optional.ofNullable(mapper.selectActiveByBizId(bizId))
             .map(this::toDomain);
     }
 
@@ -92,21 +69,12 @@ public class UserStoreImpl implements UserStore {
      */
     @Override
     public PageResult<User> search(UserSearchCriteria criteria) {
-        String direction = criteria.ascending() ? "asc" : "desc";
-        TypedQuery<UserEntity> dataQuery = entityManager.createQuery(
-            "select u " + SEARCH_CONDITION + " order by u." + criteria.sort() + " " + direction,
-            UserEntity.class);
-        TypedQuery<Long> countQuery = entityManager.createQuery(
-            "select count(u) " + SEARCH_CONDITION, Long.class);
-        bindSearchParameters(dataQuery, criteria);
-        bindSearchParameters(countQuery, criteria);
-        List<User> items = dataQuery
-            .setFirstResult((criteria.page() - 1) * criteria.size())
-            .setMaxResults(criteria.size())
-            .getResultStream()
+        int offset = (criteria.page() - 1) * criteria.size();
+        List<User> items = mapper.search(criteria, offset, resolveSortColumn(criteria.sort()))
+            .stream()
             .map(this::toDomain)
             .toList();
-        long total = countQuery.getSingleResult();
+        long total = mapper.count(criteria);
         int totalPages = (int) Math.ceil((double) total / criteria.size());
         return PageResult.<User>builder()
             .items(items)
@@ -118,16 +86,18 @@ public class UserStoreImpl implements UserStore {
     }
 
     /**
-     * 为用户分页查询绑定公共参数。
+     * 将接口排序字段转换为固定数据库列，避免动态 SQL 注入。
      *
-     * @param query JPA 查询对象
-     * @param criteria 用户筛选条件
+     * @param sort 接口排序字段
+     * @return 数据库排序列
      */
-    private void bindSearchParameters(TypedQuery<?> query, UserSearchCriteria criteria) {
-        query.setParameter("keyword", blankToNull(criteria.keyword()));
-        query.setParameter("status", criteria.status() == null ? null : criteria.status().code());
-        query.setParameter("kycStatus", criteria.kycStatus() == null ? null : criteria.kycStatus().code());
-        query.setParameter("riskLevel", criteria.riskLevel());
+    private String resolveSortColumn(String sort) {
+        return switch (sort) {
+            case "userNo" -> "u.user_no";
+            case "status" -> "u.status";
+            case "lastLoginAt" -> "u.last_login_at";
+            default -> "u.created_at";
+        };
     }
 
     /**
@@ -151,13 +121,4 @@ public class UserStoreImpl implements UserStore {
             .build();
     }
 
-    /**
-     * 将空白查询值转换为 null。
-     *
-     * @param value 原始查询值
-     * @return 标准化查询值
-     */
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
 }

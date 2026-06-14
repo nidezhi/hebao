@@ -3,7 +3,7 @@ package com.example.dzcom.infrastructure.persistence.repository.account;
 import com.example.dzcom.domain.model.account.UserCredential;
 import com.example.dzcom.domain.repository.account.UserCredentialStore;
 import com.example.dzcom.infrastructure.persistence.entity.account.UserCredentialEntity;
-import jakarta.persistence.EntityManager;
+import com.example.dzcom.infrastructure.persistence.mapper.account.UserCredentialMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -17,8 +17,8 @@ import java.util.Optional;
 @Repository
 @RequiredArgsConstructor
 public class UserCredentialStoreImpl implements UserCredentialStore {
-    /** JPA 实体管理器。 */
-    private final EntityManager entityManager;
+    /** MyBatis 用户凭据执行器。 */
+    private final UserCredentialMapper mapper;
 
     /**
      * 保存密码凭据。
@@ -28,7 +28,7 @@ public class UserCredentialStoreImpl implements UserCredentialStore {
      */
     @Override
     public UserCredential save(UserCredential value) {
-        UserCredentialEntity existing = entityManager.find(UserCredentialEntity.class, value.bizId());
+        UserCredentialEntity existing = mapper.selectById(value.bizId());
         LocalDateTime createdAt = Optional.ofNullable(existing)
             .map(UserCredentialEntity::getCreatedAt)
             .orElse(value.changedAt());
@@ -48,7 +48,8 @@ public class UserCredentialStoreImpl implements UserCredentialStore {
             .updatedAt(value.changedAt())
             .deleted(value.deleted())
             .build();
-        return toDomain(entityManager.merge(entity));
+        mapper.save(entity);
+        return toDomain(entity);
     }
 
     /**
@@ -59,15 +60,7 @@ public class UserCredentialStoreImpl implements UserCredentialStore {
      */
     @Override
     public Optional<UserCredential> findPasswordByUserBizId(String userBizId) {
-        return entityManager.createQuery("""
-                select c from UserCredentialEntity c
-                where c.userBizId = :userBizId
-                  and c.credentialType = 'PASSWORD'
-                  and c.deleted = 0
-                """, UserCredentialEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultStream()
-            .findFirst()
+        return Optional.ofNullable(mapper.selectPasswordByUserBizId(userBizId))
             .map(this::toDomain);
     }
 
@@ -78,24 +71,7 @@ public class UserCredentialStoreImpl implements UserCredentialStore {
      */
     @Override
     public void softDeleteByUserBizId(String userBizId) {
-        findEntitiesByUserBizId(userBizId).stream()
-            .map(UserCredentialEntity::toBuilder)
-            .map(builder -> builder.deleted(1).build())
-            .forEach(entityManager::merge);
-    }
-
-    /**
-     * 查询用户全部凭据实体。
-     *
-     * @param userBizId 用户业务标识
-     * @return 凭据实体列表
-     */
-    private List<UserCredentialEntity> findEntitiesByUserBizId(String userBizId) {
-        return entityManager.createQuery(
-                "select c from UserCredentialEntity c where c.userBizId = :userBizId",
-                UserCredentialEntity.class)
-            .setParameter("userBizId", userBizId)
-            .getResultList();
+        mapper.softDeleteByUserBizId(userBizId);
     }
 
     /**
