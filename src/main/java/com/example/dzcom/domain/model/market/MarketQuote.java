@@ -56,12 +56,32 @@ public record MarketQuote(
         validateWithinRange("收盘价", closePrice, lowPrice, highPrice);
     }
 
+    /**
+     * 校验输入值是否满足业务约束。
+     *
+     * @param field field 参数
+     * @param value 待处理的数据值
+     * @throws IllegalArgumentException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private static void validateNonNegative(String field, BigDecimal value) {
         if (value != null && value.signum() < 0) {
             throw new IllegalArgumentException(field + "不能为负数");
         }
     }
 
+    /**
+     * 校验输入值是否满足业务约束。
+     *
+     * @param field field 参数
+     * @param value 待处理的数据值
+     * @param low low 参数
+     * @param high high 参数
+     * @throws IllegalArgumentException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private static void validateWithinRange(String field, BigDecimal value,
                                             BigDecimal low, BigDecimal high) {
         if (value != null && low != null && value.compareTo(low) < 0) {

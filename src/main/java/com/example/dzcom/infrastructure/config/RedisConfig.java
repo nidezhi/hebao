@@ -19,10 +19,11 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 public class RedisConfig {
 
     /**
-     * 提供项目统一的 Jackson 对象映射器。
+     * 提供项目统一的 Jackson 对象映射器。 会话、偏好和 Redis 序列化共享该实例，确保日期、Record 和集合类型 使用一致的 JSON 规则，避免不同模块各自创建 Mapper 造成行为漂移。
      *
-     * <p>会话、偏好和 Redis 序列化共享该实例，确保日期、Record 和集合类型
-     * 使用一致的 JSON 规则，避免不同模块各自创建 Mapper 造成行为漂移。</p>
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @Bean
     public ObjectMapper objectMapper() {
@@ -31,6 +32,15 @@ public class RedisConfig {
             .build();
     }
 
+    /**
+     * 执行 redis template 处理。
+     *
+     * @param connectionFactory connectionFactory 参数
+     * @param objectMapper objectMapper 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Bean
     public RedisTemplate<String, Object> redisTemplate(
         RedisConnectionFactory connectionFactory,

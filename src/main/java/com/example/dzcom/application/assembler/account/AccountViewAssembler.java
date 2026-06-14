@@ -21,6 +21,14 @@ import java.util.stream.Collectors;
 public class AccountViewAssembler {
     private final AccountStore store;
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param user user 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     public UserView assemble(User user) {
         List<LoginIdentity> identities = store.findIdentities(user.getBizId());
         UserProfile profile = store.findProfile(user.getBizId()).orElse(null);
@@ -45,6 +53,15 @@ public class AccountViewAssembler {
             .build();
     }
 
+    /**
+     * 执行 identity value 处理。
+     *
+     * @param identities identities 参数
+     * @param type 数据类型
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String identityValue(List<LoginIdentity> identities, IdentityType type) {
         return identities.stream().filter(identity -> identity.type() == type)
             .map(LoginIdentity::value).findFirst().orElse(null);

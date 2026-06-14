@@ -19,6 +19,11 @@ public class GlobalExceptionHandler {
     
     /**
      * 处理业务异常
+     *
+     * @param e 当前捕获的异常
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Result<Void>> handleBusinessException(BusinessException e) {
@@ -28,6 +33,11 @@ public class GlobalExceptionHandler {
     
     /**
      * 处理参数校验异常（@Valid）
+     *
+     * @param e 当前捕获的异常
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Result<Void>> handleValidationException(MethodArgumentNotValidException e) {
@@ -41,6 +51,11 @@ public class GlobalExceptionHandler {
     
     /**
      * 处理绑定异常
+     *
+     * @param e 当前捕获的异常
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @ExceptionHandler(BindException.class)
     public ResponseEntity<Result<Void>> handleBindException(BindException e) {
@@ -53,10 +68,12 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 处理领域对象对非法状态或非法数值的拒绝。
+     * 处理领域对象对非法状态或非法数值的拒绝。 请求注解负责常规格式校验，领域校验负责跨字段和生命周期约束； 两类错误都属于调用方可修正的 400 响应，不应被包装成系统异常。
      *
-     * <p>请求注解负责常规格式校验，领域校验负责跨字段和生命周期约束；
-     * 两类错误都属于调用方可修正的 400 响应，不应被包装成系统异常。</p>
+     * @param e 当前捕获的异常
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<Result<Void>> handleDomainValidationException(RuntimeException e) {
@@ -65,8 +82,12 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 数据库唯一约束是并发写入下的最终防线，冲突时返回稳定的 409，
-     * 同时避免把 SQL 和索引细节暴露给调用方。
+     * 数据库唯一约束是并发写入下的最终防线，冲突时返回稳定的 409， 同时避免把 SQL 和索引细节暴露给调用方。
+     *
+     * @param e 当前捕获的异常
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Result<Void>> handleDataIntegrityViolation(DataIntegrityViolationException e) {
@@ -75,8 +96,12 @@ public class GlobalExceptionHandler {
     }
     
     /**
-     * 处理静态资源未找到异常（如 favicon.ico）
-     * 这类异常通常是浏览器自动请求导致的，不需要记录为错误
+     * 处理静态资源未找到异常（如 favicon.ico） 这类异常通常是浏览器自动请求导致的，不需要记录为错误
+     *
+     * @param e 当前捕获的异常
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Result<Void>> handleNoResourceFoundException(NoResourceFoundException e) {
@@ -87,6 +112,11 @@ public class GlobalExceptionHandler {
     
     /**
      * 处理其他异常
+     *
+     * @param e 当前捕获的异常
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleException(Exception e) {

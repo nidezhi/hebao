@@ -27,14 +27,33 @@ public class ProductQueryService {
     private final ProductStore store;
     private final ProductViewAssembler assembler;
 
-    /** 查询产品详情并一次性装配其有效扩展属性。 */
+    /**
+     * 查询产品详情并一次性装配其有效扩展属性。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional(readOnly = true)
     public ProductView detail(String bizId) {
         Product product = requiredProduct(bizId);
         return assembler.assembleDetail(product, store.findAttributes(bizId));
     }
 
-    /** 按白名单字段分页查询产品，阻断任意排序字段进入 JPA。 */
+    /**
+     * 按白名单字段分页查询产品，阻断任意排序字段进入 JPA。
+     *
+     * @param keyword 模糊查询关键字
+     * @param productType productType 参数
+     * @param tradeStatus tradeStatus 参数
+     * @param riskLevel riskLevel 参数
+     * @param currency currency 参数
+     * @param pageQuery 分页查询参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional(readOnly = true)
     public PageResult<ProductView> list(String keyword, ProductType productType,
                                         ProductTradeStatus tradeStatus, Integer riskLevel,
@@ -53,6 +72,14 @@ public class ProductQueryService {
             .build();
     }
 
+    /**
+     * 获取必需的业务对象，不存在时终止当前流程。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     private Product requiredProduct(String bizId) {
         return store.findByBizId(bizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "产品不存在"));

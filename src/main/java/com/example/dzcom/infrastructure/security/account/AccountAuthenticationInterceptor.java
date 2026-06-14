@@ -31,6 +31,17 @@ public class AccountAuthenticationInterceptor implements HandlerInterceptor {
     private final AccountStore store;
     private final CurrentOperatorContext context;
 
+    /**
+     * 执行 pre handle 处理。
+     *
+     * @param request HTTP 请求或接口请求参数
+     * @param response HTTP 响应对象
+     * @param handler 当前请求处理器
+     * @return 满足条件时返回 true，否则返回 false
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String token = readCookie(request);
@@ -51,12 +62,30 @@ public class AccountAuthenticationInterceptor implements HandlerInterceptor {
         return true;
     }
 
+    /**
+     * 执行 after completion 处理。
+     *
+     * @param request HTTP 请求或接口请求参数
+     * @param response HTTP 响应对象
+     * @param handler 当前请求处理器
+     * @param ex 当前捕获的异常
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                 Object handler, Exception ex) {
         context.clear();
     }
 
+    /**
+     * 执行 read cookie 处理。
+     *
+     * @param request HTTP 请求或接口请求参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String readCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {

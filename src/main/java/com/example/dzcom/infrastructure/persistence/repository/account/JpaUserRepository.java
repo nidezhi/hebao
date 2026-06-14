@@ -9,8 +9,29 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.Optional;
 
 public interface JpaUserRepository extends JpaRepository<UserEntity, String> {
+    /**
+     * 执行 find by biz id and deleted 处理。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @param deleted deleted 参数
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     Optional<UserEntity> findByBizIdAndDeleted(String bizId, int deleted);
 
+    /**
+     * 根据查询条件获取业务数据列表。
+     *
+     * @param keyword 模糊查询关键字
+     * @param status 目标状态或目标值
+     * @param kycStatus kycStatus 参数
+     * @param riskLevel riskLevel 参数
+     * @param pageable pageable 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Query(
         value = """
             select u from UserEntity u

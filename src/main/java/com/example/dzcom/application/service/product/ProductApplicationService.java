@@ -43,6 +43,15 @@ public class ProductApplicationService {
     private final IdGenerator ids;
     private final ClockProvider clock;
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param command 应用用例命令
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public ProductView create(CreateProductCommand command) {
         CurrentOperator operator = requiredAdmin();
@@ -64,6 +73,15 @@ public class ProductApplicationService {
         return assembler.assembleDetail(store.save(product), java.util.List.of());
     }
 
+    /**
+     * 更新对应的业务数据。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @param command 应用用例命令
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public ProductView update(String bizId, UpdateProductCommand command) {
         CurrentOperator operator = requiredAdmin();
@@ -75,6 +93,15 @@ public class ProductApplicationService {
         return assembler.assembleDetail(store.save(product), store.findAttributes(bizId));
     }
 
+    /**
+     * 执行 change status 处理。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @param status 目标状态或目标值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public ProductView changeStatus(String bizId, ProductTradeStatus status) {
         CurrentOperator operator = requiredAdmin();
@@ -83,6 +110,16 @@ public class ProductApplicationService {
         return assembler.assembleDetail(store.save(product), store.findAttributes(bizId));
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param productBizId 业务对象的唯一标识
+     * @param command 应用用例命令
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public ProductView saveAttribute(String productBizId, SaveProductAttributeCommand command) {
         requiredAdmin();
@@ -113,6 +150,13 @@ public class ProductApplicationService {
         return assembler.assembleDetail(product, store.findAttributes(productBizId));
     }
 
+    /**
+     * 删除或逻辑删除对应的业务数据。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public void delete(String bizId) {
         CurrentOperator operator = requiredAdmin();
@@ -121,11 +165,27 @@ public class ProductApplicationService {
         store.save(product);
     }
 
+    /**
+     * 获取必需的业务对象，不存在时终止当前流程。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     private Product requiredProduct(String bizId) {
         return store.findByBizId(bizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "产品不存在"));
     }
 
+    /**
+     * 获取必需的业务对象，不存在时终止当前流程。
+     *
+     * @return 查询到的业务数据
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private CurrentOperator requiredAdmin() {
         CurrentOperator operator = currentOperator.required();
         if (!operator.hasRole("ADMIN")) {
@@ -134,6 +194,16 @@ public class ProductApplicationService {
         return operator;
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param value 待处理的数据值
+     * @param defaultValue defaultValue 参数
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private String normalizeUpper(String value, String defaultValue) {
         String normalized = value == null || value.isBlank() ? defaultValue : value.trim();
         if (normalized == null) {
@@ -143,8 +213,12 @@ public class ProductApplicationService {
     }
 
     /**
-     * 在进入持久化层前校验 JSON，保证不同数据库方言返回一致的 400 业务错误，
-     * 而不是依赖 MySQL JSON 列在事务提交时抛出难以理解的 SQL 异常。
+     * 在进入持久化层前校验 JSON，保证不同数据库方言返回一致的 400 业务错误， 而不是依赖 MySQL JSON 列在事务提交时抛出难以理解的 SQL 异常。
+     *
+     * @param jsonValue jsonValue 参数
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
      */
     private void validateJson(String jsonValue) {
         try {

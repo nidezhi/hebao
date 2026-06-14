@@ -26,6 +26,22 @@ public class User {
     private int deleted;
     private LocalDateTime deletedAt;
 
+    /**
+     * 创建并初始化 User 对象。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @param userNo userNo 参数
+     * @param status 目标状态或目标值
+     * @param version version 参数
+     * @param registeredAt registeredAt 参数
+     * @param lastLoginAt lastLoginAt 参数
+     * @param createdAt createdAt 参数
+     * @param updatedAt updatedAt 参数
+     * @param deleted deleted 参数
+     * @param deletedAt deletedAt 参数
+     * @author dz
+     * @date 2026-06-14
+     */
     private User(String bizId, String userNo, AccountStatus status, int version,
                  LocalDateTime registeredAt, LocalDateTime lastLoginAt,
                  LocalDateTime createdAt, LocalDateTime updatedAt,
@@ -42,7 +58,16 @@ public class User {
         this.deletedAt = deletedAt;
     }
 
-    /** 创建处于正常状态的新用户主体。 */
+    /**
+     * 创建处于正常状态的新用户主体。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @param userNo userNo 参数
+     * @param now 当前业务时间
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     public static User register(String bizId, String userNo, LocalDateTime now) {
         return User.builder()
             .bizId(bizId)
@@ -56,29 +81,50 @@ public class User {
             .build();
     }
 
-    /** 校验当前账户是否允许认证，删除、禁用和锁定状态均不可登录。 */
+    /**
+     * 校验当前账户是否允许认证，删除、禁用和锁定状态均不可登录。
+     *
+     * @throws IllegalStateException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     public void ensureCanLogin() {
         if (!canLogin()) {
             throw new IllegalStateException("账户不可登录");
         }
     }
 
-    /** 返回当前账户是否满足登录所需的生命周期状态。 */
+    /**
+     * 返回当前账户是否满足登录所需的生命周期状态。
+     *
+     * @return 满足条件时返回 true，否则返回 false
+     * @author dz
+     * @date 2026-06-14
+     */
     public boolean canLogin() {
         return deleted == 0 && status == AccountStatus.ACTIVE;
     }
 
     /**
-     * 返回用户是否已被逻辑删除。
+     * 返回用户是否已被逻辑删除。 领域调用方使用布尔语义判断生命周期，避免在业务代码中传播数据库使用的 {@code 0/1} 存储约定。
      *
-     * <p>领域调用方使用布尔语义判断生命周期，避免在业务代码中传播数据库使用的
-     * {@code 0/1} 存储约定。</p>
+     * @return 满足条件时返回 true，否则返回 false
+     * @author dz
+     * @date 2026-06-14
      */
     public boolean isDeleted() {
         return deleted == 1;
     }
 
-    /** 由管理或安全用例变更账户状态。 */
+    /**
+     * 由管理或安全用例变更账户状态。
+     *
+     * @param target 目标状态或目标值
+     * @param now 当前业务时间
+     * @throws IllegalStateException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     public void changeStatus(AccountStatus target, LocalDateTime now) {
         if (deleted == 1) {
             throw new IllegalStateException("用户不存在");
@@ -87,13 +133,25 @@ public class User {
         updatedAt = now;
     }
 
-    /** 登录成功后更新最后登录时间。 */
+    /**
+     * 登录成功后更新最后登录时间。
+     *
+     * @param now 当前业务时间
+     * @author dz
+     * @date 2026-06-14
+     */
     public void recordSuccessfulLogin(LocalDateTime now) {
         lastLoginAt = now;
         updatedAt = now;
     }
 
-    /** 幂等执行逻辑删除，同时将账户置为禁用状态。 */
+    /**
+     * 幂等执行逻辑删除，同时将账户置为禁用状态。
+     *
+     * @param now 当前业务时间
+     * @author dz
+     * @date 2026-06-14
+     */
     public void delete(LocalDateTime now) {
         if (deleted == 0) {
             deleted = 1;

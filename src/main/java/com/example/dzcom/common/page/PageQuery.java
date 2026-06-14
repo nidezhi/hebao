@@ -26,7 +26,15 @@ public record PageQuery(int page, int size, String sort, String direction) {
         direction = "asc".equalsIgnoreCase(direction) ? "asc" : "desc";
     }
 
-    /** 只允许应用服务声明过的排序字段进入持久化层，避免任意属性排序。 */
+    /**
+     * 只允许应用服务声明过的排序字段进入持久化层，避免任意属性排序。
+     *
+     * @param allowed allowed 参数
+     * @param defaultSort defaultSort 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     public String safeSort(Set<String> allowed, String defaultSort) {
         return allowed.contains(sort) ? sort : defaultSort;
     }

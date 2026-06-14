@@ -31,12 +31,29 @@ public class UserPreferenceApplicationService {
     private final ClockProvider clock;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 根据查询条件获取业务数据列表。
+     *
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional(readOnly = true)
     public List<PreferenceView> list() {
         return store.findPreferences(currentOperator.required().userBizId())
             .stream().map(this::toView).toList();
     }
 
+    /**
+     * 执行 set 处理。
+     *
+     * @param key 数据键
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public PreferenceView set(String key, JsonNode value) {
         validateKey(key);
@@ -57,6 +74,13 @@ public class UserPreferenceApplicationService {
         return toView(store.savePreference(preference));
     }
 
+    /**
+     * 删除或逻辑删除对应的业务数据。
+     *
+     * @param key 数据键
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public void delete(String key) {
         validateKey(key);
@@ -65,6 +89,15 @@ public class UserPreferenceApplicationService {
             store.savePreference(existing.toBuilder().updatedAt(clock.now()).deleted(1).build()));
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param preference preference 参数
+     * @return 转换后的目标对象
+     * @throws IllegalStateException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private PreferenceView toView(UserPreference preference) {
         try {
             return PreferenceView.builder()
@@ -78,12 +111,28 @@ public class UserPreferenceApplicationService {
         }
     }
 
+    /**
+     * 校验输入值是否满足业务约束。
+     *
+     * @param key 数据键
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private void validateKey(String key) {
         if (key == null || !ALLOWED_KEYS.contains(key)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "不支持的偏好键");
         }
     }
 
+    /**
+     * 执行 value type 处理。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String valueType(JsonNode value) {
         if (value.isBoolean()) return "BOOLEAN";
         if (value.isNumber()) return "NUMBER";

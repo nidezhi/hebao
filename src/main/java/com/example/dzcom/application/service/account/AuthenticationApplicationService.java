@@ -37,10 +37,28 @@ public class AuthenticationApplicationService {
     private final ClockProvider clock;
     private final AccountViewAssembler assembler;
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param command 应用用例命令
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     public UserView register(RegisterCommand command) {
         return registrationService.register(command);
     }
 
+    /**
+     * 执行 login 处理。
+     *
+     * @param account account 参数
+     * @param password password 参数
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public LoginResult login(String account, String password) {
         IdentityType type = normalizer.detectType(account);
@@ -72,10 +90,23 @@ public class AuthenticationApplicationService {
         return new LoginResult(assembler.assemble(user), token);
     }
 
+    /**
+     * 执行 logout 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     public void logout() {
         sessions.revoke(currentOperator.required().sessionToken());
     }
 
+    /**
+     * 执行 current user 处理。
+     *
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional(readOnly = true)
     public UserView currentUser() {
         User user = store.findUser(currentOperator.required().userBizId())
@@ -83,6 +114,13 @@ public class AuthenticationApplicationService {
         return assembler.assemble(user);
     }
 
+    /**
+     * 执行 invalid credentials 处理。
+     *
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private BusinessException invalidCredentials() {
         return new BusinessException(HttpStatus.UNAUTHORIZED, "账号或密码错误");
     }

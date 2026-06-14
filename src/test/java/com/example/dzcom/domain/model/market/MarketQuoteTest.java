@@ -11,6 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** 行情价格区间与非负数约束测试。 */
 class MarketQuoteTest {
+    /**
+     * 执行 should create valid ohlcv point 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void shouldCreateValidOhlcvPoint() {
         MarketQuote quote = quote("10.10", "10.50", "9.80", "10.30");
@@ -19,12 +25,24 @@ class MarketQuoteTest {
         assertEquals(QuoteStatus.VALID, quote.status());
     }
 
+    /**
+     * 执行 should reject close price outside high low range 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void shouldRejectClosePriceOutsideHighLowRange() {
         assertThrows(IllegalArgumentException.class,
             () -> quote("10.10", "10.50", "9.80", "10.60"));
     }
 
+    /**
+     * 执行 should reject negative volume 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void shouldRejectNegativeVolume() {
         assertThrows(IllegalArgumentException.class, () -> MarketQuote.builder()
@@ -41,6 +59,17 @@ class MarketQuoteTest {
             .build());
     }
 
+    /**
+     * 执行 quote 处理。
+     *
+     * @param open open 参数
+     * @param high high 参数
+     * @param low low 参数
+     * @param close close 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private MarketQuote quote(String open, String high, String low, String close) {
         return MarketQuote.builder()
             .bizId("quote-id")

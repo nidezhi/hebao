@@ -37,6 +37,10 @@ public class ApiDocStartupListener implements ApplicationListener<WebServerIniti
 
     /**
      * 应用端口绑定完成后打印全部可用的 API 文档入口。
+     *
+     * @param event event 参数
+     * @author dz
+     * @date 2026-06-14
      */
     @Override
     public void onApplicationEvent(WebServerInitializedEvent event) {
@@ -64,6 +68,14 @@ public class ApiDocStartupListener implements ApplicationListener<WebServerIniti
         );
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param path path 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String normalizeContextPath(String path) {
         if (path == null || path.isBlank() || "/".equals(path)) {
             return "";
@@ -71,6 +83,14 @@ public class ApiDocStartupListener implements ApplicationListener<WebServerIniti
         return path.startsWith("/") ? removeTrailingSlash(path) : "/" + removeTrailingSlash(path);
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param path path 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String normalizePath(String path) {
         if (path == null || path.isBlank()) {
             return "";
@@ -78,6 +98,14 @@ public class ApiDocStartupListener implements ApplicationListener<WebServerIniti
         return path.startsWith("/") ? path : "/" + path;
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param path path 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String removeTrailingSlash(String path) {
         return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
     }

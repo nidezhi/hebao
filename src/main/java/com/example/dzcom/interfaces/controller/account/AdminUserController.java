@@ -45,20 +45,21 @@ public class AdminUserController {
      * @author dz
      * @date 2026-06-14
      */
-    @PostMapping("/list")
     @Operation(summary = "用户列表")
+    @ResponseBody
+    @RequestMapping(value = "/list", method = RequestMethod.POST, produces = {"application/json;charset=UTF-8"})
     public Result<PageResult<UserView>> list(@Valid @RequestBody AdminUserListRequest request) {
         return Result.success(queries.list(
-            request.keyword(),
-            request.status(),
-            request.kycStatus(),
-            request.riskLevel(),
-            new PageQuery(
-                request.page() == null ? 1 : request.page(),
-                request.size() == null ? 20 : request.size(),
-                request.sort() == null ? "createdAt" : request.sort(),
-                request.direction() == null ? "desc" : request.direction()
-            )
+                request.keyword(),
+                request.status(),
+                request.kycStatus(),
+                request.riskLevel(),
+                new PageQuery(
+                        request.page() == null ? 1 : request.page(),
+                        request.size() == null ? 20 : request.size(),
+                        request.sort() == null ? "createdAt" : request.sort(),
+                        request.direction() == null ? "desc" : request.direction()
+                )
         ));
     }
 

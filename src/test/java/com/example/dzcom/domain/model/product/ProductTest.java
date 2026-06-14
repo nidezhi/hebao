@@ -20,6 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProductTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 6, 8, 10, 0);
 
+    /**
+     * 执行 should create tradable product with stable identity 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void shouldCreateTradableProductWithStableIdentity() {
         Product product = createProduct();
@@ -29,6 +35,12 @@ class ProductTest {
         assertEquals(0, product.getDeleted());
     }
 
+    /**
+     * 执行 should reject invalid risk and date range 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void shouldRejectInvalidRiskAndDateRange() {
         assertThrows(IllegalArgumentException.class, () -> Product.create(
@@ -39,6 +51,12 @@ class ProductTest {
         ));
     }
 
+    /**
+     * 执行 delete should be idempotent and prevent reactivation 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void deleteShouldBeIdempotentAndPreventReactivation() {
         Product product = createProduct();
@@ -52,6 +70,13 @@ class ProductTest {
             () -> product.changeTradeStatus(ProductTradeStatus.TRADABLE, "admin", NOW.plusMinutes(3)));
     }
 
+    /**
+     * 执行 create product 处理。
+     *
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private Product createProduct() {
         return Product.create(
             "product-id", "P0001", "000001", "测试产品", ProductType.STOCK,

@@ -32,6 +32,14 @@ public class ProductStoreAdapter implements ProductStore {
     private final JpaProductRepository products;
     private final JpaProductAttributeRepository attributes;
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Product save(Product value) {
         ProductEntity entity = products.findById(value.getBizId())
@@ -64,16 +72,41 @@ public class ProductStoreAdapter implements ProductStore {
         return toDomain(products.save(entity));
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<Product> findByBizId(String bizId) {
         return products.findByBizIdAndDeleted(bizId, 0).map(this::toDomain);
     }
 
+    /**
+     * 执行 exists by market and code 处理。
+     *
+     * @param marketCode marketCode 参数
+     * @param productCode productCode 参数
+     * @return 满足条件时返回 true，否则返回 false
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public boolean existsByMarketAndCode(String marketCode, String productCode) {
         return products.existsByMarketCodeAndProductCodeAndDeleted(marketCode, productCode, 0);
     }
 
+    /**
+     * 根据查询条件获取业务数据列表。
+     *
+     * @param criteria 查询筛选条件
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public PageResult<Product> search(ProductSearchCriteria criteria) {
         Sort sort = Sort.by(criteria.ascending() ? Sort.Direction.ASC : Sort.Direction.DESC, criteria.sort());
@@ -95,6 +128,14 @@ public class ProductStoreAdapter implements ProductStore {
             .build();
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public ProductAttribute saveAttribute(ProductAttribute value) {
         ProductAttributeEntity entity = attributes.findById(value.bizId())
@@ -114,6 +155,17 @@ public class ProductStoreAdapter implements ProductStore {
         return toDomain(attributes.save(entity));
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param productBizId 业务对象的唯一标识
+     * @param key 数据键
+     * @param effectiveDate effectiveDate 参数
+     * @param includeDeleted includeDeleted 参数
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<ProductAttribute> findAttribute(String productBizId, String key,
                                                     LocalDate effectiveDate, boolean includeDeleted) {
@@ -124,12 +176,28 @@ public class ProductStoreAdapter implements ProductStore {
         return result.map(this::toDomain);
     }
 
+    /**
+     * 执行 find attributes 处理。
+     *
+     * @param productBizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public List<ProductAttribute> findAttributes(String productBizId) {
         return attributes.findAllByProductBizIdAndDeletedOrderByAttributeKeyAscEffectiveDateDesc(productBizId, 0)
             .stream().map(this::toDomain).toList();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private Product toDomain(ProductEntity entity) {
         return Product.builder()
             .bizId(entity.getBizId())
@@ -158,6 +226,14 @@ public class ProductStoreAdapter implements ProductStore {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private ProductAttribute toDomain(ProductAttributeEntity entity) {
         return ProductAttribute.builder()
             .bizId(entity.getBizId())
@@ -173,6 +249,14 @@ public class ProductStoreAdapter implements ProductStore {
             .build();
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }

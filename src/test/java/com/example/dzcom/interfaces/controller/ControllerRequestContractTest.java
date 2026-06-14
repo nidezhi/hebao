@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.lang.reflect.Method;
@@ -18,7 +20,6 @@ import java.lang.reflect.Parameter;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -72,9 +73,13 @@ class ControllerRequestContractTest {
      * @date 2026-06-14
      */
     private void assertStaticPostMapping(Method method) {
-        PostMapping mapping = method.getAnnotation(PostMapping.class);
-        assertNotNull(mapping, method + " 必须使用 @PostMapping");
-        List.of(mapping.value()).forEach(path ->
+        PostMapping postMapping = method.getAnnotation(PostMapping.class);
+        RequestMapping requestMapping = method.getAnnotation(RequestMapping.class);
+        boolean usesPost = postMapping != null || requestMapping != null
+            && List.of(requestMapping.method()).contains(RequestMethod.POST);
+        assertTrue(usesPost, method + " 必须映射为 POST 请求");
+        String[] paths = postMapping != null ? postMapping.value() : requestMapping.value();
+        List.of(paths).forEach(path ->
             assertFalse(path.contains("{"), method + " 禁止使用动态路径参数"));
     }
 

@@ -16,6 +16,14 @@ public class ExcelUtil {
     
     /**
      * 导出Excel
+     *
+     * @param response HTTP 响应对象
+     * @param fileName fileName 参数
+     * @param data data 参数
+     * @param clazz 目标数据类型
+     * @throws IOException 方法执行失败时抛出
+     * @author dz
+     * @date 2026-06-14
      */
     public static void exportExcel(HttpServletResponse response, 
                                     String fileName, 
@@ -34,6 +42,12 @@ public class ExcelUtil {
     
     /**
      * 导入Excel
+     *
+     * @param inputStream 输入数据流
+     * @param clazz 目标数据类型
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
      */
     public static <T> List<T> importExcel(InputStream inputStream, Class<T> clazz) {
         return EasyExcel.read(inputStream, clazz, null)
@@ -41,6 +55,12 @@ public class ExcelUtil {
             .doReadSync();
     }
     
+    /**
+     * 创建并初始化 ExcelUtil 对象。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     private ExcelUtil() {
         // 防止实例化
     }

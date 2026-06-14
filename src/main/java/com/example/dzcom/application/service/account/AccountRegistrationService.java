@@ -38,6 +38,15 @@ public class AccountRegistrationService {
     private final PasswordHasher passwordHasher;
     private final AccountViewAssembler assembler;
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param command 应用用例命令
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public UserView register(RegisterCommand command) {
         validatePassword(command.password());
@@ -89,6 +98,15 @@ public class AccountRegistrationService {
         return assembler.assemble(user);
     }
 
+    /**
+     * 执行 build identities 处理。
+     *
+     * @param command 应用用例命令
+     * @param now 当前业务时间
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private List<LoginIdentity> buildIdentities(RegisterCommand command, LocalDateTime now) {
         return Stream.of(
                 buildIdentity(IdentityType.USERNAME, command.username(), true, now),
@@ -99,6 +117,18 @@ public class AccountRegistrationService {
             .toList();
     }
 
+    /**
+     * 执行 build identity 处理。
+     *
+     * @param type 数据类型
+     * @param value 待处理的数据值
+     * @param required required 参数
+     * @param now 当前业务时间
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private java.util.Optional<LoginIdentity> buildIdentity(IdentityType type, String value,
                                                             boolean required, LocalDateTime now) {
         if (value == null || value.isBlank()) {
@@ -119,12 +149,28 @@ public class AccountRegistrationService {
             .build());
     }
 
+    /**
+     * 执行 ensure identity available 处理。
+     *
+     * @param identity identity 参数
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private void ensureIdentityAvailable(LoginIdentity identity) {
         if (store.findIdentity(identity.type(), identity.normalizedValue()).isPresent()) {
             throw new BusinessException(HttpStatus.CONFLICT, "用户名、邮箱或手机号已存在");
         }
     }
 
+    /**
+     * 校验输入值是否满足业务约束。
+     *
+     * @param password password 参数
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private void validatePassword(String password) {
         if (password == null || password.length() < 8
             || !password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {

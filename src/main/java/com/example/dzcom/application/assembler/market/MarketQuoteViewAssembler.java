@@ -7,6 +7,14 @@ import org.springframework.stereotype.Component;
 /** 将行情领域对象转换为不包含持久化细节的接口视图。 */
 @Component
 public class MarketQuoteViewAssembler {
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param quote quote 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     public MarketQuoteView assemble(MarketQuote quote) {
         return MarketQuoteView.builder()
             .bizId(quote.bizId())

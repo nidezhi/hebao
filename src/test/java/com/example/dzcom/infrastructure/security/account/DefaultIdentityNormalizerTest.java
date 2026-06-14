@@ -9,6 +9,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DefaultIdentityNormalizerTest {
     private final DefaultIdentityNormalizer normalizer = new DefaultIdentityNormalizer();
 
+    /**
+     * 执行 should detect and normalize email 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void shouldDetectAndNormalizeEmail() {
         assertThat(normalizer.detectType(" User@Example.COM ")).isEqualTo(IdentityType.EMAIL);
@@ -16,6 +22,12 @@ class DefaultIdentityNormalizerTest {
             .isEqualTo("user@example.com");
     }
 
+    /**
+     * 执行 should detect and normalize phone 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void shouldDetectAndNormalizePhone() {
         assertThat(normalizer.detectType("13800138000")).isEqualTo(IdentityType.PHONE);

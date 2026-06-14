@@ -37,7 +37,15 @@ public class MarketQuoteApplicationService {
     private final IdGenerator ids;
     private final ClockProvider clock;
 
-    /** 管理员或受信行情采集入口写入一个行情点。当前尚未单设数据源角色，因此要求 ADMIN。 */
+    /**
+     * 管理员或受信行情采集入口写入一个行情点。当前尚未单设数据源角色，因此要求 ADMIN。
+     *
+     * @param command 应用用例命令
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional
     public MarketQuoteView save(SaveMarketQuoteCommand command) {
         requireAdmin();
@@ -65,7 +73,16 @@ public class MarketQuoteApplicationService {
         return assembler.assemble(quotes.savePoint(quote));
     }
 
-    /** 查询指定产品和周期的最新有效行情，sourceCode 为空时跨数据源取最新点。 */
+    /**
+     * 查询指定产品和周期的最新有效行情，sourceCode 为空时跨数据源取最新点。
+     *
+     * @param productBizId 业务对象的唯一标识
+     * @param interval interval 参数
+     * @param sourceCode sourceCode 参数
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Transactional(readOnly = true)
     public MarketQuoteView latest(String productBizId, String interval, String sourceCode) {
         requireProduct(productBizId);
@@ -75,9 +92,18 @@ public class MarketQuoteApplicationService {
     }
 
     /**
-     * 查询升序历史行情。
+     * 查询升序历史行情。 限制最大返回 1000 点，防止把高频行情接口误用为无边界数据导出。
      *
-     * <p>限制最大返回 1000 点，防止把高频行情接口误用为无边界数据导出。</p>
+     * @param productBizId 业务对象的唯一标识
+     * @param interval interval 参数
+     * @param sourceCode sourceCode 参数
+     * @param from from 参数
+     * @param to to 参数
+     * @param limit 结果数量限制
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
      */
     @Transactional(readOnly = true)
     public List<MarketQuoteView> history(String productBizId, String interval, String sourceCode,
@@ -94,12 +120,27 @@ public class MarketQuoteApplicationService {
             .stream().map(assembler::assemble).toList();
     }
 
+    /**
+     * 执行 require product 处理。
+     *
+     * @param productBizId 业务对象的唯一标识
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private void requireProduct(String productBizId) {
         if (products.findByBizId(productBizId).isEmpty()) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "产品不存在");
         }
     }
 
+    /**
+     * 执行 require admin 处理。
+     *
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private void requireAdmin() {
         CurrentOperator operator = currentOperator.required();
         if (!operator.hasRole("ADMIN")) {
@@ -107,6 +148,15 @@ public class MarketQuoteApplicationService {
         }
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @throws BusinessException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private String normalize(String value) {
         if (value == null || value.isBlank()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "编码不能为空");
@@ -114,6 +164,14 @@ public class MarketQuoteApplicationService {
         return value.trim().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String normalizeNullable(String value) {
         return value == null || value.isBlank() ? null : normalize(value);
     }

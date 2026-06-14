@@ -20,6 +20,13 @@ public class OpenApiConfig {
     @Value("${server.port:8080}")
     private String serverPort;
 
+    /**
+     * 执行 custom open api 处理。
+     *
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()

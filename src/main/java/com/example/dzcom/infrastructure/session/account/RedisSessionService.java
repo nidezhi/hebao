@@ -37,6 +37,17 @@ public class RedisSessionService implements SessionService {
     @Value("${dzcom.account.session-ttl:7d}")
     private Duration ttl;
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @param credentialVersion credentialVersion 参数
+     * @param roles roles 参数
+     * @return 方法执行后的结果
+     * @throws IllegalStateException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public SessionToken create(String userBizId, int credentialVersion, Set<String> roles) {
         byte[] bytes = new byte[32];
@@ -55,6 +66,14 @@ public class RedisSessionService implements SessionService {
         return new SessionToken(token, ttl.toSeconds());
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param token token 参数
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<SessionData> resolve(String token) {
         if (token == null || token.isBlank()) {
@@ -72,6 +91,13 @@ public class RedisSessionService implements SessionService {
         }
     }
 
+    /**
+     * 执行 revoke 处理。
+     *
+     * @param token token 参数
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public void revoke(String token) {
         if (token == null || token.isBlank()) {
@@ -83,6 +109,13 @@ public class RedisSessionService implements SessionService {
         redis.delete(SESSION_PREFIX + tokenHash);
     }
 
+    /**
+     * 执行 revoke all 处理。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public void revokeAll(String userBizId) {
         String userKey = USER_SESSIONS_PREFIX + userBizId;
@@ -93,6 +126,14 @@ public class RedisSessionService implements SessionService {
         redis.delete(userKey);
     }
 
+    /**
+     * 执行 resolve without recursion 处理。
+     *
+     * @param tokenHash tokenHash 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private Optional<SessionData> resolveWithoutRecursion(String tokenHash) {
         String json = redis.opsForValue().get(SESSION_PREFIX + tokenHash);
         if (json == null) {
@@ -105,6 +146,15 @@ public class RedisSessionService implements SessionService {
         }
     }
 
+    /**
+     * 计算输入内容的安全哈希值。
+     *
+     * @param token token 参数
+     * @return 方法执行后的结果
+     * @throws IllegalStateException 输入或业务状态不满足要求时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private String hash(String token) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")

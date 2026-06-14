@@ -11,16 +11,40 @@ import java.util.List;
 /** 将产品领域数据转换为稳定的接口视图。 */
 @Component
 public class ProductViewAssembler {
-    /** 组装列表项；刻意不读取扩展属性，避免分页查询产生 N+1。 */
+    /**
+     * 组装列表项；刻意不读取扩展属性，避免分页查询产生 N+1。
+     *
+     * @param product product 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     public ProductView assembleSummary(Product product) {
         return assemble(product, List.of());
     }
 
-    /** 组装包含低频扩展属性的产品详情。 */
+    /**
+     * 组装包含低频扩展属性的产品详情。
+     *
+     * @param product product 参数
+     * @param attributes attributes 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     public ProductView assembleDetail(Product product, List<ProductAttribute> attributes) {
         return assemble(product, attributes.stream().map(this::toView).toList());
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param product product 参数
+     * @param attributes attributes 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private ProductView assemble(Product product, List<ProductAttributeView> attributes) {
         return ProductView.builder()
             .bizId(product.getBizId())
@@ -45,6 +69,14 @@ public class ProductViewAssembler {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param attribute attribute 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private ProductAttributeView toView(ProductAttribute attribute) {
         return ProductAttributeView.builder()
             .key(attribute.key())

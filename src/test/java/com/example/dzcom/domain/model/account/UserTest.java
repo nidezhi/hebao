@@ -16,6 +16,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class UserTest {
 
+    /**
+     * 执行 registered user should be active and can login 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void registeredUserShouldBeActiveAndCanLogin() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 8, 0, 0);
@@ -27,6 +33,12 @@ class UserTest {
         user.ensureCanLogin();
     }
 
+    /**
+     * 执行 disabled user should not login 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void disabledUserShouldNotLogin() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 8, 0, 0);
@@ -38,6 +50,12 @@ class UserTest {
             .hasMessage("账户不可登录");
     }
 
+    /**
+     * 执行 delete should be idempotent and disable account 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void deleteShouldBeIdempotentAndDisableAccount() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 8, 0, 0);

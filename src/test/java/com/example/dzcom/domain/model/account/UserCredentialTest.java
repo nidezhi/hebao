@@ -9,6 +9,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 密码凭据失败计数、锁定和版本递增规则测试。 */
 class UserCredentialTest {
 
+    /**
+     * 执行 change secret should increment version and clear lock 处理。
+     *
+     * @author dz
+     * @date 2026-06-14
+     */
     @Test
     void changeSecretShouldIncrementVersionAndClearLock() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 8, 0, 0);

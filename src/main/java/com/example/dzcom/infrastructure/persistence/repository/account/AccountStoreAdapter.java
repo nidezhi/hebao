@@ -35,6 +35,14 @@ public class AccountStoreAdapter implements AccountStore {
     private final JpaUserRoleRepository roles;
     private final JpaUserPreferenceRepository preferences;
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param user user 参数
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public User saveUser(User user) {
         UserEntity.UserEntityBuilder entityBuilder = users.findById(user.getBizId())
@@ -55,11 +63,27 @@ public class AccountStoreAdapter implements AccountStore {
         return toDomain(users.save(entity));
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param bizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<User> findUser(String bizId) {
         return users.findByBizIdAndDeleted(bizId, 0).map(this::toDomain);
     }
 
+    /**
+     * 根据查询条件获取业务数据列表。
+     *
+     * @param criteria 查询筛选条件
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public PageResult<User> searchUsers(UserSearchCriteria criteria) {
         Sort sort = Sort.by(criteria.ascending() ? Sort.Direction.ASC : Sort.Direction.DESC, criteria.sort());
@@ -77,6 +101,14 @@ public class AccountStoreAdapter implements AccountStore {
         );
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public LoginIdentity saveIdentity(LoginIdentity value) {
         UserIdentityEntity entity = identities.findById(value.bizId())
@@ -96,6 +128,15 @@ public class AccountStoreAdapter implements AccountStore {
         return toDomain(identities.save(entity));
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param type 数据类型
+     * @param normalizedValue normalizedValue 参数
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<LoginIdentity> findIdentity(IdentityType type, String normalizedValue) {
         return identities.findByIdentityTypeAndNormalizedValueAndStatusAndDeleted(
@@ -103,18 +144,43 @@ public class AccountStoreAdapter implements AccountStore {
             .map(this::toDomain);
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @param type 数据类型
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<LoginIdentity> findIdentity(String userBizId, IdentityType type) {
         return identities.findByUserBizIdAndIdentityTypeAndDeleted(userBizId, type.name(), 0)
             .map(this::toDomain);
     }
 
+    /**
+     * 执行 find identities 处理。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public List<LoginIdentity> findIdentities(String userBizId) {
         return identities.findAllByUserBizIdAndDeleted(userBizId, 0)
             .stream().map(this::toDomain).toList();
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public UserCredential saveCredential(UserCredential value) {
         LocalDateTime createdAt = credentials.findById(value.bizId())
@@ -139,12 +205,28 @@ public class AccountStoreAdapter implements AccountStore {
         return toDomain(credentials.save(entity));
     }
 
+    /**
+     * 执行 find password credential 处理。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<UserCredential> findPasswordCredential(String userBizId) {
         return credentials.findByUserBizIdAndCredentialTypeAndDeleted(userBizId, "PASSWORD", 0)
             .map(this::toDomain);
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public UserProfile saveProfile(UserProfile value) {
         LocalDateTime now = LocalDateTime.now();
@@ -167,11 +249,27 @@ public class AccountStoreAdapter implements AccountStore {
         return toDomain(profiles.save(entity));
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<UserProfile> findProfile(String userBizId) {
         return profiles.findByUserBizIdAndDeleted(userBizId, 0).map(this::toDomain);
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public UserRiskProfile saveRiskProfile(UserRiskProfile value) {
         LocalDateTime now = LocalDateTime.now();
@@ -195,11 +293,27 @@ public class AccountStoreAdapter implements AccountStore {
         return toDomain(riskProfiles.save(entity));
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<UserRiskProfile> findRiskProfile(String userBizId) {
         return riskProfiles.findByUserBizIdAndDeleted(userBizId, 0).map(this::toDomain);
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public UserRole saveRole(UserRole value) {
         LocalDateTime createdAt = roles.findById(value.bizId())
@@ -220,11 +334,27 @@ public class AccountStoreAdapter implements AccountStore {
         return toDomain(roles.save(entity));
     }
 
+    /**
+     * 执行 find roles 处理。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public List<UserRole> findRoles(String userBizId) {
         return roles.findAllByUserBizIdAndDeleted(userBizId, 0).stream().map(this::toDomain).toList();
     }
 
+    /**
+     * 创建或保存对应的业务数据。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public UserPreference savePreference(UserPreference value) {
         LocalDateTime createdAt = preferences.findById(value.bizId())
@@ -245,6 +375,16 @@ public class AccountStoreAdapter implements AccountStore {
         return toDomain(preferences.save(entity));
     }
 
+    /**
+     * 根据指定条件查询业务数据。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @param key 数据键
+     * @param includeDeleted includeDeleted 参数
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public Optional<UserPreference> findPreference(String userBizId, String key, boolean includeDeleted) {
         Optional<UserPreferenceEntity> result = includeDeleted
@@ -253,12 +393,27 @@ public class AccountStoreAdapter implements AccountStore {
         return result.map(this::toDomain);
     }
 
+    /**
+     * 执行 find preferences 处理。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @return 查询到的业务数据
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public List<UserPreference> findPreferences(String userBizId) {
         return preferences.findAllByUserBizIdAndDeletedOrderByPreferenceKey(userBizId, 0)
             .stream().map(this::toDomain).toList();
     }
 
+    /**
+     * 删除或逻辑删除对应的业务数据。
+     *
+     * @param userBizId 业务对象的唯一标识
+     * @author dz
+     * @date 2026-06-14
+     */
     @Override
     public void softDeleteAccountData(String userBizId) {
         identities.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(1));
@@ -269,6 +424,14 @@ public class AccountStoreAdapter implements AccountStore {
         preferences.findAllByUserBizId(userBizId).forEach(entity -> entity.setDeleted(1));
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private User toDomain(UserEntity entity) {
         return User.builder()
             .bizId(entity.getBizId())
@@ -284,6 +447,14 @@ public class AccountStoreAdapter implements AccountStore {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private LoginIdentity toDomain(UserIdentityEntity entity) {
         return LoginIdentity.builder()
             .bizId(entity.getBizId())
@@ -298,6 +469,14 @@ public class AccountStoreAdapter implements AccountStore {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private UserCredential toDomain(UserCredentialEntity entity) {
         return UserCredential.builder()
             .bizId(entity.getBizId())
@@ -312,6 +491,14 @@ public class AccountStoreAdapter implements AccountStore {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private UserProfile toDomain(UserProfileEntity entity) {
         return UserProfile.builder()
             .bizId(entity.getBizId())
@@ -324,6 +511,14 @@ public class AccountStoreAdapter implements AccountStore {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private UserRiskProfile toDomain(UserRiskProfileEntity entity) {
         return UserRiskProfile.builder()
             .bizId(entity.getBizId())
@@ -337,6 +532,14 @@ public class AccountStoreAdapter implements AccountStore {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private UserRole toDomain(UserRoleEntity entity) {
         return UserRole.builder()
             .bizId(entity.getBizId())
@@ -349,6 +552,14 @@ public class AccountStoreAdapter implements AccountStore {
             .build();
     }
 
+    /**
+     * 将源对象转换为目标视图或领域对象。
+     *
+     * @param entity entity 参数
+     * @return 转换后的目标对象
+     * @author dz
+     * @date 2026-06-14
+     */
     private UserPreference toDomain(UserPreferenceEntity entity) {
         return UserPreference.builder()
             .bizId(entity.getBizId())
@@ -361,6 +572,14 @@ public class AccountStoreAdapter implements AccountStore {
             .build();
     }
 
+    /**
+     * 规范化输入值并返回统一格式。
+     *
+     * @param value 待处理的数据值
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }

@@ -12,6 +12,13 @@ import org.springframework.web.filter.CorsFilter;
 @Configuration
 public class CorsConfig {
     
+    /**
+     * 执行 cors filter 处理。
+     *
+     * @return 方法执行后的结果
+     * @author dz
+     * @date 2026-06-14
+     */
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
