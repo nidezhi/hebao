@@ -3,8 +3,8 @@ package com.example.dzcom.application.service.market;
 import com.example.dzcom.application.assembler.market.MarketQuoteViewAssembler;
 import com.example.dzcom.application.command.market.SaveMarketQuoteCommand;
 import com.example.dzcom.application.dto.market.MarketQuoteView;
-import com.example.dzcom.application.service.account.CurrentOperator;
-import com.example.dzcom.application.service.account.CurrentOperatorProvider;
+import com.example.dzcom.application.service.account.AuthorizationService;
+import com.example.dzcom.application.service.account.PermissionCodes;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
@@ -33,12 +33,12 @@ public class MarketQuoteApplicationService {
     private final MarketQuoteStore quotes;
     private final ProductStore products;
     private final MarketQuoteViewAssembler assembler;
-    private final CurrentOperatorProvider currentOperator;
+    private final AuthorizationService authorization;
     private final IdGenerator ids;
     private final ClockProvider clock;
 
     /**
-     * 管理员或受信行情采集入口写入一个行情点。当前尚未单设数据源角色，因此要求 ADMIN。
+     * 具备行情写入权限的操作者写入一个行情点。
      *
      * @param command 应用用例命令
      * @return 方法执行后的结果
@@ -48,7 +48,7 @@ public class MarketQuoteApplicationService {
      */
     @Transactional
     public MarketQuoteView save(SaveMarketQuoteCommand command) {
-        requireAdmin();
+        authorization.require(PermissionCodes.MARKET_QUOTE_WRITE);
         if (products.findByBizId(command.productBizId()).isEmpty()) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "行情关联产品不存在");
         }
@@ -141,13 +141,6 @@ public class MarketQuoteApplicationService {
      * @author dz
      * @date 2026-06-14
      */
-    private void requireAdmin() {
-        CurrentOperator operator = currentOperator.required();
-        if (!operator.hasRole("ADMIN")) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "需要管理员权限");
-        }
-    }
-
     /**
      * 规范化输入值并返回统一格式。
      *

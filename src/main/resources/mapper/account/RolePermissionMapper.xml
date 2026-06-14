@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.account.RolePermissionMapper">
+    <select id="selectOne" resultType="com.example.dzcom.infrastructure.persistence.entity.account.RolePermissionEntity">
+        select * from aiw_role_permission
+        where role_code = #{roleCode} and permission_code = #{permissionCode}
+    </select>
+    <select id="selectByRoleCode" resultType="com.example.dzcom.infrastructure.persistence.entity.account.RolePermissionEntity">
+        select * from aiw_role_permission
+        where role_code = #{roleCode} and is_deleted = 0
+        order by permission_code
+    </select>
+    <select id="selectPermissionCodesByRoleCodes" resultType="string">
+        select distinct permission_code
+        from aiw_role_permission
+        where is_deleted = 0
+          and role_code in
+        <foreach collection="roleCodes" item="roleCode" open="(" separator="," close=")">
+            #{roleCode}
+        </foreach>
+        order by permission_code
+    </select>
+    <insert id="save">
+        insert into aiw_role_permission
+        (biz_id, role_code, permission_code, created_at, created_by, is_deleted, deleted_at)
+        values
+        (#{bizId}, #{roleCode}, #{permissionCode}, #{createdAt}, #{createdBy}, #{deleted}, #{deletedAt})
+        on duplicate key update
+        created_at = values(created_at), created_by = values(created_by),
+        is_deleted = values(is_deleted), deleted_at = values(deleted_at)
+    </insert>
+    <update id="softDeleteByRoleCode">
+        update aiw_role_permission
+        set is_deleted = 1, deleted_at = current_timestamp(3)
+        where role_code = #{roleCode} and is_deleted = 0
+    </update>
+</mapper>

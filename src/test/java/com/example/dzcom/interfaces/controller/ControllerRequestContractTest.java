@@ -1,6 +1,7 @@
 package com.example.dzcom.interfaces.controller;
 
 import com.example.dzcom.interfaces.controller.account.AdminUserController;
+import com.example.dzcom.interfaces.controller.account.AdminRoleController;
 import com.example.dzcom.interfaces.controller.account.AuthenticationController;
 import com.example.dzcom.interfaces.controller.account.CurrentUserController;
 import com.example.dzcom.interfaces.controller.product.AdminProductController;
@@ -29,6 +30,7 @@ class ControllerRequestContractTest {
 
     private static final List<Class<?>> CONTROLLERS = List.of(
         AdminUserController.class,
+        AdminRoleController.class,
         AuthenticationController.class,
         CurrentUserController.class,
         AdminProductController.class,

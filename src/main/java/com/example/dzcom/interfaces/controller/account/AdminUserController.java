@@ -4,7 +4,8 @@ import com.example.dzcom.application.command.account.RegisterCommand;
 import com.example.dzcom.application.command.account.UpdateIdentitiesCommand;
 import com.example.dzcom.application.dto.account.UserView;
 import com.example.dzcom.application.service.account.AccountRegistrationService;
-import com.example.dzcom.application.service.account.CurrentOperatorProvider;
+import com.example.dzcom.application.service.account.AuthorizationService;
+import com.example.dzcom.application.service.account.PermissionCodes;
 import com.example.dzcom.application.service.account.UserApplicationService;
 import com.example.dzcom.application.service.account.UserQueryService;
 import com.example.dzcom.application.common.exception.BusinessException;
@@ -17,13 +18,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * 管理端用户接口。
  *
- * <p>所有请求必须先通过会话认证，具体用例再次校验 ADMIN 角色，
+ * <p>所有请求必须先通过会话认证，具体用例再次校验细粒度权限，
  * 状态、KYC 和风险等级使用独立接口，避免通用更新绕过业务规则。</p>
  */
 @RestController
@@ -34,7 +34,7 @@ public class AdminUserController {
     private final UserQueryService queries;
     private final UserApplicationService users;
     private final AccountRegistrationService registration;
-    private final CurrentOperatorProvider currentOperator;
+    private final AuthorizationService authorization;
 
     /**
      * 根据筛选条件分页查询用户列表。
@@ -90,7 +90,7 @@ public class AdminUserController {
     @PostMapping("/create")
     @Operation(summary = "管理端创建用户")
     public Result<UserView> create(@Valid @RequestBody AdminCreateUserRequest request) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_CREATE);
         UserView created = registration.register(RegisterCommand.builder()
             .username(request.username())
             .password(request.password())
@@ -184,16 +184,4 @@ public class AdminUserController {
         return Result.success();
     }
 
-    /**
-     * 校验当前操作者是否具备管理员角色。
-     *
-     * @throws BusinessException 当当前操作者不具备管理员角色时抛出
-     * @author dz
-     * @date 2026-06-14
-     */
-    private void requireAdmin() {
-        if (!currentOperator.required().hasRole("ADMIN")) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "需要管理员权限");
-        }
-    }
 }

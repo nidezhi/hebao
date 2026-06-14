@@ -21,6 +21,7 @@ public record UserView(
     KycStatus kycStatus,
     int riskLevel,
     Set<String> roles,
+    Set<String> permissions,
     LocalDateTime registeredAt,
     LocalDateTime lastLoginAt
 ) {

@@ -31,6 +31,7 @@ public class AccountAuthenticationInterceptor implements HandlerInterceptor {
     private final SessionService sessions;
     private final UserStore users;
     private final UserCredentialStore credentials;
+    private final com.example.dzcom.application.service.account.AuthorizationService authorization;
     private final CurrentOperatorContext context;
 
     /**
@@ -60,7 +61,17 @@ public class AccountAuthenticationInterceptor implements HandlerInterceptor {
             sessions.revoke(token);
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "登录已失效，请重新登录");
         }
-        context.set(new CurrentOperator(user.getBizId(), token, session.roles()));
+        com.example.dzcom.application.service.account.AuthorizationService.AuthorizationSnapshot snapshot =
+            session.permissions().isEmpty()
+                ? authorization.resolve(user.getBizId())
+                : new com.example.dzcom.application.service.account.AuthorizationService.AuthorizationSnapshot(
+                    session.roles(), session.permissions());
+        context.set(new CurrentOperator(
+            user.getBizId(),
+            token,
+            snapshot.roleCodes(),
+            snapshot.permissionCodes()
+        ));
         return true;
     }
 

@@ -24,7 +24,7 @@ public class UserQueryService {
 
     private final UserStore users;
     private final AccountViewAssembler assembler;
-    private final CurrentOperatorProvider currentOperator;
+    private final AuthorizationService authorization;
 
     /**
      * 根据指定条件查询业务数据。
@@ -36,7 +36,7 @@ public class UserQueryService {
      */
     @Transactional(readOnly = true)
     public UserView detail(String bizId) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_READ);
         return assembler.assemble(requiredUser(bizId));
     }
 
@@ -55,7 +55,7 @@ public class UserQueryService {
     @Transactional(readOnly = true)
     public PageResult<UserView> list(String keyword, AccountStatus status, KycStatus kycStatus,
                                      Integer riskLevel, PageQuery pageQuery) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_READ);
         String sort = pageQuery.safeSort(SORT_FIELDS, "createdAt");
         PageResult<User> page = users.search(new UserSearchCriteria(keyword, status, kycStatus, riskLevel,
             pageQuery.page(), pageQuery.size(), sort, "asc".equals(pageQuery.direction())));
@@ -81,16 +81,4 @@ public class UserQueryService {
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
     }
 
-    /**
-     * 执行 require admin 处理。
-     *
-     * @throws BusinessException 输入或业务状态不满足要求时抛出
-     * @author dz
-     * @date 2026-06-14
-     */
-    private void requireAdmin() {
-        if (!currentOperator.required().hasRole("ADMIN")) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "需要管理员权限");
-        }
-    }
 }

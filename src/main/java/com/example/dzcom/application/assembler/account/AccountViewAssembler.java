@@ -1,18 +1,16 @@
 package com.example.dzcom.application.assembler.account;
 
 import com.example.dzcom.application.dto.account.UserView;
+import com.example.dzcom.application.service.account.AuthorizationService;
 import com.example.dzcom.domain.enums.account.IdentityType;
 import com.example.dzcom.domain.model.account.*;
 import com.example.dzcom.domain.repository.account.LoginIdentityStore;
 import com.example.dzcom.domain.repository.account.UserProfileStore;
 import com.example.dzcom.domain.repository.account.UserRiskProfileStore;
-import com.example.dzcom.domain.repository.account.UserRoleStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * 将账户域多表数据组装为接口视图。
@@ -25,7 +23,7 @@ public class AccountViewAssembler {
     private final LoginIdentityStore identities;
     private final UserProfileStore profiles;
     private final UserRiskProfileStore riskProfiles;
-    private final UserRoleStore roles;
+    private final AuthorizationService authorization;
 
     /**
      * 将源对象转换为目标视图或领域对象。
@@ -39,9 +37,7 @@ public class AccountViewAssembler {
         List<LoginIdentity> loginIdentities = identities.findByUserBizId(user.getBizId());
         UserProfile profile = profiles.findByUserBizId(user.getBizId()).orElse(null);
         UserRiskProfile risk = riskProfiles.findByUserBizId(user.getBizId()).orElse(null);
-        Set<String> roleCodes = roles.findByUserBizId(user.getBizId()).stream()
-            .map(UserRole::roleCode)
-            .collect(Collectors.toUnmodifiableSet());
+        AuthorizationService.AuthorizationSnapshot snapshot = authorization.resolve(user.getBizId());
         return UserView.builder()
             .bizId(user.getBizId())
             .userNo(user.getUserNo())
@@ -53,7 +49,8 @@ public class AccountViewAssembler {
             .status(user.getStatus())
             .kycStatus(risk == null ? null : risk.kycStatus())
             .riskLevel(risk == null ? 1 : risk.riskLevel())
-            .roles(roleCodes)
+            .roles(snapshot.roleCodes())
+            .permissions(snapshot.permissionCodes())
             .registeredAt(user.getRegisteredAt())
             .lastLoginAt(user.getLastLoginAt())
             .build();

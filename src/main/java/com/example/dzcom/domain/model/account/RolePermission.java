@@ -4,16 +4,15 @@ import lombok.Builder;
 
 import java.time.LocalDateTime;
 
-/** 用户角色分配领域对象。 */
+/** 角色权限映射领域对象。 */
 @Builder(toBuilder = true)
-public record UserRole(
+public record RolePermission(
     String bizId,
-    String userBizId,
     String roleCode,
-    String scopeCode,
-    LocalDateTime effectiveFrom,
-    LocalDateTime effectiveTo,
+    String permissionCode,
+    LocalDateTime createdAt,
     String createdBy,
-    int deleted
+    int deleted,
+    LocalDateTime deletedAt
 ) {
 }

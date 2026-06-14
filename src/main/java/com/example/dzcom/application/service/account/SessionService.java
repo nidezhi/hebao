@@ -15,12 +15,14 @@ public interface SessionService {
      *
      * @param userBizId 业务对象的唯一标识
      * @param credentialVersion credentialVersion 参数
-     * @param roles roles 参数
+     * @param roles 有效角色编码
+     * @param permissions 有效权限编码
      * @return 方法执行后的结果
      * @author dz
      * @date 2026-06-14
      */
-    SessionToken create(String userBizId, int credentialVersion, Set<String> roles);
+    SessionToken create(String userBizId, int credentialVersion, Set<String> roles,
+                        Set<String> permissions);
 
     /**
      * 解析会话令牌；令牌不存在、过期或数据损坏时返回空。
@@ -55,6 +57,15 @@ public interface SessionService {
     }
 
     /** 服务端保存的最小会话数据，不包含密码和个人敏感信息。 */
-    record SessionData(String userBizId, int credentialVersion, Set<String> roles) {
+    record SessionData(
+        String userBizId,
+        int credentialVersion,
+        Set<String> roles,
+        Set<String> permissions
+    ) {
+        public SessionData {
+            roles = roles == null ? Set.of() : Set.copyOf(roles);
+            permissions = permissions == null ? Set.of() : Set.copyOf(permissions);
+        }
     }
 }

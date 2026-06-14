@@ -9,7 +9,6 @@ import com.example.dzcom.domain.enums.account.IdentityType;
 import com.example.dzcom.domain.model.account.LoginIdentity;
 import com.example.dzcom.domain.model.account.User;
 import com.example.dzcom.domain.model.account.UserCredential;
-import com.example.dzcom.domain.model.account.UserRole;
 import com.example.dzcom.domain.repository.account.LoginIdentityStore;
 import com.example.dzcom.domain.repository.account.UserCredentialStore;
 import com.example.dzcom.domain.repository.account.UserRoleStore;
@@ -22,8 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +31,7 @@ public class AuthenticationApplicationService {
     private final UserStore users;
     private final LoginIdentityStore identities;
     private final UserCredentialStore credentials;
-    private final UserRoleStore roles;
+    private final AuthorizationService authorization;
     private final IdentityNormalizer normalizer;
     private final PasswordHasher passwordHasher;
     private final SessionService sessions;
@@ -89,10 +86,13 @@ public class AuthenticationApplicationService {
         credentials.save(credential.loginSucceeded());
         user.recordSuccessfulLogin(now);
         users.save(user);
-        Set<String> roleCodes = roles.findByUserBizId(user.getBizId()).stream()
-            .map(UserRole::roleCode).collect(Collectors.toUnmodifiableSet());
+        AuthorizationService.AuthorizationSnapshot snapshot = authorization.resolve(user.getBizId());
         SessionService.SessionToken token = sessions.create(
-            user.getBizId(), credential.credentialVersion(), roleCodes);
+            user.getBizId(),
+            credential.credentialVersion(),
+            snapshot.roleCodes(),
+            snapshot.permissionCodes()
+        );
         return new LoginResult(assembler.assemble(user), token);
     }
 

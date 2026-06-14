@@ -8,7 +8,8 @@ import com.example.dzcom.application.command.product.SaveProductAttributeCommand
 import com.example.dzcom.application.command.product.UpdateProductCommand;
 import com.example.dzcom.application.dto.product.ProductView;
 import com.example.dzcom.application.service.account.CurrentOperator;
-import com.example.dzcom.application.service.account.CurrentOperatorProvider;
+import com.example.dzcom.application.service.account.AuthorizationService;
+import com.example.dzcom.application.service.account.PermissionCodes;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
@@ -29,7 +30,7 @@ import java.util.Set;
 /**
  * 产品中心管理用例。
  *
- * <p>所有写操作要求 ADMIN 角色，并在同一事务内完成业务校验和持久化。
+ * <p>所有写操作要求产品目录管理权限，并在同一事务内完成业务校验和持久化。
  * 代码层预检查用于给出可读错误，数据库唯一索引仍是并发场景的最终约束。</p>
  */
 @Service
@@ -41,7 +42,7 @@ public class ProductApplicationService {
     private final ProductStore store;
     private final ProductAttributeStore attributes;
     private final ProductViewAssembler assembler;
-    private final CurrentOperatorProvider currentOperator;
+    private final AuthorizationService authorization;
     private final IdGenerator ids;
     private final ClockProvider clock;
 
@@ -56,7 +57,7 @@ public class ProductApplicationService {
      */
     @Transactional
     public ProductView create(CreateProductCommand command) {
-        CurrentOperator operator = requiredAdmin();
+        CurrentOperator operator = requiredManager();
         String marketCode = normalizeUpper(command.marketCode(), "OTC");
         String productCode = normalizeUpper(command.productCode(), null);
         if (store.existsByMarketAndCode(marketCode, productCode)) {
@@ -86,7 +87,7 @@ public class ProductApplicationService {
      */
     @Transactional
     public ProductView update(String bizId, UpdateProductCommand command) {
-        CurrentOperator operator = requiredAdmin();
+        CurrentOperator operator = requiredManager();
         Product product = requiredProduct(bizId);
         product.updateDetails(command.productName(), command.riskLevel(),
             command.minInvestAmount(), command.amountStep(), command.quantityStep(),
@@ -106,7 +107,7 @@ public class ProductApplicationService {
      */
     @Transactional
     public ProductView changeStatus(String bizId, ProductTradeStatus status) {
-        CurrentOperator operator = requiredAdmin();
+        CurrentOperator operator = requiredManager();
         Product product = requiredProduct(bizId);
         product.changeTradeStatus(status, operator.userBizId(), clock.now());
         return assembler.assembleDetail(store.save(product), attributes.findByProductBizId(bizId));
@@ -124,7 +125,7 @@ public class ProductApplicationService {
      */
     @Transactional
     public ProductView saveAttribute(String productBizId, SaveProductAttributeCommand command) {
-        requiredAdmin();
+        requiredManager();
         Product product = requiredProduct(productBizId);
         String valueType = normalizeUpper(command.valueType(), "STRING");
         if (!ATTRIBUTE_VALUE_TYPES.contains(valueType)) {
@@ -161,7 +162,7 @@ public class ProductApplicationService {
      */
     @Transactional
     public void delete(String bizId) {
-        CurrentOperator operator = requiredAdmin();
+        CurrentOperator operator = requiredManager();
         Product product = requiredProduct(bizId);
         product.delete(operator.userBizId(), clock.now());
         store.save(product);
@@ -188,12 +189,8 @@ public class ProductApplicationService {
      * @author dz
      * @date 2026-06-14
      */
-    private CurrentOperator requiredAdmin() {
-        CurrentOperator operator = currentOperator.required();
-        if (!operator.hasRole("ADMIN")) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "需要管理员权限");
-        }
-        return operator;
+    private CurrentOperator requiredManager() {
+        return authorization.require(PermissionCodes.PRODUCT_CATALOG_MANAGE);
     }
 
     /**

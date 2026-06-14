@@ -35,6 +35,7 @@ public class UserApplicationService {
     private final UserRoleStore roles;
     private final UserPreferenceStore preferences;
     private final CurrentOperatorProvider currentOperator;
+    private final AuthorizationService authorization;
     private final IdentityNormalizer normalizer;
     private final PasswordHasher passwordHasher;
     private final SessionService sessions;
@@ -69,7 +70,7 @@ public class UserApplicationService {
      */
     @Transactional
     public UserView updateUser(String bizId, UpdateIdentitiesCommand command) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_UPDATE);
         requiredUser(bizId);
         updateIdentity(bizId, IdentityType.EMAIL, command.email());
         updateIdentity(bizId, IdentityType.PHONE, command.phone());
@@ -109,7 +110,7 @@ public class UserApplicationService {
      */
     @Transactional
     public UserView changeStatus(String bizId, AccountStatus status) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_UPDATE_STATUS);
         User user = requiredUser(bizId);
         user.changeStatus(status, clock.now());
         users.save(user);
@@ -130,7 +131,7 @@ public class UserApplicationService {
      */
     @Transactional
     public UserView changeKycStatus(String bizId, KycStatus status) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_UPDATE_KYC);
         requiredUser(bizId);
         UserRiskProfile risk = requiredRiskProfile(bizId);
         riskProfiles.save(risk.changeKycStatus(status, clock.now()));
@@ -149,7 +150,7 @@ public class UserApplicationService {
      */
     @Transactional
     public UserView changeRiskLevel(String bizId, int riskLevel) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_UPDATE_RISK);
         if (riskLevel < 1 || riskLevel > 5) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "风险等级必须在 1 到 5 之间");
         }
@@ -168,7 +169,7 @@ public class UserApplicationService {
      */
     @Transactional
     public void deleteUser(String bizId) {
-        requireAdmin();
+        authorization.require(PermissionCodes.ACCOUNT_USER_DELETE);
         users.findByBizId(bizId).ifPresent(user -> {
             user.delete(clock.now());
             identities.softDeleteByUserBizId(bizId);
@@ -248,19 +249,6 @@ public class UserApplicationService {
     private UserRiskProfile requiredRiskProfile(String bizId) {
         return riskProfiles.findByUserBizId(bizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户风险画像不存在"));
-    }
-
-    /**
-     * 执行 require admin 处理。
-     *
-     * @throws BusinessException 输入或业务状态不满足要求时抛出
-     * @author dz
-     * @date 2026-06-14
-     */
-    private void requireAdmin() {
-        if (!currentOperator.required().hasRole("ADMIN")) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "需要管理员权限");
-        }
     }
 
     /**

@@ -42,6 +42,7 @@ public class UserRoleStoreImpl implements UserRoleStore {
             .effectiveFrom(value.effectiveFrom())
             .effectiveTo(value.effectiveTo())
             .createdAt(createdAt)
+            .createdBy(value.createdBy())
             .deleted(value.deleted())
             .build();
         mapper.save(entity);
@@ -59,6 +60,31 @@ public class UserRoleStoreImpl implements UserRoleStore {
         return findEntitiesByUserBizId(userBizId, false).stream()
             .map(this::toDomain)
             .toList();
+    }
+
+    /** 查询用户指定角色分配，包含已撤销记录。 */
+    @Override
+    public Optional<UserRole> findByUserBizIdAndRoleCode(String userBizId, String roleCode) {
+        return Optional.ofNullable(mapper.selectByUserBizIdAndRoleCode(userBizId, roleCode))
+            .map(this::toDomain);
+    }
+
+    /** 查询持有指定角色的用户业务标识。 */
+    @Override
+    public List<String> findUserBizIdsByRoleCode(String roleCode) {
+        return mapper.selectUserBizIdsByRoleCode(roleCode);
+    }
+
+    /** 统计通过其他角色具备指定权限的有效用户数量。 */
+    @Override
+    public long countUsersWithPermissionExcludingRole(String permissionCode, String excludedRoleCode) {
+        return mapper.countUsersWithPermissionExcludingRole(permissionCode, excludedRoleCode);
+    }
+
+    /** 软删除用户的指定角色。 */
+    @Override
+    public void softDelete(String userBizId, String roleCode) {
+        mapper.softDelete(userBizId, roleCode);
     }
 
     /**
@@ -96,6 +122,7 @@ public class UserRoleStoreImpl implements UserRoleStore {
             .scopeCode(entity.getScopeCode())
             .effectiveFrom(entity.getEffectiveFrom())
             .effectiveTo(entity.getEffectiveTo())
+            .createdBy(entity.getCreatedBy())
             .deleted(entity.getDeleted())
             .build();
     }

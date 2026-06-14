@@ -5,20 +5,55 @@
         select * from aiw_user_role where biz_id = #{bizId}
     </select>
     <select id="selectByUserBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserRoleEntity">
-        select * from aiw_user_role where user_biz_id = #{userBizId}
-        <if test="!includeDeleted">and is_deleted = 0</if>
+        select ur.* from aiw_user_role ur
+        inner join aiw_role r on r.role_code = ur.role_code
+        where ur.user_biz_id = #{userBizId}
+        <if test="!includeDeleted">
+            and ur.is_deleted = 0
+            and ur.effective_from &lt;= current_timestamp(3)
+            and (ur.effective_to is null or ur.effective_to &gt; current_timestamp(3))
+            and r.status = 1 and r.is_deleted = 0
+        </if>
+        order by ur.role_code
+    </select>
+    <select id="selectByUserBizIdAndRoleCode" resultType="com.example.dzcom.infrastructure.persistence.entity.account.UserRoleEntity">
+        select * from aiw_user_role
+        where user_biz_id = #{userBizId} and role_code = #{roleCode} and scope_code = 'GLOBAL'
+    </select>
+    <select id="selectUserBizIdsByRoleCode" resultType="string">
+        select distinct user_biz_id from aiw_user_role
+        where role_code = #{roleCode} and is_deleted = 0
+    </select>
+    <select id="countUsersWithPermissionExcludingRole" resultType="long">
+        select count(distinct ur.user_biz_id)
+        from aiw_user_role ur
+        inner join aiw_role r on r.role_code = ur.role_code
+        inner join aiw_role_permission rp on rp.role_code = ur.role_code
+        where rp.permission_code = #{permissionCode}
+          and ur.role_code != #{excludedRoleCode}
+          and ur.is_deleted = 0
+          and ur.effective_from &lt;= current_timestamp(3)
+          and (ur.effective_to is null or ur.effective_to &gt; current_timestamp(3))
+          and r.status = 1 and r.is_deleted = 0
+          and rp.is_deleted = 0
     </select>
     <insert id="save">
         insert into aiw_user_role
-        (biz_id, user_biz_id, role_code, scope_code, effective_from, effective_to, created_at, is_deleted)
+        (biz_id, user_biz_id, role_code, scope_code, effective_from, effective_to,
+         created_at, created_by, is_deleted)
         values
         (#{bizId}, #{userBizId}, #{roleCode}, #{scopeCode}, #{effectiveFrom}, #{effectiveTo},
-         #{createdAt}, #{deleted})
+         #{createdAt}, #{createdBy}, #{deleted})
         on duplicate key update
         role_code = values(role_code), scope_code = values(scope_code),
         effective_from = values(effective_from), effective_to = values(effective_to),
         is_deleted = values(is_deleted)
     </insert>
+    <update id="softDelete">
+        update aiw_user_role
+        set is_deleted = 1, effective_to = current_timestamp(3)
+        where user_biz_id = #{userBizId} and role_code = #{roleCode} and is_deleted = 0
+    </update>
     <update id="softDeleteByUserBizId">
         update aiw_user_role set is_deleted = 1 where user_biz_id = #{userBizId}
     </update>

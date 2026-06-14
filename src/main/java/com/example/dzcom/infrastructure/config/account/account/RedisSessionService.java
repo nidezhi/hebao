@@ -42,19 +42,26 @@ public class RedisSessionService implements SessionService {
      *
      * @param userBizId 业务对象的唯一标识
      * @param credentialVersion credentialVersion 参数
-     * @param roles roles 参数
+     * @param roles 有效角色编码
+     * @param permissions 有效权限编码
      * @return 方法执行后的结果
      * @throws IllegalStateException 输入或业务状态不满足要求时抛出
      * @author dz
      * @date 2026-06-14
      */
     @Override
-    public SessionToken create(String userBizId, int credentialVersion, Set<String> roles) {
+    public SessionToken create(String userBizId, int credentialVersion, Set<String> roles,
+                               Set<String> permissions) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         String tokenHash = hash(token);
-        SessionData data = new SessionData(userBizId, credentialVersion, Set.copyOf(roles));
+        SessionData data = new SessionData(
+            userBizId,
+            credentialVersion,
+            Set.copyOf(roles),
+            Set.copyOf(permissions)
+        );
         try {
             redis.opsForValue().set(SESSION_PREFIX + tokenHash, objectMapper.writeValueAsString(data), ttl);
             String userKey = USER_SESSIONS_PREFIX + userBizId;
