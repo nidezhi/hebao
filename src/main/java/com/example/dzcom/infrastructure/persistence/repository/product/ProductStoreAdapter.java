@@ -4,10 +4,8 @@ import com.example.dzcom.common.page.PageResult;
 import com.example.dzcom.domain.enums.product.ProductTradeStatus;
 import com.example.dzcom.domain.enums.product.ProductType;
 import com.example.dzcom.domain.model.product.Product;
-import com.example.dzcom.domain.model.product.ProductAttribute;
 import com.example.dzcom.domain.repository.product.ProductSearchCriteria;
 import com.example.dzcom.domain.repository.product.ProductStore;
-import com.example.dzcom.infrastructure.persistence.entity.product.ProductAttributeEntity;
 import com.example.dzcom.infrastructure.persistence.entity.product.ProductEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,8 +13,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -30,7 +26,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ProductStoreAdapter implements ProductStore {
     private final JpaProductRepository products;
-    private final JpaProductAttributeRepository attributes;
 
     /**
      * 创建或保存对应的业务数据。
@@ -129,68 +124,6 @@ public class ProductStoreAdapter implements ProductStore {
     }
 
     /**
-     * 创建或保存对应的业务数据。
-     *
-     * @param value 待处理的数据值
-     * @return 方法执行后的结果
-     * @author dz
-     * @date 2026-06-14
-     */
-    @Override
-    public ProductAttribute saveAttribute(ProductAttribute value) {
-        ProductAttributeEntity entity = attributes.findById(value.bizId())
-            .map(ProductAttributeEntity::toBuilder)
-            .orElseGet(ProductAttributeEntity::builder)
-            .bizId(value.bizId())
-            .productBizId(value.productBizId())
-            .attributeKey(value.key())
-            .valueType(value.valueType())
-            .attributeValue(value.jsonValue())
-            .effectiveDate(value.effectiveDate())
-            .sourceCode(value.sourceCode())
-            .createdAt(value.createdAt())
-            .updatedAt(value.updatedAt())
-            .deleted(value.deleted())
-            .build();
-        return toDomain(attributes.save(entity));
-    }
-
-    /**
-     * 根据指定条件查询业务数据。
-     *
-     * @param productBizId 业务对象的唯一标识
-     * @param key 数据键
-     * @param effectiveDate effectiveDate 参数
-     * @param includeDeleted includeDeleted 参数
-     * @return 查询到的业务数据
-     * @author dz
-     * @date 2026-06-14
-     */
-    @Override
-    public Optional<ProductAttribute> findAttribute(String productBizId, String key,
-                                                    LocalDate effectiveDate, boolean includeDeleted) {
-        Optional<ProductAttributeEntity> result = includeDeleted
-            ? attributes.findByProductBizIdAndAttributeKeyAndEffectiveDate(productBizId, key, effectiveDate)
-            : attributes.findByProductBizIdAndAttributeKeyAndEffectiveDateAndDeleted(
-                productBizId, key, effectiveDate, 0);
-        return result.map(this::toDomain);
-    }
-
-    /**
-     * 执行 find attributes 处理。
-     *
-     * @param productBizId 业务对象的唯一标识
-     * @return 查询到的业务数据
-     * @author dz
-     * @date 2026-06-14
-     */
-    @Override
-    public List<ProductAttribute> findAttributes(String productBizId) {
-        return attributes.findAllByProductBizIdAndDeletedOrderByAttributeKeyAscEffectiveDateDesc(productBizId, 0)
-            .stream().map(this::toDomain).toList();
-    }
-
-    /**
      * 将源对象转换为目标视图或领域对象。
      *
      * @param entity entity 参数
@@ -223,29 +156,6 @@ public class ProductStoreAdapter implements ProductStore {
             .updatedBy(entity.getUpdatedBy())
             .deleted(entity.getDeleted())
             .deletedAt(entity.getDeletedAt())
-            .build();
-    }
-
-    /**
-     * 将源对象转换为目标视图或领域对象。
-     *
-     * @param entity entity 参数
-     * @return 转换后的目标对象
-     * @author dz
-     * @date 2026-06-14
-     */
-    private ProductAttribute toDomain(ProductAttributeEntity entity) {
-        return ProductAttribute.builder()
-            .bizId(entity.getBizId())
-            .productBizId(entity.getProductBizId())
-            .key(entity.getAttributeKey())
-            .valueType(entity.getValueType())
-            .jsonValue(entity.getAttributeValue())
-            .effectiveDate(entity.getEffectiveDate())
-            .sourceCode(entity.getSourceCode())
-            .createdAt(entity.getCreatedAt())
-            .updatedAt(entity.getUpdatedAt())
-            .deleted(entity.getDeleted())
             .build();
     }
 

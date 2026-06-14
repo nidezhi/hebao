@@ -121,6 +121,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleException(Exception e) {
         log.error("系统异常: ", e);
-        return ResponseEntity.internalServerError().body(Result.error(500, "系统错误，请联系管理员"));
+        return ResponseEntity.internalServerError().body(Result.error("系统错误"));
     }
 }

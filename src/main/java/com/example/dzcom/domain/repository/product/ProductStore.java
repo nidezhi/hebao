@@ -2,9 +2,7 @@ package com.example.dzcom.domain.repository.product;
 
 import com.example.dzcom.common.page.PageResult;
 import com.example.dzcom.domain.model.product.Product;
-import com.example.dzcom.domain.model.product.ProductAttribute;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -55,37 +53,4 @@ public interface ProductStore {
      */
     PageResult<Product> search(ProductSearchCriteria criteria);
 
-    /**
-     * 创建或保存对应的业务数据。
-     *
-     * @param attribute attribute 参数
-     * @return 方法执行后的结果
-     * @author dz
-     * @date 2026-06-14
-     */
-    ProductAttribute saveAttribute(ProductAttribute attribute);
-
-    /**
-     * 根据指定条件查询业务数据。
-     *
-     * @param productBizId 业务对象的唯一标识
-     * @param key 数据键
-     * @param effectiveDate effectiveDate 参数
-     * @param includeDeleted includeDeleted 参数
-     * @return 查询到的业务数据
-     * @author dz
-     * @date 2026-06-14
-     */
-    Optional<ProductAttribute> findAttribute(String productBizId, String key,
-                                             java.time.LocalDate effectiveDate, boolean includeDeleted);
-
-    /**
-     * 执行 find attributes 处理。
-     *
-     * @param productBizId 业务对象的唯一标识
-     * @return 查询到的业务数据
-     * @author dz
-     * @date 2026-06-14
-     */
-    List<ProductAttribute> findAttributes(String productBizId);
 }

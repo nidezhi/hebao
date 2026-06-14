@@ -8,7 +8,7 @@ import com.example.dzcom.common.page.PageResult;
 import com.example.dzcom.domain.enums.account.AccountStatus;
 import com.example.dzcom.domain.enums.account.KycStatus;
 import com.example.dzcom.domain.model.account.User;
-import com.example.dzcom.domain.repository.account.AccountStore;
+import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.domain.repository.account.UserSearchCriteria;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ import java.util.Set;
 public class UserQueryService {
     private static final Set<String> SORT_FIELDS = Set.of("createdAt", "userNo", "status", "lastLoginAt");
 
-    private final AccountStore store;
+    private final UserStore users;
     private final AccountViewAssembler assembler;
     private final CurrentOperatorProvider currentOperator;
 
@@ -58,7 +58,7 @@ public class UserQueryService {
                                      Integer riskLevel, PageQuery pageQuery) {
         requireAdmin();
         String sort = pageQuery.safeSort(SORT_FIELDS, "createdAt");
-        PageResult<User> page = store.searchUsers(new UserSearchCriteria(keyword, status, kycStatus, riskLevel,
+        PageResult<User> page = users.search(new UserSearchCriteria(keyword, status, kycStatus, riskLevel,
             pageQuery.page(), pageQuery.size(), sort, "asc".equals(pageQuery.direction())));
         return PageResult.<UserView>builder()
             .items(page.items().stream().map(assembler::assemble).toList())
@@ -78,7 +78,7 @@ public class UserQueryService {
      * @date 2026-06-14
      */
     private User requiredUser(String bizId) {
-        return store.findUser(bizId)
+        return users.findByBizId(bizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
     }
 

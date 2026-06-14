@@ -1,4 +1,4 @@
-package com.example.dzcom.infrastructure.session.account;
+package com.example.dzcom.infrastructure.config.account.account;
 
 import com.example.dzcom.application.service.account.SessionService;
 import com.fasterxml.jackson.core.JsonProcessingException;

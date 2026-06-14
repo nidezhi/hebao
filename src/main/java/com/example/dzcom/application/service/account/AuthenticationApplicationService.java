@@ -10,8 +10,10 @@ import com.example.dzcom.domain.model.account.LoginIdentity;
 import com.example.dzcom.domain.model.account.User;
 import com.example.dzcom.domain.model.account.UserCredential;
 import com.example.dzcom.domain.model.account.UserRole;
-import com.example.dzcom.domain.repository.account.AccountStore;
-import com.example.dzcom.application.service.account.*;
+import com.example.dzcom.domain.repository.account.LoginIdentityStore;
+import com.example.dzcom.domain.repository.account.UserCredentialStore;
+import com.example.dzcom.domain.repository.account.UserRoleStore;
+import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.domain.service.account.IdentityNormalizer;
 import com.example.dzcom.domain.service.account.PasswordHasher;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +31,10 @@ public class AuthenticationApplicationService {
     private static final int MAX_FAILED_ATTEMPTS = 5;
 
     private final AccountRegistrationService registrationService;
-    private final AccountStore store;
+    private final UserStore users;
+    private final LoginIdentityStore identities;
+    private final UserCredentialStore credentials;
+    private final UserRoleStore roles;
     private final IdentityNormalizer normalizer;
     private final PasswordHasher passwordHasher;
     private final SessionService sessions;
@@ -63,10 +68,10 @@ public class AuthenticationApplicationService {
     public LoginResult login(String account, String password) {
         IdentityType type = normalizer.detectType(account);
         String normalized = normalizer.normalize(type, account);
-        LoginIdentity identity = store.findIdentity(type, normalized)
+        LoginIdentity identity = identities.findByTypeAndNormalizedValue(type, normalized)
             .orElseThrow(this::invalidCredentials);
-        User user = store.findUser(identity.userBizId()).orElseThrow(this::invalidCredentials);
-        UserCredential credential = store.findPasswordCredential(user.getBizId())
+        User user = users.findByBizId(identity.userBizId()).orElseThrow(this::invalidCredentials);
+        UserCredential credential = credentials.findPasswordByUserBizId(user.getBizId())
             .orElseThrow(this::invalidCredentials);
         LocalDateTime now = clock.now();
         if (!user.canLogin()) {
@@ -78,15 +83,16 @@ public class AuthenticationApplicationService {
         if (!passwordHasher.matches(password, credential.secretHash())) {
             LocalDateTime lockedUntil = credential.failedAttempts() + 1 >= MAX_FAILED_ATTEMPTS
                 ? now.plusMinutes(15) : null;
-            store.saveCredential(credential.failed(lockedUntil));
+            credentials.save(credential.failed(lockedUntil));
             throw invalidCredentials();
         }
-        store.saveCredential(credential.loginSucceeded());
+        credentials.save(credential.loginSucceeded());
         user.recordSuccessfulLogin(now);
-        store.saveUser(user);
-        Set<String> roles = store.findRoles(user.getBizId()).stream()
+        users.save(user);
+        Set<String> roleCodes = roles.findByUserBizId(user.getBizId()).stream()
             .map(UserRole::roleCode).collect(Collectors.toUnmodifiableSet());
-        SessionService.SessionToken token = sessions.create(user.getBizId(), credential.credentialVersion(), roles);
+        SessionService.SessionToken token = sessions.create(
+            user.getBizId(), credential.credentialVersion(), roleCodes);
         return new LoginResult(assembler.assemble(user), token);
     }
 
@@ -109,7 +115,7 @@ public class AuthenticationApplicationService {
      */
     @Transactional(readOnly = true)
     public UserView currentUser() {
-        User user = store.findUser(currentOperator.required().userBizId())
+        User user = users.findByBizId(currentOperator.required().userBizId())
             .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "未登录或登录已过期"));
         return assembler.assemble(user);
     }

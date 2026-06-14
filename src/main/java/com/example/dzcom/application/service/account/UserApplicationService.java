@@ -10,8 +10,13 @@ import com.example.dzcom.domain.enums.account.AccountStatus;
 import com.example.dzcom.domain.enums.account.IdentityType;
 import com.example.dzcom.domain.enums.account.KycStatus;
 import com.example.dzcom.domain.model.account.*;
-import com.example.dzcom.domain.repository.account.AccountStore;
-import com.example.dzcom.application.service.account.*;
+import com.example.dzcom.domain.repository.account.LoginIdentityStore;
+import com.example.dzcom.domain.repository.account.UserCredentialStore;
+import com.example.dzcom.domain.repository.account.UserPreferenceStore;
+import com.example.dzcom.domain.repository.account.UserProfileStore;
+import com.example.dzcom.domain.repository.account.UserRiskProfileStore;
+import com.example.dzcom.domain.repository.account.UserRoleStore;
+import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.domain.service.account.IdentityNormalizer;
 import com.example.dzcom.domain.service.account.PasswordHasher;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +29,13 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 public class UserApplicationService {
-    private final AccountStore store;
+    private final UserStore users;
+    private final LoginIdentityStore identities;
+    private final UserCredentialStore credentials;
+    private final UserProfileStore profiles;
+    private final UserRiskProfileStore riskProfiles;
+    private final UserRoleStore roles;
+    private final UserPreferenceStore preferences;
     private final CurrentOperatorProvider currentOperator;
     private final IdentityNormalizer normalizer;
     private final PasswordHasher passwordHasher;
@@ -80,12 +91,12 @@ public class UserApplicationService {
     public void changePassword(String currentPassword, String newPassword) {
         validatePassword(newPassword);
         String userBizId = currentOperator.required().userBizId();
-        UserCredential credential = store.findPasswordCredential(userBizId)
+        UserCredential credential = credentials.findPasswordByUserBizId(userBizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "密码凭据不存在"));
         if (!passwordHasher.matches(currentPassword, credential.secretHash())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "当前密码错误");
         }
-        store.saveCredential(credential.changeSecret(passwordHasher.hash(newPassword), clock.now()));
+        credentials.save(credential.changeSecret(passwordHasher.hash(newPassword), clock.now()));
         sessions.revokeAll(userBizId);
     }
 
@@ -103,7 +114,7 @@ public class UserApplicationService {
         requireAdmin();
         User user = requiredUser(bizId);
         user.changeStatus(status, clock.now());
-        store.saveUser(user);
+        users.save(user);
         if (status != AccountStatus.ACTIVE) {
             sessions.revokeAll(bizId);
         }
@@ -124,7 +135,7 @@ public class UserApplicationService {
         requireAdmin();
         requiredUser(bizId);
         UserRiskProfile risk = requiredRiskProfile(bizId);
-        store.saveRiskProfile(risk.changeKycStatus(status, clock.now()));
+        riskProfiles.save(risk.changeKycStatus(status, clock.now()));
         return assembler.assemble(requiredUser(bizId));
     }
 
@@ -146,7 +157,7 @@ public class UserApplicationService {
         }
         requiredUser(bizId);
         UserRiskProfile risk = requiredRiskProfile(bizId);
-        store.saveRiskProfile(risk.changeRiskLevel(riskLevel, clock.now()));
+        riskProfiles.save(risk.changeRiskLevel(riskLevel, clock.now()));
         return assembler.assemble(requiredUser(bizId));
     }
 
@@ -160,10 +171,15 @@ public class UserApplicationService {
     @Transactional
     public void deleteUser(String bizId) {
         requireAdmin();
-        store.findUser(bizId).ifPresent(user -> {
+        users.findByBizId(bizId).ifPresent(user -> {
             user.delete(clock.now());
-            store.softDeleteAccountData(bizId);
-            store.saveUser(user);
+            identities.softDeleteByUserBizId(bizId);
+            credentials.softDeleteByUserBizId(bizId);
+            profiles.softDeleteByUserBizId(bizId);
+            riskProfiles.softDeleteByUserBizId(bizId);
+            roles.softDeleteByUserBizId(bizId);
+            preferences.softDeleteByUserBizId(bizId);
+            users.save(user);
             sessions.revokeAll(bizId);
         });
     }
@@ -183,12 +199,12 @@ public class UserApplicationService {
             return;
         }
         String normalized = normalizer.normalize(type, value);
-        store.findIdentity(type, normalized).ifPresent(existing -> {
+        identities.findByTypeAndNormalizedValue(type, normalized).ifPresent(existing -> {
             if (!existing.userBizId().equals(userBizId)) {
                 throw new BusinessException(HttpStatus.CONFLICT, "邮箱或手机号已被使用");
             }
         });
-        LoginIdentity identity = store.findIdentity(userBizId, type)
+        LoginIdentity identity = identities.findByUserBizIdAndType(userBizId, type)
             .map(existing -> existing.toBuilder()
                 .value(value.trim())
                 .normalizedValue(normalized)
@@ -207,7 +223,7 @@ public class UserApplicationService {
                 .createdAt(clock.now())
                 .deleted(0)
                 .build());
-        store.saveIdentity(identity);
+        identities.save(identity);
     }
 
     /**
@@ -219,7 +235,7 @@ public class UserApplicationService {
      * @date 2026-06-14
      */
     private User requiredUser(String bizId) {
-        return store.findUser(bizId)
+        return users.findByBizId(bizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
     }
 
@@ -232,7 +248,7 @@ public class UserApplicationService {
      * @date 2026-06-14
      */
     private UserRiskProfile requiredRiskProfile(String bizId) {
-        return store.findRiskProfile(bizId)
+        return riskProfiles.findByUserBizId(bizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户风险画像不存在"));
     }
 

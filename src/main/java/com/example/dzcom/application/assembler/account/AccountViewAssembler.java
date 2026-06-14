@@ -3,7 +3,10 @@ package com.example.dzcom.application.assembler.account;
 import com.example.dzcom.application.dto.account.UserView;
 import com.example.dzcom.domain.enums.account.IdentityType;
 import com.example.dzcom.domain.model.account.*;
-import com.example.dzcom.domain.repository.account.AccountStore;
+import com.example.dzcom.domain.repository.account.LoginIdentityStore;
+import com.example.dzcom.domain.repository.account.UserProfileStore;
+import com.example.dzcom.domain.repository.account.UserRiskProfileStore;
+import com.example.dzcom.domain.repository.account.UserRoleStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +22,10 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class AccountViewAssembler {
-    private final AccountStore store;
+    private final LoginIdentityStore identities;
+    private final UserProfileStore profiles;
+    private final UserRiskProfileStore riskProfiles;
+    private final UserRoleStore roles;
 
     /**
      * 将源对象转换为目标视图或领域对象。
@@ -30,24 +36,24 @@ public class AccountViewAssembler {
      * @date 2026-06-14
      */
     public UserView assemble(User user) {
-        List<LoginIdentity> identities = store.findIdentities(user.getBizId());
-        UserProfile profile = store.findProfile(user.getBizId()).orElse(null);
-        UserRiskProfile risk = store.findRiskProfile(user.getBizId()).orElse(null);
-        Set<String> roles = store.findRoles(user.getBizId()).stream()
+        List<LoginIdentity> loginIdentities = identities.findByUserBizId(user.getBizId());
+        UserProfile profile = profiles.findByUserBizId(user.getBizId()).orElse(null);
+        UserRiskProfile risk = riskProfiles.findByUserBizId(user.getBizId()).orElse(null);
+        Set<String> roleCodes = roles.findByUserBizId(user.getBizId()).stream()
             .map(UserRole::roleCode)
             .collect(Collectors.toUnmodifiableSet());
         return UserView.builder()
             .bizId(user.getBizId())
             .userNo(user.getUserNo())
-            .username(identityValue(identities, IdentityType.USERNAME))
-            .email(identityValue(identities, IdentityType.EMAIL))
-            .phone(identityValue(identities, IdentityType.PHONE))
+            .username(identityValue(loginIdentities, IdentityType.USERNAME))
+            .email(identityValue(loginIdentities, IdentityType.EMAIL))
+            .phone(identityValue(loginIdentities, IdentityType.PHONE))
             .nickname(profile == null ? null : profile.nickname())
             .avatarUrl(profile == null ? null : profile.avatarUrl())
             .status(user.getStatus())
             .kycStatus(risk == null ? null : risk.kycStatus())
             .riskLevel(risk == null ? 1 : risk.riskLevel())
-            .roles(roles)
+            .roles(roleCodes)
             .registeredAt(user.getRegisteredAt())
             .lastLoginAt(user.getLastLoginAt())
             .build();

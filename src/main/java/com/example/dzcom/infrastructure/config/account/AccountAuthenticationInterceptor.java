@@ -1,9 +1,10 @@
-package com.example.dzcom.infrastructure.security.account;
+package com.example.dzcom.infrastructure.config.account;
 
 import com.example.dzcom.common.exception.BusinessException;
 import com.example.dzcom.domain.model.account.User;
 import com.example.dzcom.domain.model.account.UserCredential;
-import com.example.dzcom.domain.repository.account.AccountStore;
+import com.example.dzcom.domain.repository.account.UserCredentialStore;
+import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.SessionService;
 import jakarta.servlet.http.Cookie;
@@ -28,7 +29,8 @@ public class AccountAuthenticationInterceptor implements HandlerInterceptor {
     public static final String COOKIE_NAME = "DZCOM_SESSION";
 
     private final SessionService sessions;
-    private final AccountStore store;
+    private final UserStore users;
+    private final UserCredentialStore credentials;
     private final CurrentOperatorContext context;
 
     /**
@@ -47,12 +49,12 @@ public class AccountAuthenticationInterceptor implements HandlerInterceptor {
         String token = readCookie(request);
         SessionService.SessionData session = sessions.resolve(token)
             .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "未登录或登录已过期"));
-        User user = store.findUser(session.userBizId())
+        User user = users.findByBizId(session.userBizId())
             .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "未登录或登录已过期"));
         if (!user.canLogin()) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "未登录或登录已过期");
         }
-        UserCredential credential = store.findPasswordCredential(user.getBizId())
+        UserCredential credential = credentials.findPasswordByUserBizId(user.getBizId())
             .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "未登录或登录已过期"));
         if (credential.credentialVersion() != session.credentialVersion()) {
             sessions.revoke(token);

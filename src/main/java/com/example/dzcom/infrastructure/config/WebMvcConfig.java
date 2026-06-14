@@ -1,6 +1,6 @@
 package com.example.dzcom.infrastructure.config;
 
-import com.example.dzcom.infrastructure.security.account.AccountAuthenticationInterceptor;
+import com.example.dzcom.infrastructure.config.account.AccountAuthenticationInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;

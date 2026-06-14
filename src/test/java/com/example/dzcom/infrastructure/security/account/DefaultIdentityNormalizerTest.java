@@ -1,6 +1,7 @@
 package com.example.dzcom.infrastructure.security.account;
 
 import com.example.dzcom.domain.enums.account.IdentityType;
+import com.example.dzcom.infrastructure.config.account.DefaultIdentityNormalizer;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

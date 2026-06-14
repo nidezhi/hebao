@@ -5,8 +5,7 @@ import com.example.dzcom.common.exception.BusinessException;
 import com.example.dzcom.common.service.ClockProvider;
 import com.example.dzcom.common.service.IdGenerator;
 import com.example.dzcom.domain.model.account.UserPreference;
-import com.example.dzcom.domain.repository.account.AccountStore;
-import com.example.dzcom.application.service.account.CurrentOperatorProvider;
+import com.example.dzcom.domain.repository.account.UserPreferenceStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +24,7 @@ public class UserPreferenceApplicationService {
         "language", "timezone", "theme", "market", "notification", "dashboard"
     );
 
-    private final AccountStore store;
+    private final UserPreferenceStore preferences;
     private final CurrentOperatorProvider currentOperator;
     private final IdGenerator idGenerator;
     private final ClockProvider clock;
@@ -40,7 +39,7 @@ public class UserPreferenceApplicationService {
      */
     @Transactional(readOnly = true)
     public List<PreferenceView> list() {
-        return store.findPreferences(currentOperator.required().userBizId())
+        return preferences.findByUserBizId(currentOperator.required().userBizId())
             .stream().map(this::toView).toList();
     }
 
@@ -61,7 +60,7 @@ public class UserPreferenceApplicationService {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "偏好值不能为空");
         }
         String userBizId = currentOperator.required().userBizId();
-        UserPreference existing = store.findPreference(userBizId, key, true).orElse(null);
+        UserPreference existing = preferences.findByUserBizIdAndKey(userBizId, key, true).orElse(null);
         UserPreference preference = UserPreference.builder()
             .bizId(existing == null ? idGenerator.newBizId() : existing.bizId())
             .userBizId(userBizId)
@@ -71,7 +70,7 @@ public class UserPreferenceApplicationService {
             .updatedAt(clock.now())
             .deleted(0)
             .build();
-        return toView(store.savePreference(preference));
+        return toView(preferences.save(preference));
     }
 
     /**
@@ -85,8 +84,8 @@ public class UserPreferenceApplicationService {
     public void delete(String key) {
         validateKey(key);
         String userBizId = currentOperator.required().userBizId();
-        store.findPreference(userBizId, key, false).ifPresent(existing ->
-            store.savePreference(existing.toBuilder().updatedAt(clock.now()).deleted(1).build()));
+        preferences.findByUserBizIdAndKey(userBizId, key, false).ifPresent(existing ->
+            preferences.save(existing.toBuilder().updatedAt(clock.now()).deleted(1).build()));
     }
 
     /**

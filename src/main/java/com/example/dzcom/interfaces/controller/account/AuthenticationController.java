@@ -4,7 +4,7 @@ import com.example.dzcom.application.command.account.RegisterCommand;
 import com.example.dzcom.application.dto.account.UserView;
 import com.example.dzcom.application.service.account.AuthenticationApplicationService;
 import com.example.dzcom.common.result.Result;
-import com.example.dzcom.infrastructure.security.account.AccountAuthenticationInterceptor;
+import com.example.dzcom.infrastructure.config.account.AccountAuthenticationInterceptor;
 import com.example.dzcom.interfaces.request.account.LoginRequest;
 import com.example.dzcom.interfaces.request.account.RegisterRequest;
 import io.swagger.v3.oas.annotations.Operation;

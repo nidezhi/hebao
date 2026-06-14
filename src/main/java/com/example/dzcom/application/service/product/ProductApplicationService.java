@@ -16,6 +16,7 @@ import com.example.dzcom.domain.enums.product.ProductTradeStatus;
 import com.example.dzcom.domain.model.product.Product;
 import com.example.dzcom.domain.model.product.ProductAttribute;
 import com.example.dzcom.domain.repository.product.ProductStore;
+import com.example.dzcom.domain.repository.product.ProductAttributeStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ public class ProductApplicationService {
         Set.of("STRING", "NUMBER", "BOOLEAN", "DATE", "JSON");
 
     private final ProductStore store;
+    private final ProductAttributeStore attributes;
     private final ProductViewAssembler assembler;
     private final CurrentOperatorProvider currentOperator;
     private final IdGenerator ids;
@@ -90,7 +92,7 @@ public class ProductApplicationService {
             command.minInvestAmount(), command.amountStep(), command.quantityStep(),
             command.feeRate(), command.listingDate(), command.delistingDate(),
             command.description(), operator.userBizId(), clock.now());
-        return assembler.assembleDetail(store.save(product), store.findAttributes(bizId));
+        return assembler.assembleDetail(store.save(product), attributes.findByProductBizId(bizId));
     }
 
     /**
@@ -107,7 +109,7 @@ public class ProductApplicationService {
         CurrentOperator operator = requiredAdmin();
         Product product = requiredProduct(bizId);
         product.changeTradeStatus(status, operator.userBizId(), clock.now());
-        return assembler.assembleDetail(store.save(product), store.findAttributes(bizId));
+        return assembler.assembleDetail(store.save(product), attributes.findByProductBizId(bizId));
     }
 
     /**
@@ -132,7 +134,7 @@ public class ProductApplicationService {
         LocalDate effectiveDate = command.effectiveDate() == null
             ? LocalDate.of(1970, 1, 1) : command.effectiveDate();
         LocalDateTime now = clock.now();
-        ProductAttribute existing = store.findAttribute(productBizId, command.key(), effectiveDate, true)
+        ProductAttribute existing = attributes.find(productBizId, command.key(), effectiveDate, true)
             .orElse(null);
         ProductAttribute attribute = ProductAttribute.builder()
             .bizId(existing == null ? ids.newBizId() : existing.bizId())
@@ -146,8 +148,8 @@ public class ProductApplicationService {
             .updatedAt(now)
             .deleted(0)
             .build();
-        store.saveAttribute(attribute);
-        return assembler.assembleDetail(product, store.findAttributes(productBizId));
+        attributes.save(attribute);
+        return assembler.assembleDetail(product, attributes.findByProductBizId(productBizId));
     }
 
     /**

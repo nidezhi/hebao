@@ -1,4 +1,4 @@
-package com.example.dzcom.infrastructure.security.account;
+package com.example.dzcom.infrastructure.config.account;
 
 import com.example.dzcom.domain.service.account.PasswordHasher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;

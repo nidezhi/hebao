@@ -76,3 +76,21 @@ spring:
 - Knife4j：`http://localhost:8511/doc.html`
 - Swagger UI：`http://localhost:8511/swagger-ui.html`
 - OpenAPI JSON：`http://localhost:8511/v3/api-docs`
+
+
+
+public RsResult<String> addUserInfo(AddUserInfoVO addUserInfoVO, HttpServletRequest request) {
+RsResult<String> rs = new RsResult<>();
+try {
+boolean isSuccess = userInfoService.saveInfo(addUserInfoVO, null);
+if (isSuccess) {
+log.error("用户信息添加失败，mybatis添加失败！");
+rs.setFailMessage("保存失败！");
+}
+rs.setResult("保存成功！");
+} catch (Exception e) {
+log.error(e.getMessage(), e);
+rs.setFailMessage("保存失败！");
+}
+return rs;
+}

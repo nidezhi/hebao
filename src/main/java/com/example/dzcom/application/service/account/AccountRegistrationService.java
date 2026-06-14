@@ -9,7 +9,12 @@ import com.example.dzcom.common.service.IdGenerator;
 import com.example.dzcom.domain.enums.account.IdentityType;
 import com.example.dzcom.domain.enums.account.KycStatus;
 import com.example.dzcom.domain.model.account.*;
-import com.example.dzcom.domain.repository.account.AccountStore;
+import com.example.dzcom.domain.repository.account.LoginIdentityStore;
+import com.example.dzcom.domain.repository.account.UserCredentialStore;
+import com.example.dzcom.domain.repository.account.UserProfileStore;
+import com.example.dzcom.domain.repository.account.UserRiskProfileStore;
+import com.example.dzcom.domain.repository.account.UserRoleStore;
+import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.domain.service.account.IdentityNormalizer;
 import com.example.dzcom.domain.service.account.PasswordHasher;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +36,12 @@ import java.util.stream.Stream;
 @Service
 @RequiredArgsConstructor
 public class AccountRegistrationService {
-    private final AccountStore store;
+    private final UserStore users;
+    private final LoginIdentityStore identities;
+    private final UserCredentialStore credentials;
+    private final UserProfileStore profiles;
+    private final UserRiskProfileStore riskProfiles;
+    private final UserRoleStore roles;
     private final IdGenerator idGenerator;
     private final ClockProvider clock;
     private final IdentityNormalizer normalizer;
@@ -55,11 +65,11 @@ public class AccountRegistrationService {
         identities.forEach(this::ensureIdentityAvailable);
         User user = User.register(idGenerator.newBizId(), idGenerator.newUserNo(), now);
         try {
-            store.saveUser(user);
+            users.save(user);
             identities.stream()
                 .map(identity -> identity.toBuilder().userBizId(user.getBizId()).build())
-                .forEach(store::saveIdentity);
-            store.saveCredential(UserCredential.builder()
+                .forEach(this.identities::save);
+            credentials.save(UserCredential.builder()
                 .bizId(idGenerator.newBizId())
                 .userBizId(user.getBizId())
                 .secretHash(passwordHasher.hash(command.password()))
@@ -69,7 +79,7 @@ public class AccountRegistrationService {
                 .changedAt(now)
                 .deleted(0)
                 .build());
-            store.saveProfile(UserProfile.builder()
+            profiles.save(UserProfile.builder()
                 .bizId(idGenerator.newBizId())
                 .userBizId(user.getBizId())
                 .nickname(command.nickname())
@@ -77,14 +87,14 @@ public class AccountRegistrationService {
                 .timezone("Asia/Shanghai")
                 .deleted(0)
                 .build());
-            store.saveRiskProfile(UserRiskProfile.builder()
+            riskProfiles.save(UserRiskProfile.builder()
                 .bizId(idGenerator.newBizId())
                 .userBizId(user.getBizId())
                 .kycStatus(KycStatus.UNVERIFIED)
                 .riskLevel(1)
                 .deleted(0)
                 .build());
-            store.saveRole(UserRole.builder()
+            roles.save(UserRole.builder()
                 .bizId(idGenerator.newBizId())
                 .userBizId(user.getBizId())
                 .roleCode(command.initialRole() == null ? "USER" : command.initialRole())
@@ -158,7 +168,7 @@ public class AccountRegistrationService {
      * @date 2026-06-14
      */
     private void ensureIdentityAvailable(LoginIdentity identity) {
-        if (store.findIdentity(identity.type(), identity.normalizedValue()).isPresent()) {
+        if (identities.findByTypeAndNormalizedValue(identity.type(), identity.normalizedValue()).isPresent()) {
             throw new BusinessException(HttpStatus.CONFLICT, "用户名、邮箱或手机号已存在");
         }
     }

@@ -4,14 +4,14 @@ import com.example.dzcom.application.command.account.RegisterCommand;
 import com.example.dzcom.application.command.account.UpdateIdentitiesCommand;
 import com.example.dzcom.application.dto.account.UserView;
 import com.example.dzcom.application.service.account.AccountRegistrationService;
+import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.account.UserApplicationService;
 import com.example.dzcom.application.service.account.UserQueryService;
+import com.example.dzcom.common.exception.BusinessException;
 import com.example.dzcom.common.page.PageQuery;
 import com.example.dzcom.common.page.PageResult;
 import com.example.dzcom.common.result.Result;
 import com.example.dzcom.domain.enums.account.AccountStatus;
-import com.example.dzcom.application.service.account.CurrentOperatorProvider;
-import com.example.dzcom.common.exception.BusinessException;
 import com.example.dzcom.interfaces.request.account.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,16 +50,16 @@ public class AdminUserController {
     @RequestMapping(value = "/list", method = RequestMethod.POST, produces = {"application/json;charset=UTF-8"})
     public Result<PageResult<UserView>> list(@Valid @RequestBody AdminUserListRequest request) {
         return Result.success(queries.list(
-                request.keyword(),
-                request.status(),
-                request.kycStatus(),
-                request.riskLevel(),
-                new PageQuery(
-                        request.page() == null ? 1 : request.page(),
-                        request.size() == null ? 20 : request.size(),
-                        request.sort() == null ? "createdAt" : request.sort(),
-                        request.direction() == null ? "desc" : request.direction()
-                )
+            request.keyword(),
+            request.status(),
+            request.kycStatus(),
+            request.riskLevel(),
+            new PageQuery(
+                request.page() == null ? 1 : request.page(),
+                request.size() == null ? 20 : request.size(),
+                request.sort() == null ? "createdAt" : request.sort(),
+                request.direction() == null ? "desc" : request.direction()
+            )
         ));
     }
 

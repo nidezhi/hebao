@@ -10,6 +10,7 @@ import com.example.dzcom.domain.enums.product.ProductType;
 import com.example.dzcom.domain.model.product.Product;
 import com.example.dzcom.domain.repository.product.ProductSearchCriteria;
 import com.example.dzcom.domain.repository.product.ProductStore;
+import com.example.dzcom.domain.repository.product.ProductAttributeStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ public class ProductQueryService {
         Set.of("createdAt", "productName", "productCode", "riskLevel", "listingDate");
 
     private final ProductStore store;
+    private final ProductAttributeStore attributes;
     private final ProductViewAssembler assembler;
 
     /**
@@ -38,7 +40,7 @@ public class ProductQueryService {
     @Transactional(readOnly = true)
     public ProductView detail(String bizId) {
         Product product = requiredProduct(bizId);
-        return assembler.assembleDetail(product, store.findAttributes(bizId));
+        return assembler.assembleDetail(product, attributes.findByProductBizId(bizId));
     }
 
     /**

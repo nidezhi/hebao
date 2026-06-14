@@ -1,4 +1,4 @@
-package com.example.dzcom.infrastructure.security.account;
+package com.example.dzcom.infrastructure.config.account;
 
 import com.example.dzcom.common.exception.BusinessException;
 import com.example.dzcom.domain.enums.account.IdentityType;
