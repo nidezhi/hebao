@@ -13,6 +13,11 @@ import com.example.dzcom.interfaces.request.market.MarketQuoteHistoryRequest;
 import com.example.dzcom.interfaces.request.product.ProductBizIdRequest;
 import com.example.dzcom.interfaces.request.product.ProductListRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +52,11 @@ public class ProductController {
      * @date 2026-06-14
      */
     @PostMapping("/list")
-    @Operation(summary = "分页查询产品目录")
+    @Operation(summary = "分页查询产品目录", description = "根据筛选条件分页查询产品目录。分页默认 page=1,size=20, sort=createdAt,direction=desc。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回分页产品列表（Result<PageResult<ProductView>>）", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数或分页规则不合法")
+    })
     public Result<PageResult<ProductView>> list(@Valid @RequestBody ProductListRequest request) {
         return Result.success(products.list(
             request.keyword(),
@@ -74,7 +83,11 @@ public class ProductController {
      * @date 2026-06-14
      */
     @PostMapping("/detail")
-    @Operation(summary = "查询产品详情")
+    @Operation(summary = "查询产品详情", description = "根据产品业务标识查询产品的详细信息（生命周期、交易参数、说明、扩展属性等）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回 ProductView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "404", description = "产品不存在")
+    })
     public Result<ProductView> detail(@Valid @RequestBody ProductBizIdRequest request) {
         return Result.success(products.detail(request.bizId()));
     }
@@ -89,7 +102,12 @@ public class ProductController {
      * @date 2026-06-14
      */
     @PostMapping("/quotes/latest")
-    @Operation(summary = "查询产品最新有效行情")
+    @Operation(summary = "查询产品最新有效行情", description = "查询指定产品和周期的最新有效行情。若 interval 为空默认使用 1D。可指定数据源 sourceCode。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回最新行情 MarketQuoteView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "产品或行情不存在")
+    })
     public Result<MarketQuoteView> latestQuote(@Valid @RequestBody LatestMarketQuoteRequest request) {
         return Result.success(quotes.latest(
             request.productBizId(),
@@ -108,7 +126,12 @@ public class ProductController {
      * @date 2026-06-14
      */
     @PostMapping("/quotes/history")
-    @Operation(summary = "查询产品历史行情")
+    @Operation(summary = "查询产品历史行情", description = "查询指定时间区间内按时间升序排列的历史行情，limit 最大 5000（默认 500）。from/to 必须同时提供且 from <= to。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回历史行情数组", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "时间区间或查询上限不合法"),
+        @ApiResponse(responseCode = "404", description = "产品不存在")
+    })
     public Result<List<MarketQuoteView>> quoteHistory(@Valid @RequestBody MarketQuoteHistoryRequest request) {
         return Result.success(quotes.history(
             request.productBizId(),

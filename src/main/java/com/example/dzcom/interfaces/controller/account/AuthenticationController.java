@@ -9,6 +9,11 @@ import com.example.dzcom.infrastructure.config.account.AccountAuthenticationInte
 import com.example.dzcom.interfaces.request.account.LoginRequest;
 import com.example.dzcom.interfaces.request.account.RegisterRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -40,7 +45,12 @@ public class AuthenticationController {
      * @date 2026-06-14
      */
     @PostMapping("/register")
-    @Operation(summary = "注册用户")
+    @Operation(summary = "注册用户", description = "公开注册普通用户。用户名、密码、email 与 phone 的格式在请求边界校验。密码须包含字母和数字，长度 8-72。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "注册成功，返回创建的用户信息（Result<UserView>）", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败或注册规则不满足"),
+        @ApiResponse(responseCode = "409", description = "登录标识（username/email/phone）冲突")
+    })
     public ResponseEntity<Result<UserView>> register(@Valid @RequestBody RegisterRequest request) {
         UserView user = service.register(RegisterCommand.builder()
             .username(request.username())
@@ -64,7 +74,12 @@ public class AuthenticationController {
      * @date 2026-06-14
      */
     @PostMapping("/login")
-    @Operation(summary = "登录")
+    @Operation(summary = "登录", description = "使用用户名/邮箱/手机号 + 密码登录。成功后在响应头写入会话 Cookie (DZCOM_SESSION)。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "登录成功，返回当前用户信息（Result<UserView>），并在 Set-Cookie 中返回会话令牌"),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "401", description = "账号或密码错误或账户不可登录")
+    })
     public Result<UserView> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         AuthenticationApplicationService.LoginResult login = service.login(request.account(), request.password());
         response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(login.token().value(),
@@ -81,7 +96,11 @@ public class AuthenticationController {
      * @date 2026-06-14
      */
     @PostMapping("/logout")
-    @Operation(summary = "登出")
+    @Operation(summary = "登出", description = "撤销当前会话并清除会话 Cookie（设置空 token 并 max-age=0）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "登出成功（Result<Void>）"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话已过期")
+    })
     public Result<Void> logout(HttpServletResponse response) {
         service.logout();
         response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie("", 0).toString());
@@ -97,7 +116,11 @@ public class AuthenticationController {
      * @date 2026-06-14
      */
     @PostMapping("/me")
-    @Operation(summary = "获取当前用户")
+    @Operation(summary = "获取当前用户", description = "返回当前登录用户信息。受会话认证拦截器保护，未登录将返回 401。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回当前用户 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效")
+    })
     public Result<UserView> me() {
         return Result.success(service.currentUser());
     }

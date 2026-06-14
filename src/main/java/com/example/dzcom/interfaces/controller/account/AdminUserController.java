@@ -15,6 +15,11 @@ import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.domain.enums.account.AccountStatus;
 import com.example.dzcom.interfaces.request.account.*;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +50,13 @@ public class AdminUserController {
      * @author dz
      * @date 2026-06-14
      */
-    @Operation(summary = "用户列表")
+    @Operation(summary = "用户列表", description = "按关键字、状态、KYC、风险等级分页查询用户。分页参数默认 page=1,size=20, sort=createdAt,direction=desc。\n\n请求中 page 可为 0 用于兼容前端零基页码，会被转换为 1。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回分页结果（Result<PageResult<UserView>>）", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "请求参数校验失败或分页参数不合法"),
+        @ApiResponse(responseCode = "401", description = "未认证或无权限"),
+        @ApiResponse(responseCode = "500", description = "服务器内部错误")
+    })
     @ResponseBody
     @RequestMapping(value = "/list", method = RequestMethod.POST, produces = {"application/json;charset=UTF-8"})
     public Result<PageResult<UserView>> list(@Valid @RequestBody AdminUserListRequest request) {
@@ -73,7 +84,13 @@ public class AdminUserController {
      * @date 2026-06-14
      */
     @PostMapping("/detail")
-    @Operation(summary = "用户详情")
+    @Operation(summary = "用户详情", description = "根据用户业务标识查询用户详情，返回完整的 UserView。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "用户不存在"),
+        @ApiResponse(responseCode = "401", description = "未认证或无权限")
+    })
     public Result<UserView> detail(@Valid @RequestBody UserBizIdRequest request) {
         return Result.success(queries.detail(request.bizId()));
     }
@@ -88,7 +105,13 @@ public class AdminUserController {
      * @date 2026-06-14
      */
     @PostMapping("/create")
-    @Operation(summary = "管理端创建用户")
+    @Operation(summary = "管理端创建用户", description = "由管理员创建用户。请求遵循公开注册的用户名/密码规则。可选设置初始账户状态（默认 ACTIVE）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "创建成功，返回新建用户（Result<UserView>）", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class), examples = @ExampleObject(value = "{\n  \"code\":200,\n  \"message\":\"success\",\n  \"data\":{ /* UserView */ }\n}"))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败或用户名/密码不符合规则"),
+        @ApiResponse(responseCode = "403", description = "操作者无权限创建用户"),
+        @ApiResponse(responseCode = "409", description = "用户标识冲突")
+    })
     public Result<UserView> create(@Valid @RequestBody AdminCreateUserRequest request) {
         authorization.require(PermissionCodes.ACCOUNT_USER_CREATE);
         UserView created = registration.register(RegisterCommand.builder()
@@ -115,7 +138,13 @@ public class AdminUserController {
      * @date 2026-06-14
      */
     @PostMapping("/update")
-    @Operation(summary = "更新用户邮箱和手机号")
+    @Operation(summary = "更新用户邮箱和手机号", description = "根据用户 bizId 更新用户的 email 与 phone。变更后会做唯一性冲突校验。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回更新后的 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "用户不存在"),
+        @ApiResponse(responseCode = "409", description = "登录标识冲突")
+    })
     public Result<UserView> update(@Valid @RequestBody AdminUpdateUserRequest request) {
         return Result.success(users.updateUser(request.bizId(), UpdateIdentitiesCommand.builder()
             .email(request.email())
@@ -133,7 +162,12 @@ public class AdminUserController {
      * @date 2026-06-14
      */
     @PostMapping("/status")
-    @Operation(summary = "更新账户状态")
+    @Operation(summary = "更新账户状态", description = "变更用户账户状态（ACTIVE/DISABLED/LOCKED）。请使用专用接口避免绕过状态机规则。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回状态变更后的 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数或状态转换不合法"),
+        @ApiResponse(responseCode = "404", description = "用户不存在")
+    })
     public Result<UserView> status(@Valid @RequestBody StatusRequest request) {
         return Result.success(users.changeStatus(request.bizId(), request.status()));
     }
@@ -148,7 +182,12 @@ public class AdminUserController {
      * @date 2026-06-14
      */
     @PostMapping("/kyc-status")
-    @Operation(summary = "更新 KYC 状态")
+    @Operation(summary = "更新 KYC 状态", description = "变更用户的 KYC 状态（UNVERIFIED/VERIFIED/REVIEWING/REJECTED）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回更新后的 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数或状态转换不合法"),
+        @ApiResponse(responseCode = "404", description = "用户不存在")
+    })
     public Result<UserView> kycStatus(@Valid @RequestBody KycStatusRequest request) {
         return Result.success(users.changeKycStatus(request.bizId(), request.kycStatus()));
     }
@@ -163,7 +202,12 @@ public class AdminUserController {
      * @date 2026-06-14
      */
     @PostMapping("/risk-level")
-    @Operation(summary = "更新风险等级")
+    @Operation(summary = "更新风险等级", description = "设置用户风险承受等级，允许值 1-5。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回更新后的 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数非法（riskLevel 必须 1-5）"),
+        @ApiResponse(responseCode = "404", description = "用户不存在")
+    })
     public Result<UserView> riskLevel(@Valid @RequestBody RiskLevelRequest request) {
         return Result.success(users.changeRiskLevel(request.bizId(), request.riskLevel()));
     }
@@ -178,7 +222,13 @@ public class AdminUserController {
      * @date 2026-06-14
      */
     @PostMapping("/delete")
-    @Operation(summary = "软删除用户")
+    @Operation(summary = "软删除用户", description = "对用户执行逻辑删除，并撤销相关会话。此操作不可恢复，应由具有足够权限的管理员执行。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "删除成功（Result<Void>）"),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "用户不存在"),
+        @ApiResponse(responseCode = "403", description = "无权限删除")
+    })
     public Result<Void> delete(@Valid @RequestBody UserBizIdRequest request) {
         users.deleteUser(request.bizId());
         return Result.success();

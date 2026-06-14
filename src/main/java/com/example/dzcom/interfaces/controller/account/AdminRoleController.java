@@ -11,6 +11,11 @@ import com.example.dzcom.interfaces.request.account.UpdateRoleRequest;
 import com.example.dzcom.interfaces.request.account.UserRoleAssignmentRequest;
 import com.example.dzcom.interfaces.request.account.UserRoleRevokeRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,14 +36,23 @@ public class AdminRoleController {
 
     /** 查询全部角色及权限。 */
     @PostMapping("/list")
-    @Operation(summary = "角色列表")
+    @Operation(summary = "角色列表", description = "返回系统中全部角色及其权限集合。用于管理端角色查看与权限审计。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回角色数组（Result<List<RoleView>>）", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "401", description = "未认证或无权限")
+    })
     public Result<List<RoleView>> list() {
         return Result.success(roles.list());
     }
 
     /** 创建自定义角色。 */
     @PostMapping("/create")
-    @Operation(summary = "创建角色")
+    @Operation(summary = "创建角色", description = "创建自定义角色，roleCode 必须为大写字母开头，长度 3-64，允许数字和下划线。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回新建角色 RoleView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "409", description = "角色编码冲突")
+    })
     public Result<RoleView> create(@Valid @RequestBody CreateRoleRequest request) {
         return Result.success(roles.create(
             request.roleCode(),
@@ -49,7 +63,12 @@ public class AdminRoleController {
 
     /** 更新角色名称和说明。 */
     @PostMapping("/update")
-    @Operation(summary = "更新角色")
+    @Operation(summary = "更新角色", description = "更新角色名称与说明。角色编码为不可变字段。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回更新后的 RoleView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "角色不存在")
+    })
     public Result<RoleView> update(@Valid @RequestBody UpdateRoleRequest request) {
         return Result.success(roles.update(
             request.roleCode(),
@@ -60,14 +79,24 @@ public class AdminRoleController {
 
     /** 启用或停用角色。 */
     @PostMapping("/status")
-    @Operation(summary = "更新角色状态")
+    @Operation(summary = "更新角色状态", description = "启用或停用指定角色（通常用于临时禁止某角色的权限）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回变更后的 RoleView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "角色不存在")
+    })
     public Result<RoleView> status(@Valid @RequestBody RoleStatusRequest request) {
         return Result.success(roles.changeStatus(request.roleCode(), request.enabled()));
     }
 
     /** 覆盖配置角色权限。 */
     @PostMapping("/permissions/configure")
-    @Operation(summary = "配置角色权限")
+    @Operation(summary = "配置角色权限", description = "覆盖配置角色的权限集合。传入的 permissions 将替换现有权限集合。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回更新后的 RoleView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败或权限格式不正确"),
+        @ApiResponse(responseCode = "404", description = "角色不存在")
+    })
     public Result<RoleView> configurePermissions(
         @Valid @RequestBody ConfigureRolePermissionsRequest request
     ) {
@@ -79,7 +108,12 @@ public class AdminRoleController {
 
     /** 给用户分配角色。 */
     @PostMapping("/users/assign")
-    @Operation(summary = "分配用户角色")
+    @Operation(summary = "分配用户角色", description = "给用户分配角色，可设置 effectiveTo 为角色失效时间（可选）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回用户最新信息 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "用户或角色不存在")
+    })
     public Result<UserView> assign(@Valid @RequestBody UserRoleAssignmentRequest request) {
         return Result.success(roles.assign(
             request.userBizId(),
@@ -90,7 +124,12 @@ public class AdminRoleController {
 
     /** 撤销用户指定角色。 */
     @PostMapping("/users/revoke")
-    @Operation(summary = "撤销用户角色")
+    @Operation(summary = "撤销用户角色", description = "撤销用户的指定角色分配。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回用户最新信息 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "404", description = "用户或角色不存在")
+    })
     public Result<UserView> revoke(@Valid @RequestBody UserRoleRevokeRequest request) {
         return Result.success(roles.revoke(request.userBizId(), request.roleCode()));
     }
