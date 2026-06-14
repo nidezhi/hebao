@@ -11,7 +11,6 @@ import com.example.dzcom.domain.model.account.User;
 import com.example.dzcom.domain.model.account.UserCredential;
 import com.example.dzcom.domain.repository.account.LoginIdentityStore;
 import com.example.dzcom.domain.repository.account.UserCredentialStore;
-import com.example.dzcom.domain.repository.account.UserRoleStore;
 import com.example.dzcom.domain.repository.account.UserStore;
 import com.example.dzcom.domain.service.account.IdentityNormalizer;
 import com.example.dzcom.domain.service.account.PasswordHasher;

@@ -75,9 +75,6 @@ public class RoleApplicationService {
     public RoleView update(String roleCode, String roleName, String description) {
         CurrentOperator operator = authorization.require(PermissionCodes.ACCOUNT_ROLE_MANAGE);
         Role role = requiredRole(roleCode);
-        if (!enabled) {
-            ensureRoleManagerRemains(role.roleCode());
-        }
         Role updated = role.toBuilder()
             .roleName(roleName.trim())
             .description(trimToNull(description))
@@ -93,6 +90,9 @@ public class RoleApplicationService {
     public RoleView changeStatus(String roleCode, boolean enabled) {
         CurrentOperator operator = authorization.require(PermissionCodes.ACCOUNT_ROLE_MANAGE);
         Role role = requiredRole(roleCode);
+        if (!enabled) {
+            ensureRoleManagerRemains(role.roleCode());
+        }
         Role updated = role.toBuilder()
             .status(enabled ? 1 : 0)
             .version(role.version() + 1)
@@ -169,12 +169,14 @@ public class RoleApplicationService {
     /** 撤销用户指定角色，并撤销该用户旧会话。 */
     @Transactional
     public UserView revoke(String userBizId, String roleCode) {
-        CurrentOperator operator = authorization.require(PermissionCodes.ACCOUNT_ROLE_ASSIGN);
+        authorization.require(PermissionCodes.ACCOUNT_ROLE_ASSIGN);
         com.example.dzcom.domain.model.account.User user = users.findByBizId(userBizId)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "用户不存在"));
         String normalizedRole = normalizeCode(roleCode);
-        if (roleHasPermission(normalizedRole, PermissionCodes.ACCOUNT_ROLE_MANAGE)) {
-            ensureRoleManagerRemains(normalizedRole);
+        if (roleHasPermission(normalizedRole, PermissionCodes.ACCOUNT_ROLE_MANAGE)
+            && userRoles.countUsersWithPermissionExcludingAssignment(
+                PermissionCodes.ACCOUNT_ROLE_MANAGE, userBizId, normalizedRole) == 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "必须保留至少一个角色管理员");
         }
         userRoles.softDelete(userBizId, normalizedRole);
         sessions.revokeAll(userBizId);

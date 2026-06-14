@@ -17,3 +17,4 @@
 15. 每个 Mapper Java 文件必须存在同名 Mapper XML，接口方法与 XML statement 必须逐一对应。
 16. README、docs_new 和项目 skills 的持久化规范必须与 MyBatis Mapper XML 基线一致，禁止保留会诱导重新引入 JPA 的旧说明。
 17. 角色权限采用三层 RBAC：aiw_role 定义角色、aiw_user_role 分配用户角色、aiw_role_permission 映射角色权限；禁止将用户、角色和权限聚合到单表，禁止以 ADMIN 角色隐式绕过权限校验。
+18. 所有受保护业务接口必须使用 PermissionCodes 中的稳定权限编码鉴权；角色、角色权限或用户角色发生变化后，必须撤销受影响用户会话，且任何操作不得移除最后一个有效角色管理员。

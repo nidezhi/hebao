@@ -37,6 +37,19 @@
           and r.status = 1 and r.is_deleted = 0
           and rp.is_deleted = 0
     </select>
+    <select id="countUsersWithPermissionExcludingAssignment" resultType="long">
+        select count(distinct ur.user_biz_id)
+        from aiw_user_role ur
+        inner join aiw_role r on r.role_code = ur.role_code
+        inner join aiw_role_permission rp on rp.role_code = ur.role_code
+        where rp.permission_code = #{permissionCode}
+          and not (ur.user_biz_id = #{userBizId} and ur.role_code = #{roleCode})
+          and ur.is_deleted = 0
+          and ur.effective_from &lt;= current_timestamp(3)
+          and (ur.effective_to is null or ur.effective_to &gt; current_timestamp(3))
+          and r.status = 1 and r.is_deleted = 0
+          and rp.is_deleted = 0
+    </select>
     <insert id="save">
         insert into aiw_user_role
         (biz_id, user_biz_id, role_code, scope_code, effective_from, effective_to,

@@ -22,6 +22,10 @@ public interface UserRoleStore {
     /** 统计通过其他角色具备指定权限的有效用户数量。 */
     long countUsersWithPermissionExcludingRole(String permissionCode, String excludedRoleCode);
 
+    /** 统计排除指定用户角色分配后仍具备权限的有效用户数量。 */
+    long countUsersWithPermissionExcludingAssignment(String permissionCode, String userBizId,
+                                                      String roleCode);
+
     /** 软删除用户的指定角色。 */
     void softDelete(String userBizId, String roleCode);
 

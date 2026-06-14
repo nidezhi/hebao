@@ -81,6 +81,14 @@ public class UserRoleStoreImpl implements UserRoleStore {
         return mapper.countUsersWithPermissionExcludingRole(permissionCode, excludedRoleCode);
     }
 
+    /** 统计排除指定用户角色分配后仍具备权限的有效用户数量。 */
+    @Override
+    public long countUsersWithPermissionExcludingAssignment(String permissionCode, String userBizId,
+                                                             String roleCode) {
+        return mapper.countUsersWithPermissionExcludingAssignment(
+            permissionCode, userBizId, roleCode);
+    }
+
     /** 软删除用户的指定角色。 */
     @Override
     public void softDelete(String userBizId, String roleCode) {

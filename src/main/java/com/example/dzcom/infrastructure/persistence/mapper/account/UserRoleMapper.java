@@ -27,6 +27,13 @@ public interface UserRoleMapper {
     long countUsersWithPermissionExcludingRole(@Param("permissionCode") String permissionCode,
                                                @Param("excludedRoleCode") String excludedRoleCode);
 
+    /** 统计排除指定用户角色分配后仍具备权限的有效用户数量。 */
+    long countUsersWithPermissionExcludingAssignment(
+        @Param("permissionCode") String permissionCode,
+        @Param("userBizId") String userBizId,
+        @Param("roleCode") String roleCode
+    );
+
     /** 新增或更新用户角色。 */
     int save(UserRoleEntity entity);
 
