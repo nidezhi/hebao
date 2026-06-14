@@ -12,6 +12,7 @@ import java.time.LocalDate;
  * 例如 {@code "张三"}，而数字可直接传 {@code 12.5}。</p>
  */
 public record ProductAttributeRequest(
+    @NotBlank String bizId,
     @NotBlank @Size(max = 64) String key,
     @NotBlank @Size(max = 16) String valueType,
     @NotBlank String jsonValue,

@@ -14,6 +14,7 @@ import java.time.LocalDate;
 
 /** 产品稳定身份不可修改，该请求只包含允许变化的资料和交易参数。 */
 public record UpdateProductRequest(
+    @NotBlank String bizId,
     @NotBlank @Size(max = 160) String productName,
     @Min(1) @Max(5) int riskLevel,
     @NotNull @DecimalMin("0") @Digits(integer = 16, fraction = 4) BigDecimal minInvestAmount,

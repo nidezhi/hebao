@@ -85,6 +85,21 @@ src/main/java/com/example/dzcom/
 
 - 使用明确、完整的业务命名，避免无语义缩写。
 - 类、公共方法、关键字段、业务规则和复杂流程必须有详尽中文注释；注释说明职责、约束、边界或原因，禁止只翻译代码。
+- 方法 JavaDoc 属于开发规范铁律，所有新增或修改的方法必须按照以下格式编写；`@param`、`@return` 和 `@throws`
+  必须与真实签名和行为一致，不适用的标签不得虚构，`@author` 固定为 `dz`，`@date` 使用 `yyyy-MM-dd` 格式：
+
+```java
+/**
+ * 根据用户ID查询用户详细信息。
+ *
+ * @param userId 用户的唯一标识索引
+ * @return 返回包含用户详细信息的 UsrInfo 对象
+ * @throws IllegalArgumentException 当 userId 为 null 或负数时抛出
+ * @author dz
+ * @date 2026-06-14
+ */
+```
+
 - 单个方法保持单一职责，复杂逻辑拆成清晰的私有方法或领域行为。
 - 值对象优先不可变，在构造时完成校验。
 - 领域对象优先表达行为，不做贫血数据模型。
@@ -97,6 +112,9 @@ src/main/java/com/example/dzcom/
 ## 6. API 与安全要求
 
 - 所有接口统一返回 `Result<T>`。
+- HTTP 接口统一使用 `POST`，接口路径使用固定的用例动作名称，禁止使用 `GET`、`PUT`、`PATCH` 或 `DELETE`。
+- 所有业务请求参数必须封装为请求对象并通过 `@RequestBody` 接收，禁止使用 `@RequestParam` 和
+  `@PathVariable` 在 URL 中传递业务参数；确无业务请求参数的接口可以不声明请求体。
 - 请求参数使用 `@Valid` 或 `@Validated`，校验失败统一交给全局异常处理。
 - OpenAPI 文档与接口代码同步维护。
 - 鉴权、风控、审计和权限控制必须显式设计，不允许“先跳过后补”。

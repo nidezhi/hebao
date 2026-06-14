@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 
 /** 标准 OHLCV 行情点写入请求。 */
 public record SaveMarketQuoteRequest(
+    @NotBlank String productBizId,
     @NotBlank @Size(max = 64) String sourceCode,
     @NotBlank @Size(max = 16) String interval,
     @NotNull LocalDateTime quoteTime,

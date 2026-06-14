@@ -10,7 +10,6 @@ import com.example.dzcom.common.page.PageQuery;
 import com.example.dzcom.common.page.PageResult;
 import com.example.dzcom.common.result.Result;
 import com.example.dzcom.domain.enums.account.AccountStatus;
-import com.example.dzcom.domain.enums.account.KycStatus;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.common.exception.BusinessException;
 import com.example.dzcom.interfaces.request.account.*;
@@ -37,29 +36,57 @@ public class AdminUserController {
     private final AccountRegistrationService registration;
     private final CurrentOperatorProvider currentOperator;
 
-    @GetMapping
+    /**
+     * 根据筛选条件分页查询用户列表。
+     *
+     * @param request 用户筛选、分页和排序请求
+     * @return 用户分页结果
+     * @throws BusinessException 当分页参数或排序规则不合法时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/list")
     @Operation(summary = "用户列表")
-    public Result<PageResult<UserView>> list(
-        @RequestParam(required = false) String keyword,
-        @RequestParam(required = false) AccountStatus status,
-        @RequestParam(required = false) KycStatus kycStatus,
-        @RequestParam(required = false) Integer riskLevel,
-        @RequestParam(defaultValue = "1") int page,
-        @RequestParam(defaultValue = "20") int size,
-        @RequestParam(defaultValue = "createdAt") String sort,
-        @RequestParam(defaultValue = "desc") String direction
-    ) {
-        return Result.success(queries.list(keyword, status, kycStatus, riskLevel,
-            new PageQuery(page, size, sort, direction)));
+    public Result<PageResult<UserView>> list(@Valid @RequestBody AdminUserListRequest request) {
+        return Result.success(queries.list(
+            request.keyword(),
+            request.status(),
+            request.kycStatus(),
+            request.riskLevel(),
+            new PageQuery(
+                request.page() == null ? 1 : request.page(),
+                request.size() == null ? 20 : request.size(),
+                request.sort() == null ? "createdAt" : request.sort(),
+                request.direction() == null ? "desc" : request.direction()
+            )
+        ));
     }
 
-    @GetMapping("/{bizId}")
+    /**
+     * 根据用户业务标识查询用户详情。
+     *
+     * @param request 用户业务标识请求
+     * @return 用户详细信息
+     * @throws BusinessException 当用户不存在时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/detail")
     @Operation(summary = "用户详情")
-    public Result<UserView> detail(@PathVariable String bizId) {
-        return Result.success(queries.detail(bizId));
+    public Result<UserView> detail(@Valid @RequestBody UserBizIdRequest request) {
+        return Result.success(queries.detail(request.bizId()));
     }
 
-    @PostMapping
+    /**
+     * 由管理员创建用户并设置可选的初始账户状态。
+     *
+     * @param request 管理端创建用户请求
+     * @return 创建后的用户信息
+     * @throws BusinessException 当操作者无权限或用户标识冲突时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/create")
     @Operation(summary = "管理端创建用户")
     public Result<UserView> create(@Valid @RequestBody AdminCreateUserRequest request) {
         requireAdmin();
@@ -77,42 +104,92 @@ public class AdminUserController {
         return Result.success(created);
     }
 
-    @PatchMapping("/{bizId}")
+    /**
+     * 更新指定用户的邮箱和手机号登录标识。
+     *
+     * @param request 用户业务标识和待更新资料
+     * @return 更新后的用户信息
+     * @throws BusinessException 当用户不存在或登录标识冲突时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/update")
     @Operation(summary = "更新用户邮箱和手机号")
-    public Result<UserView> update(@PathVariable String bizId, @Valid @RequestBody UpdateUserRequest request) {
-        return Result.success(users.updateUser(bizId, UpdateIdentitiesCommand.builder()
+    public Result<UserView> update(@Valid @RequestBody AdminUpdateUserRequest request) {
+        return Result.success(users.updateUser(request.bizId(), UpdateIdentitiesCommand.builder()
             .email(request.email())
             .phone(request.phone())
             .build()));
     }
 
-    @PatchMapping("/{bizId}/status")
+    /**
+     * 变更指定用户的账户状态。
+     *
+     * @param request 用户业务标识和目标账户状态
+     * @return 状态变更后的用户信息
+     * @throws BusinessException 当用户不存在或状态转换不合法时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/status")
     @Operation(summary = "更新账户状态")
-    public Result<UserView> status(@PathVariable String bizId, @Valid @RequestBody StatusRequest request) {
-        return Result.success(users.changeStatus(bizId, request.status()));
+    public Result<UserView> status(@Valid @RequestBody StatusRequest request) {
+        return Result.success(users.changeStatus(request.bizId(), request.status()));
     }
 
-    @PatchMapping("/{bizId}/kyc-status")
+    /**
+     * 变更指定用户的 KYC 状态。
+     *
+     * @param request 用户业务标识和目标 KYC 状态
+     * @return KYC 状态变更后的用户信息
+     * @throws BusinessException 当用户不存在或状态转换不合法时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/kyc-status")
     @Operation(summary = "更新 KYC 状态")
-    public Result<UserView> kycStatus(@PathVariable String bizId,
-                                      @Valid @RequestBody KycStatusRequest request) {
-        return Result.success(users.changeKycStatus(bizId, request.kycStatus()));
+    public Result<UserView> kycStatus(@Valid @RequestBody KycStatusRequest request) {
+        return Result.success(users.changeKycStatus(request.bizId(), request.kycStatus()));
     }
 
-    @PatchMapping("/{bizId}/risk-level")
+    /**
+     * 变更指定用户的风险承受等级。
+     *
+     * @param request 用户业务标识和目标风险等级
+     * @return 风险等级变更后的用户信息
+     * @throws BusinessException 当用户不存在或风险等级不合法时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/risk-level")
     @Operation(summary = "更新风险等级")
-    public Result<UserView> riskLevel(@PathVariable String bizId,
-                                      @Valid @RequestBody RiskLevelRequest request) {
-        return Result.success(users.changeRiskLevel(bizId, request.riskLevel()));
+    public Result<UserView> riskLevel(@Valid @RequestBody RiskLevelRequest request) {
+        return Result.success(users.changeRiskLevel(request.bizId(), request.riskLevel()));
     }
 
-    @DeleteMapping("/{bizId}")
+    /**
+     * 逻辑删除指定用户并撤销相关会话。
+     *
+     * @param request 用户业务标识请求
+     * @return 无业务数据的成功结果
+     * @throws BusinessException 当用户不存在或不允许删除时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
+    @PostMapping("/delete")
     @Operation(summary = "软删除用户")
-    public Result<Void> delete(@PathVariable String bizId) {
-        users.deleteUser(bizId);
+    public Result<Void> delete(@Valid @RequestBody UserBizIdRequest request) {
+        users.deleteUser(request.bizId());
         return Result.success();
     }
 
+    /**
+     * 校验当前操作者是否具备管理员角色。
+     *
+     * @throws BusinessException 当当前操作者不具备管理员角色时抛出
+     * @author dz
+     * @date 2026-06-14
+     */
     private void requireAdmin() {
         if (!currentOperator.required().hasRole("ADMIN")) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "需要管理员权限");

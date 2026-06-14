@@ -28,10 +28,12 @@ spring:
   # Redis配置
   data:
     redis:
-      host: localhost
-      port: 6379
-      database: 0
-      timeout: 3000ms
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:3000ms}
 
   # Flyway配置
   flyway:

@@ -55,9 +55,17 @@ spring:
   datasource:
     username: root
     password: 本机数据库密码
+  data:
+    redis:
+      username: default
+      password: 本机 Redis 密码
 ```
 
-也可以通过 `DB_USERNAME`、`DB_PASSWORD` 和 `DB_URL` 环境变量覆盖。
+也可以通过以下环境变量覆盖：
+
+- MySQL：`DB_USERNAME`、`DB_PASSWORD`、`DB_URL`
+- Redis：`REDIS_HOST`、`REDIS_PORT`、`REDIS_USERNAME`、`REDIS_PASSWORD`、
+  `REDIS_DATABASE`、`REDIS_TIMEOUT`
 
 ```bash
 ./mvnw test

@@ -3,6 +3,8 @@
 ## 1. 通用约定
 
 - 基础路径：`/api`
+- 请求方法：所有接口统一使用 `POST`
+- 请求参数：业务参数统一放入 JSON 请求体，禁止使用 URL 查询参数和路径变量
 - 响应体：`Result<T>`
 - 时间格式：ISO-8601
 - 分页参数：`page` 从 1 开始，`size` 默认 20，最大 100
@@ -59,7 +61,7 @@
 
 ### 当前用户
 
-`GET /api/auth/me`
+`POST /api/auth/me`
 
 - 返回当前登录用户基础信息。
 - 不返回 `passwordHash`、内部删除标记等字段。
@@ -68,7 +70,7 @@
 
 ### 更新本人资料
 
-`PATCH /api/users/me`
+`POST /api/users/me/update`
 
 允许修改：
 
@@ -84,7 +86,7 @@
 
 ### 修改密码
 
-`PUT /api/users/me/password`
+`POST /api/users/me/password`
 
 请求字段：
 
@@ -99,19 +101,21 @@
 
 ### 查询偏好
 
-`GET /api/users/me/preferences`
+`POST /api/users/me/preferences/list`
 
 ### 设置偏好
 
-`PUT /api/users/me/preferences/{key}`
+`POST /api/users/me/preferences/set`
 
 - 使用 upsert 语义。
+- 请求体包含 `key` 和 `value`。
 - 偏好键必须通过校验。
 
 ### 删除偏好
 
-`DELETE /api/users/me/preferences/{key}`
+`POST /api/users/me/preferences/delete`
 
+- 请求体包含 `key`。
 - 使用逻辑删除。
 - 重复删除保持幂等。
 
@@ -121,9 +125,9 @@
 
 ### 用户列表
 
-`GET /api/admin/users`
+`POST /api/admin/users/list`
 
-筛选参数：
+请求体筛选参数：
 
 - `keyword`：匹配用户编号、用户名、邮箱或手机号
 - `status`
@@ -139,21 +143,24 @@
 
 ### 用户详情
 
-`GET /api/admin/users/{bizId}`
+`POST /api/admin/users/detail`
+
+- 请求体包含 `bizId`。
 
 ### 管理端创建用户
 
-`POST /api/admin/users`
+`POST /api/admin/users/create`
 
 - 复用注册领域规则。
 - 支持显式设置初始状态，但不能接收明文密码之外的密码哈希。
 
 ### 管理端更新用户
 
-`PATCH /api/admin/users/{bizId}`
+`POST /api/admin/users/update`
 
 允许修改：
 
+- `bizId`
 - `email`
 - `phone`
 
@@ -161,12 +168,13 @@
 
 ### 更新账户状态
 
-`PATCH /api/admin/users/{bizId}/status`
+`POST /api/admin/users/status`
 
 请求：
 
 ```json
 {
+  "bizId": "用户业务标识",
   "status": "ACTIVE"
 }
 ```
@@ -177,16 +185,21 @@
 
 ### 更新 KYC 状态
 
-`PATCH /api/admin/users/{bizId}/kyc-status`
+`POST /api/admin/users/kyc-status`
+
+- 请求体包含 `bizId` 和 `kycStatus`。
 
 ### 更新风险等级
 
-`PATCH /api/admin/users/{bizId}/risk-level`
+`POST /api/admin/users/risk-level`
+
+- 请求体包含 `bizId` 和 `riskLevel`。
 
 ### 删除用户
 
-`DELETE /api/admin/users/{bizId}`
+`POST /api/admin/users/delete`
 
+- 请求体包含 `bizId`。
 - 软删除用户和偏好。
 - 撤销全部会话。
 - 重复删除返回成功或资源不存在，项目必须统一选择；首版建议幂等成功。
