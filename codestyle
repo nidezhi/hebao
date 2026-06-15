@@ -18,3 +18,6 @@
 16. README、docs_new 和项目 skills 的持久化规范必须与 MyBatis Mapper XML 基线一致，禁止保留会诱导重新引入 JPA 的旧说明。
 17. 角色权限采用三层 RBAC：aiw_role 定义角色、aiw_user_role 分配用户角色、aiw_role_permission 映射角色权限；禁止将用户、角色和权限聚合到单表，禁止以 ADMIN 角色隐式绕过权限校验。
 18. 所有受保护业务接口必须使用 PermissionCodes 中的稳定权限编码鉴权；角色、角色权限或用户角色发生变化后，必须撤销受影响用户会话，且任何操作不得移除最后一个有效角色管理员。
+19. 所有 Controller 类必须提供带详细 description 的 @Tag；每个接口必须提供非空 summary 和 description 的 @Operation、完整 @ApiResponses，并明确 500 系统错误响应。
+20. Swagger 成功响应必须使用 useReturnTypeSchema=true 保留 Result<T> 的真实泛型返回模型；统一返回包装、分页模型、请求类和响应 DTO 必须为类及字段提供准确的 @Schema 说明、约束和必要示例。
+21. Controller 层必须使用 interfaces/request 下的独立请求 DTO 和 interfaces/dto/response 下的独立响应 DTO；Controller 公开返回签名和响应 DTO 字段禁止直接或间接暴露 Domain 对象、持久化实体、application.dto View 或应用层分页对象，应用结果必须在接口边界使用 Builder 和 Stream 转换为接口 DTO。

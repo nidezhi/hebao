@@ -4,6 +4,7 @@ import com.example.dzcom.domain.enums.product.ProductTradeStatus;
 import com.example.dzcom.domain.enums.product.ProductType;
 import lombok.Builder;
 import lombok.Getter;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,31 +20,51 @@ import java.time.LocalDateTime;
 @Getter
 @Builder(toBuilder = true)
 public class Product {
-    /** 跨领域引用和 API 输出使用的稳定业务标识。 */
+    @Schema(description = "产品业务标识")
     private final String bizId;
-    /** 平台内部产品编号，创建后不可变。 */
+    @Schema(description = "平台内部产品编号（不可变）")
     private final String productNo;
-    /** 市场或销售渠道内的产品代码。 */
+    @Schema(description = "市场或渠道内产品编码")
     private final String productCode;
+    @Schema(description = "产品名称")
     private String productName;
+    @Schema(description = "产品类型")
     private final ProductType productType;
+    @Schema(description = "市场编码")
     private final String marketCode;
+    @Schema(description = "币种")
     private final String currency;
+    @Schema(description = "交易状态")
     private ProductTradeStatus tradeStatus;
+    @Schema(description = "风险等级（1-5）")
     private int riskLevel;
+    @Schema(description = "最小投资金额")
     private BigDecimal minInvestAmount;
+    @Schema(description = "金额步长")
     private BigDecimal amountStep;
+    @Schema(description = "数量步长")
     private BigDecimal quantityStep;
+    @Schema(description = "费率")
     private BigDecimal feeRate;
+    @Schema(description = "上市日期")
     private LocalDate listingDate;
+    @Schema(description = "退市日期")
     private LocalDate delistingDate;
+    @Schema(description = "产品说明")
     private String description;
+    @Schema(description = "乐观锁版本")
     private int version;
+    @Schema(description = "记录创建时间（UTC）")
     private final LocalDateTime createdAt;
+    @Schema(description = "记录最后更新时间（UTC）")
     private LocalDateTime updatedAt;
+    @Schema(description = "创建者标识")
     private final String createdBy;
+    @Schema(description = "最后修改者标识")
     private String updatedBy;
+    @Schema(description = "逻辑删除标记（0/1）")
     private int deleted;
+    @Schema(description = "删除时间（UTC）")
     private LocalDateTime deletedAt;
 
     /**

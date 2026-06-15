@@ -2,6 +2,7 @@ package com.example.dzcom.domain.model.market;
 
 import com.example.dzcom.domain.enums.market.QuoteStatus;
 import lombok.Builder;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -12,23 +13,24 @@ import java.time.LocalDateTime;
  * <p>同一业务键的数据由基础设施层执行覆盖式修正，领域对象负责保证价格区间、
  * 非负成交量以及时间完整性。行情是只追加/修正数据，不与产品聚合建立对象关系。</p>
  */
+@Schema(description = "领域层行情对象（OHLCV）")
 @Builder
 public record MarketQuote(
-    String bizId,
-    String productBizId,
-    String sourceCode,
-    String interval,
-    LocalDateTime quoteTime,
-    BigDecimal openPrice,
-    BigDecimal highPrice,
-    BigDecimal lowPrice,
-    BigDecimal closePrice,
-    BigDecimal previousClosePrice,
-    BigDecimal volume,
-    BigDecimal turnoverAmount,
-    QuoteStatus status,
-    LocalDateTime receivedAt,
-    LocalDateTime createdAt
+    @Schema(description = "行情业务标识") String bizId,
+    @Schema(description = "产品业务标识") String productBizId,
+    @Schema(description = "数据源编码") String sourceCode,
+    @Schema(description = "周期") String interval,
+    @Schema(description = "行情时间（UTC）") LocalDateTime quoteTime,
+    @Schema(description = "开盘价") BigDecimal openPrice,
+    @Schema(description = "最高价") BigDecimal highPrice,
+    @Schema(description = "最低价") BigDecimal lowPrice,
+    @Schema(description = "收盘价") BigDecimal closePrice,
+    @Schema(description = "前一周期收盘价") BigDecimal previousClosePrice,
+    @Schema(description = "成交量") BigDecimal volume,
+    @Schema(description = "成交额") BigDecimal turnoverAmount,
+    @Schema(description = "行情状态") QuoteStatus status,
+    @Schema(description = "接收时间（UTC）") LocalDateTime receivedAt,
+    @Schema(description = "创建时间（UTC）") LocalDateTime createdAt
 ) {
     public MarketQuote {
         if (productBizId == null || productBizId.isBlank()) {

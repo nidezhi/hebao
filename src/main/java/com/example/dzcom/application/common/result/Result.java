@@ -1,32 +1,30 @@
 package com.example.dzcom.application.common.result;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 统一返回结果
+ * 统一接口返回结果。
+ *
+ * @param <T> 业务数据类型
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "统一接口返回包装")
 public class Result<T> {
-    
-    /**
-     * 响应码
-     */
+
+    @Schema(description = "业务响应码，与 HTTP 状态语义保持一致", example = "200")
     private Integer code;
-    
-    /**
-     * 响应消息
-     */
+
+    @Schema(description = "响应消息；成功时通常为 success，失败时为可读错误信息", example = "success")
     private String message;
-    
-    /**
-     * 响应数据
-     */
+
+    @Schema(description = "业务响应数据；无返回数据时为 null")
     private T data;
     
     /**

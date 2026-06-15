@@ -3,6 +3,7 @@ package com.example.dzcom.domain.model.account;
 import com.example.dzcom.domain.enums.account.AccountStatus;
 import lombok.Builder;
 import lombok.Getter;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 
@@ -15,15 +16,25 @@ import java.time.LocalDateTime;
 @Getter
 @Builder(toBuilder = true)
 public class User {
+    @Schema(description = "业务唯一标识")
     private final String bizId;
+    @Schema(description = "平台用户编号（不可变）")
     private final String userNo;
+    @Schema(description = "账户状态")
     private AccountStatus status;
+    @Schema(description = "乐观锁版本")
     private int version;
+    @Schema(description = "注册时间（UTC）")
     private final LocalDateTime registeredAt;
+    @Schema(description = "最近登录时间（UTC）")
     private LocalDateTime lastLoginAt;
+    @Schema(description = "记录创建时间（UTC）")
     private final LocalDateTime createdAt;
+    @Schema(description = "记录最后更新时间（UTC）")
     private LocalDateTime updatedAt;
+    @Schema(description = "逻辑删除标记（0/1）")
     private int deleted;
+    @Schema(description = "删除时间（UTC）")
     private LocalDateTime deletedAt;
 
     /**

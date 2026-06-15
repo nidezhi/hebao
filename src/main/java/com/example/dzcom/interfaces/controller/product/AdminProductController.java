@@ -5,11 +5,11 @@ import com.example.dzcom.application.command.product.CreateProductCommand;
 import com.example.dzcom.application.command.product.SaveProductAttributeCommand;
 import com.example.dzcom.application.command.product.UpdateProductCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
-import com.example.dzcom.application.dto.market.MarketQuoteView;
-import com.example.dzcom.application.dto.product.ProductView;
 import com.example.dzcom.application.service.market.MarketQuoteApplicationService;
 import com.example.dzcom.application.service.product.ProductApplicationService;
 import com.example.dzcom.application.common.result.Result;
+import com.example.dzcom.interfaces.dto.response.market.MarketQuoteResponse;
+import com.example.dzcom.interfaces.dto.response.product.ProductResponse;
 import com.example.dzcom.interfaces.request.market.SaveMarketQuoteRequest;
 import com.example.dzcom.interfaces.request.product.CreateProductRequest;
 import com.example.dzcom.interfaces.request.product.ProductAttributeRequest;
@@ -19,9 +19,6 @@ import com.example.dzcom.interfaces.request.product.UpdateProductRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/products")
 @RequiredArgsConstructor
-@Tag(name = "管理端产品与行情")
+@Tag(name = "管理端产品与行情", description = "管理产品资料、交易状态、扩展属性和行情数据的管理端接口")
 public class AdminProductController {
     private final ProductApplicationService products;
     private final MarketQuoteApplicationService quotes;
@@ -54,12 +51,15 @@ public class AdminProductController {
     @PostMapping("/create")
     @Operation(summary = "创建产品", description = "创建产品并初始化交易参数。请求中 productCode/marketCode/currency 等字段有严格格式与数值校验。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "创建成功，返回 ProductView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "200", description = "创建成功，返回产品响应", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数校验失败或数值不合法"),
-        @ApiResponse(responseCode = "409", description = "产品编码冲突")
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无产品创建权限"),
+        @ApiResponse(responseCode = "409", description = "产品编码冲突"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public Result<ProductView> create(@Valid @RequestBody CreateProductRequest request) {
-        return Result.success(products.create(CreateProductCommand.builder()
+    public Result<ProductResponse> create(@Valid @RequestBody CreateProductRequest request) {
+        return Result.success(ProductResponse.from(products.create(CreateProductCommand.builder()
                 .productCode(request.productCode())
                 .productName(request.productName())
                 .productType(request.productType())
@@ -73,7 +73,7 @@ public class AdminProductController {
                 .listingDate(request.listingDate())
                 .delistingDate(request.delistingDate())
                 .description(request.description())
-                .build()));
+                .build())));
     }
 
     /**
@@ -88,12 +88,16 @@ public class AdminProductController {
     @PostMapping("/update")
     @Operation(summary = "更新产品可变资料", description = "更新产品允许变更的资料与交易参数（名称、风险等级、步进、费用、上下架时间、说明等）。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "更新成功，返回 ProductView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "200", description = "更新成功，返回产品响应", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数或业务规则不合法"),
-        @ApiResponse(responseCode = "404", description = "产品不存在")
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无产品更新权限"),
+        @ApiResponse(responseCode = "404", description = "产品不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public Result<ProductView> update(@Valid @RequestBody UpdateProductRequest request) {
-        return Result.success(products.update(request.bizId(), UpdateProductCommand.builder()
+    public Result<ProductResponse> update(@Valid @RequestBody UpdateProductRequest request) {
+        return Result.success(ProductResponse.from(products.update(
+            request.bizId(), UpdateProductCommand.builder()
                 .productName(request.productName())
                 .riskLevel(request.riskLevel())
                 .minInvestAmount(request.minInvestAmount())
@@ -103,7 +107,7 @@ public class AdminProductController {
                 .listingDate(request.listingDate())
                 .delistingDate(request.delistingDate())
                 .description(request.description())
-                .build()));
+                .build())));
     }
 
     /**
@@ -118,12 +122,16 @@ public class AdminProductController {
     @PostMapping("/status")
     @Operation(summary = "变更产品交易状态", description = "变更产品的交易可用状态（DISABLED/TRADABLE/SUSPENDED）。请使用此独立接口以确保生命周期规则。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "成功，返回变更后的 ProductView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "200", description = "成功，返回变更后的产品响应", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数或状态转换不合法"),
-        @ApiResponse(responseCode = "404", description = "产品不存在")
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无产品状态变更权限"),
+        @ApiResponse(responseCode = "404", description = "产品不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public Result<ProductView> status(@Valid @RequestBody ProductStatusRequest request) {
-        return Result.success(products.changeStatus(request.bizId(), request.status()));
+    public Result<ProductResponse> status(@Valid @RequestBody ProductStatusRequest request) {
+        return Result.success(ProductResponse.from(
+            products.changeStatus(request.bizId(), request.status())));
     }
 
     /**
@@ -138,18 +146,22 @@ public class AdminProductController {
     @PostMapping("/attributes/save")
     @Operation(summary = "新增或覆盖产品扩展属性", description = "向产品写入扩展属性，jsonValue 必须是合法的 JSON 文本（字符串需包含引号）。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "成功，返回 ProductView（包含新属性）", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "200", description = "成功，返回包含新属性的产品响应", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数校验失败或 jsonValue 非法"),
-        @ApiResponse(responseCode = "404", description = "产品不存在")
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无产品属性维护权限"),
+        @ApiResponse(responseCode = "404", description = "产品不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public Result<ProductView> attribute(@Valid @RequestBody ProductAttributeRequest request) {
-        return Result.success(products.saveAttribute(request.bizId(), SaveProductAttributeCommand.builder()
+    public Result<ProductResponse> attribute(@Valid @RequestBody ProductAttributeRequest request) {
+        return Result.success(ProductResponse.from(products.saveAttribute(
+            request.bizId(), SaveProductAttributeCommand.builder()
                 .key(request.key())
                 .valueType(request.valueType())
                 .jsonValue(request.jsonValue())
                 .effectiveDate(request.effectiveDate())
                 .sourceCode(request.sourceCode())
-                .build()));
+                .build())));
     }
 
     /**
@@ -164,12 +176,15 @@ public class AdminProductController {
     @PostMapping("/quotes/save")
     @Operation(summary = "写入或修正产品行情点", description = "写入单条 OHLCV 行情点。用于修正或补写历史/实时行情数据。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "成功，返回保存后的行情 MarketQuoteView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "200", description = "成功，返回保存后的行情响应", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数校验失败或行情数据不合法"),
-        @ApiResponse(responseCode = "404", description = "产品不存在")
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无行情维护权限"),
+        @ApiResponse(responseCode = "404", description = "产品不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public Result<MarketQuoteView> quote(@Valid @RequestBody SaveMarketQuoteRequest request) {
-        return Result.success(quotes.save(SaveMarketQuoteCommand.builder()
+    public Result<MarketQuoteResponse> quote(@Valid @RequestBody SaveMarketQuoteRequest request) {
+        return Result.success(MarketQuoteResponse.from(quotes.save(SaveMarketQuoteCommand.builder()
                 .productBizId(request.productBizId())
                 .sourceCode(request.sourceCode())
                 .interval(request.interval())
@@ -182,7 +197,7 @@ public class AdminProductController {
                 .volume(request.volume())
                 .turnoverAmount(request.turnoverAmount())
                 .status(request.status())
-                .build()));
+                .build())));
     }
 
     /**
@@ -195,11 +210,14 @@ public class AdminProductController {
      * @date 2026-06-14
      */
     @PostMapping("/delete")
-    @Operation(summary = "逻辑删除产品", description = "对指定产���执行逻辑删除操作，撤销相关可交易权限与会话。")
+    @Operation(summary = "逻辑删除产品", description = "对指定产品执行逻辑删除。删除后常规产品查询不再返回该产品。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "删除成功（Result<Void>）"),
+        @ApiResponse(responseCode = "200", description = "删除成功（Result<Void>）", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数不合法或不允许删除"),
-        @ApiResponse(responseCode = "404", description = "产品不存在")
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无产品删除权限"),
+        @ApiResponse(responseCode = "404", description = "产品不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
     public Result<Void> delete(@Valid @RequestBody ProductBizIdRequest request) {
         products.delete(request.bizId());

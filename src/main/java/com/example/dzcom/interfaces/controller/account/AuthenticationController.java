@@ -2,18 +2,15 @@ package com.example.dzcom.interfaces.controller.account;
 
 import com.example.dzcom.application.command.account.RegisterCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
-import com.example.dzcom.application.dto.account.UserView;
 import com.example.dzcom.application.service.account.AuthenticationApplicationService;
 import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.infrastructure.config.account.AccountAuthenticationInterceptor;
+import com.example.dzcom.interfaces.dto.response.account.UserResponse;
 import com.example.dzcom.interfaces.request.account.LoginRequest;
 import com.example.dzcom.interfaces.request.account.RegisterRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -31,7 +28,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "账户认证")
+@Tag(name = "账户认证", description = "用户注册、登录、登出和当前会话用户查询接口")
 public class AuthenticationController {
     private final AuthenticationApplicationService service;
 
@@ -47,12 +44,13 @@ public class AuthenticationController {
     @PostMapping("/register")
     @Operation(summary = "注册用户", description = "公开注册普通用户。用户名、密码、email 与 phone 的格式在请求边界校验。密码须包含字母和数字，长度 8-72。")
     @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "注册成功，返回创建的用户信息（Result<UserView>）", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
+        @ApiResponse(responseCode = "201", description = "注册成功，返回创建后的用户响应", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数校验失败或注册规则不满足"),
-        @ApiResponse(responseCode = "409", description = "登录标识（username/email/phone）冲突")
+        @ApiResponse(responseCode = "409", description = "登录标识（username/email/phone）冲突"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public ResponseEntity<Result<UserView>> register(@Valid @RequestBody RegisterRequest request) {
-        UserView user = service.register(RegisterCommand.builder()
+    public ResponseEntity<Result<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
+        var user = service.register(RegisterCommand.builder()
             .username(request.username())
             .password(request.password())
             .email(request.email())
@@ -60,7 +58,7 @@ public class AuthenticationController {
             .nickname(request.nickname())
             .initialRole("USER")
             .build());
-        return ResponseEntity.status(201).body(Result.success(user));
+        return ResponseEntity.status(201).body(Result.success(UserResponse.from(user)));
     }
 
     /**
@@ -76,15 +74,16 @@ public class AuthenticationController {
     @PostMapping("/login")
     @Operation(summary = "登录", description = "使用用户名/邮箱/手机号 + 密码登录。成功后在响应头写入会话 Cookie (DZCOM_SESSION)。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "登录成功，返回当前用户信息（Result<UserView>），并在 Set-Cookie 中返回会话令牌"),
+        @ApiResponse(responseCode = "200", description = "登录成功，返回当前用户响应，并在 Set-Cookie 中返回会话令牌", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数校验失败"),
-        @ApiResponse(responseCode = "401", description = "账号或密码错误或账户不可登录")
+        @ApiResponse(responseCode = "401", description = "账号或密码错误或账户不可登录"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public Result<UserView> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
+    public Result<UserResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         AuthenticationApplicationService.LoginResult login = service.login(request.account(), request.password());
         response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(login.token().value(),
             login.token().maxAgeSeconds()).toString());
-        return Result.success(login.user());
+        return Result.success(UserResponse.from(login.user()));
     }
 
     /**
@@ -98,8 +97,9 @@ public class AuthenticationController {
     @PostMapping("/logout")
     @Operation(summary = "登出", description = "撤销当前会话并清除会话 Cookie（设置空 token 并 max-age=0）。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "登出成功（Result<Void>）"),
-        @ApiResponse(responseCode = "401", description = "未登录或会话已过期")
+        @ApiResponse(responseCode = "200", description = "登出成功（Result<Void>）", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "401", description = "未登录或会话已过期"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
     public Result<Void> logout(HttpServletResponse response) {
         service.logout();
@@ -118,11 +118,12 @@ public class AuthenticationController {
     @PostMapping("/me")
     @Operation(summary = "获取当前用户", description = "返回当前登录用户信息。受会话认证拦截器保护，未登录将返回 401。")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "成功，返回当前用户 UserView", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Result.class))),
-        @ApiResponse(responseCode = "401", description = "未登录或会话失效")
+        @ApiResponse(responseCode = "200", description = "成功，返回当前用户响应", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
     })
-    public Result<UserView> me() {
-        return Result.success(service.currentUser());
+    public Result<UserResponse> me() {
+        return Result.success(UserResponse.from(service.currentUser()));
     }
 
     /**
