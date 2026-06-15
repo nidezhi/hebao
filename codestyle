@@ -21,3 +21,6 @@
 19. 所有 Controller 类必须提供带详细 description 的 @Tag；每个接口必须提供非空 summary 和 description 的 @Operation、完整 @ApiResponses，并明确 500 系统错误响应。
 20. Swagger 成功响应必须使用 useReturnTypeSchema=true 保留 Result<T> 的真实泛型返回模型；统一返回包装、分页模型、请求类和响应 DTO 必须为类及字段提供准确的 @Schema 说明、约束和必要示例。
 21. Controller 层必须使用 interfaces/request 下的独立请求 DTO 和 interfaces/dto/response 下的独立响应 DTO；Controller 公开返回签名和响应 DTO 字段禁止直接或间接暴露 Domain 对象、持久化实体、application.dto View 或应用层分页对象，应用结果必须在接口边界使用 Builder 和 Stream 转换为接口 DTO。
+22. 所有定时任务必须由配置定义并动态生成调度，禁止在业务处理器中使用硬编码 @Scheduled；任务配置必须包含稳定 code、type、cron、zone、enabled 和参数集合，并允许通过环境变量覆盖。
+23. 定时任务触发与执行必须通过 Kafka 解耦，事件必须包含全局唯一 eventId 并以执行记录保证消费幂等；失败必须保存失败状态、原因摘要并记录完整异常堆栈。
+24. 每一种任务类型必须使用独立 InvestmentTaskHandler 实现单一职责，禁止聚合到任务工厂类；任务结果持久化必须遵循独立 Store、Impl、Mapper Java/XML 一一对应的规范。

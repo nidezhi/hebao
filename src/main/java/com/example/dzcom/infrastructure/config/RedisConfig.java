@@ -56,12 +56,13 @@ public class RedisConfig {
         
         // 使用JSON序列化器处理value
         Jackson2JsonRedisSerializer<Object> jsonSerializer = new Jackson2JsonRedisSerializer<>(Object.class);
-        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        objectMapper.activateDefaultTyping(
+        ObjectMapper redisObjectMapper = objectMapper.copy();
+        redisObjectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        redisObjectMapper.activateDefaultTyping(
             LaissezFaireSubTypeValidator.instance,
             ObjectMapper.DefaultTyping.NON_FINAL
         );
-        jsonSerializer.setObjectMapper(objectMapper);
+        jsonSerializer.setObjectMapper(redisObjectMapper);
         
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);

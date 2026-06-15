@@ -1,6 +1,7 @@
 package com.example.dzcom.infrastructure.persistence.mapper.market;
 
 import com.example.dzcom.infrastructure.persistence.entity.market.MarketQuoteEntity;
+import com.example.dzcom.infrastructure.persistence.entity.task.ThemeProductPerformanceRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -31,4 +32,11 @@ public interface MarketQuoteMapper {
 
     /** 新增或更新行情点。 */
     int save(MarketQuoteEntity entity);
+
+    /** 查询产品编码集合在指定窗口内的收益表现。 */
+    List<ThemeProductPerformanceRow> selectPerformance(
+        @Param("productCodes") List<String> productCodes,
+        @Param("from") LocalDateTime from,
+        @Param("to") LocalDateTime to
+    );
 }

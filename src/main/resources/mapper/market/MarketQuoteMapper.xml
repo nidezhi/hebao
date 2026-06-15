@@ -35,4 +35,47 @@
         volume = values(volume), turnover_amount = values(turnover_amount),
         quote_status = values(quote_status), received_at = values(received_at)
     </insert>
+    <select id="selectPerformance"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.ThemeProductPerformanceRow">
+        select p.biz_id as product_biz_id,
+               p.product_code,
+               p.product_name,
+               (
+                   select q1.close_price from aiw_market_quote q1
+                   where q1.product_biz_id = p.biz_id
+                     and q1.quote_status in (1, 2)
+                     and q1.quote_time between #{from} and #{to}
+                   order by q1.quote_time asc limit 1
+               ) as start_price,
+               (
+                   select q2.close_price from aiw_market_quote q2
+                   where q2.product_biz_id = p.biz_id
+                     and q2.quote_status in (1, 2)
+                     and q2.quote_time between #{from} and #{to}
+                   order by q2.quote_time desc limit 1
+               ) as end_price,
+               (
+                   (
+                       select q3.close_price from aiw_market_quote q3
+                       where q3.product_biz_id = p.biz_id
+                         and q3.quote_status in (1, 2)
+                         and q3.quote_time between #{from} and #{to}
+                       order by q3.quote_time desc limit 1
+                   ) /
+                   nullif((
+                       select q4.close_price from aiw_market_quote q4
+                       where q4.product_biz_id = p.biz_id
+                         and q4.quote_status in (1, 2)
+                         and q4.quote_time between #{from} and #{to}
+                       order by q4.quote_time asc limit 1
+                   ), 0)
+               ) - 1 as return_rate
+        from aiw_product p
+        where p.is_deleted = 0
+          and p.product_code in
+          <foreach collection="productCodes" item="code" open="(" separator="," close=")">
+              #{code}
+          </foreach>
+        having start_price is not null and end_price is not null
+    </select>
 </mapper>

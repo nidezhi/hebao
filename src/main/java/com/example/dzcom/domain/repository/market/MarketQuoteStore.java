@@ -1,6 +1,7 @@
 package com.example.dzcom.domain.repository.market;
 
 import com.example.dzcom.domain.model.market.MarketQuote;
+import com.example.dzcom.domain.model.task.ThemeProductPerformance;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,4 +48,18 @@ public interface MarketQuoteStore {
      */
     List<MarketQuote> findHistory(String productBizId, String interval, String sourceCode,
                                   LocalDateTime from, LocalDateTime to, int limit);
+
+    /**
+     * 查询一组产品在指定窗口内的首尾价格和收益率。
+     *
+     * @param productCodes 产品编码列表
+     * @param from 窗口开始时间
+     * @param to 窗口结束时间
+     * @return 有足够行情样本的产品收益表现
+     */
+    List<ThemeProductPerformance> findPerformance(
+        List<String> productCodes,
+        LocalDateTime from,
+        LocalDateTime to
+    );
 }

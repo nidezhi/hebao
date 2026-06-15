@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.NewsArticleMapper">
+    <select id="selectBySourceAndExternalId"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleEntity">
+        select * from aiw_news_article
+        where source_code = #{sourceCode} and external_id = #{externalId}
+    </select>
+    <insert id="save">
+        insert into aiw_news_article
+        (biz_id, external_id, article_type, title, summary, content, source_code, source_url,
+         language_code, publish_time, collected_at, created_at, is_deleted)
+        values
+        (#{bizId}, #{externalId}, #{articleType}, #{title}, #{summary}, #{content}, #{sourceCode},
+         #{sourceUrl}, #{languageCode}, #{publishTime}, #{collectedAt}, #{createdAt}, #{deleted})
+        on duplicate key update
+        article_type = values(article_type), title = values(title), summary = values(summary),
+        content = values(content), source_url = values(source_url),
+        language_code = values(language_code), publish_time = values(publish_time),
+        collected_at = values(collected_at), is_deleted = 0
+    </insert>
+    <select id="countByKeywords" resultType="long">
+        select count(*) from aiw_news_article
+        where is_deleted = 0 and publish_time &gt;= #{from}
+        <if test="keywords != null and !keywords.isEmpty()">
+            and (
+            <foreach collection="keywords" item="keyword" separator=" or ">
+                lower(concat(title, ' ', coalesce(summary, ''))) like
+                concat('%', lower(#{keyword}), '%')
+            </foreach>
+            )
+        </if>
+    </select>
+</mapper>

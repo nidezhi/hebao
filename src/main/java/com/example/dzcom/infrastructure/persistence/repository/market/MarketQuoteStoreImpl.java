@@ -2,6 +2,7 @@ package com.example.dzcom.infrastructure.persistence.repository.market;
 
 import com.example.dzcom.domain.enums.market.QuoteStatus;
 import com.example.dzcom.domain.model.market.MarketQuote;
+import com.example.dzcom.domain.model.task.ThemeProductPerformance;
 import com.example.dzcom.domain.repository.market.MarketQuoteStore;
 import com.example.dzcom.infrastructure.persistence.entity.market.MarketQuoteEntity;
 import com.example.dzcom.infrastructure.persistence.mapper.market.MarketQuoteMapper;
@@ -86,6 +87,35 @@ public class MarketQuoteStoreImpl implements MarketQuoteStore {
         return mapper.selectHistory(productBizId, interval, sourceCode, from, to, limit)
             .stream()
             .map(this::toDomain)
+            .toList();
+    }
+
+    /**
+     * 查询一组产品在指定窗口内的收益表现。
+     *
+     * @param productCodes 产品编码列表
+     * @param from 窗口开始时间
+     * @param to 窗口结束时间
+     * @return 产品收益表现
+     */
+    @Override
+    public List<ThemeProductPerformance> findPerformance(
+        List<String> productCodes,
+        LocalDateTime from,
+        LocalDateTime to
+    ) {
+        if (productCodes == null || productCodes.isEmpty()) {
+            return List.of();
+        }
+        return mapper.selectPerformance(productCodes, from, to).stream()
+            .map(row -> ThemeProductPerformance.builder()
+                .productBizId(row.getProductBizId())
+                .productCode(row.getProductCode())
+                .productName(row.getProductName())
+                .startPrice(row.getStartPrice())
+                .endPrice(row.getEndPrice())
+                .returnRate(row.getReturnRate())
+                .build())
             .toList();
     }
 

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.ScheduledTaskExecutionMapper">
+    <select id="selectByEventId"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.ScheduledTaskExecutionEntity">
+        select * from aiw_scheduled_task_execution where event_id = #{eventId}
+    </select>
+    <insert id="save">
+        insert into aiw_scheduled_task_execution
+        (biz_id, task_code, task_type, trigger_source, status, event_id, result_summary,
+         failure_reason, started_at, completed_at, created_at)
+        values
+        (#{bizId}, #{taskCode}, #{taskType}, #{triggerSource}, #{status}, #{eventId},
+         #{resultSummary}, #{failureReason}, #{startedAt}, #{completedAt}, #{createdAt})
+        on duplicate key update
+        status = values(status), result_summary = values(result_summary),
+        failure_reason = values(failure_reason), completed_at = values(completed_at)
+    </insert>
+</mapper>

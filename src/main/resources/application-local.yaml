@@ -35,6 +35,15 @@ spring:
       database: ${REDIS_DATABASE:0}
       timeout: ${REDIS_TIMEOUT:3000ms}
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:dzcom-investment-task-worker}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+
   # Flyway配置
   flyway:
     enabled: true
@@ -71,3 +80,39 @@ mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
+
+investment:
+  tasks:
+    enabled: ${INVESTMENT_TASKS_ENABLED:true}
+    topic: ${INVESTMENT_TASK_TOPIC:dzcom.investment.task.trigger.v1}
+    definitions:
+      - code: investment-news-collection
+        type: INVESTMENT_NEWS_COLLECTION
+        cron: ${NEWS_COLLECTION_CRON:0 */10 * * * *}
+        zone: Asia/Shanghai
+        parameters:
+          feedUrls: ${INVESTMENT_NEWS_FEEDS:https://www.sec.gov/news/pressreleases.rss}
+          sourceCode: OFFICIAL_RSS
+          languageCode: en-US
+          maxItems: "50"
+      - code: hot-theme-return
+        type: HOT_THEME_RETURN
+        cron: ${HOT_THEME_RETURN_CRON:30 */5 * * * *}
+        zone: Asia/Shanghai
+        parameters:
+          windowMinutes: "1440"
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=AAPL,MSFT,NVDA;半导体=NVDA,AMD,TSM;黄金=GLD;数字资产=BTC,ETH}
+      - code: market-momentum-scan
+        type: MARKET_MOMENTUM_SCAN
+        cron: ${MARKET_MOMENTUM_CRON:0 */5 * * * *}
+        zone: Asia/Shanghai
+        parameters:
+          windowMinutes: "60"
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=AAPL,MSFT,NVDA;半导体=NVDA,AMD,TSM;黄金=GLD;数字资产=BTC,ETH}
+      - code: news-heat-aggregation
+        type: NEWS_HEAT_AGGREGATION
+        cron: ${NEWS_HEAT_CRON:45 */10 * * * *}
+        zone: Asia/Shanghai
+        parameters:
+          windowMinutes: "1440"
+          themes: ${HOT_INVESTMENT_KEYWORDS:AI人工智能=AI,artificial intelligence,人工智能;半导体=semiconductor,chip,芯片;黄金=gold,黄金;数字资产=bitcoin,crypto,比特币}
