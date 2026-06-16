@@ -1,4 +1,4 @@
-package com.example.dzcom.application.task;
+package com.example.dzcom.infrastructure.task;
 
 import com.example.dzcom.application.service.task.InvestmentNewsFeedClient;
 import org.springframework.stereotype.Component;

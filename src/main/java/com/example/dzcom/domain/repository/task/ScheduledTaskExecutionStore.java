@@ -1,5 +1,6 @@
 package com.example.dzcom.domain.repository.task;
 
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.domain.model.task.ScheduledTaskExecution;
 
 import java.util.Optional;
@@ -11,4 +12,7 @@ public interface ScheduledTaskExecutionStore {
 
     /** 保存或更新任务执行记录。 */
     ScheduledTaskExecution save(ScheduledTaskExecution execution);
+
+    /** 根据筛选条件分页查询任务执行记录。 */
+    PageResult<ScheduledTaskExecution> search(ScheduledTaskExecutionSearchCriteria criteria);
 }

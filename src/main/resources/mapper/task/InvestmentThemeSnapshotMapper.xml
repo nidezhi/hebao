@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.InvestmentThemeSnapshotMapper">
+    <sql id="searchCondition">
+        from aiw_investment_theme_snapshot s
+        where 1 = 1
+        <if test="criteria.taskCode != null and criteria.taskCode != ''">
+            and s.task_code = #{criteria.taskCode}
+        </if>
+        <if test="criteria.snapshotType != null and criteria.snapshotType != ''">
+            and s.snapshot_type = #{criteria.snapshotType}
+        </if>
+        <if test="criteria.themeCode != null and criteria.themeCode != ''">
+            and s.theme_code = #{criteria.themeCode}
+        </if>
+        <if test="criteria.snapshotFrom != null">
+            and s.snapshot_time &gt;= #{criteria.snapshotFrom}
+        </if>
+        <if test="criteria.snapshotTo != null">
+            and s.snapshot_time &lt;= #{criteria.snapshotTo}
+        </if>
+    </sql>
     <insert id="insert">
         insert into aiw_investment_theme_snapshot
         (biz_id, task_code, snapshot_type, theme_code, theme_name, window_minutes, sample_count,
@@ -11,4 +30,17 @@
          #{sampleCount}, #{returnRate}, #{momentumScore}, #{heatScore}, #{topProductBizId},
          #{metrics}, #{snapshotTime}, #{createdAt})
     </insert>
+    <select id="search"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.InvestmentThemeSnapshotEntity">
+        select s.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
 </mapper>

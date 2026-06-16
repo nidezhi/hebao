@@ -1,11 +1,13 @@
 package com.example.dzcom.application.service.task;
 
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.domain.model.task.InvestmentThemeSnapshot;
 import com.example.dzcom.domain.model.task.ThemeProductPerformance;
 import com.example.dzcom.domain.repository.market.MarketQuoteStore;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotStore;
+import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotSearchCriteria;
 import com.example.dzcom.domain.model.market.MarketQuote;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.Test;
@@ -107,6 +109,19 @@ class HotThemeReturnTaskHandlerTest {
         public InvestmentThemeSnapshot save(InvestmentThemeSnapshot snapshot) {
             saved = snapshot;
             return snapshot;
+        }
+
+        @Override
+        public PageResult<InvestmentThemeSnapshot> search(
+            InvestmentThemeSnapshotSearchCriteria criteria
+        ) {
+            return PageResult.<InvestmentThemeSnapshot>builder()
+                .items(List.of())
+                .total(0)
+                .page(criteria.page())
+                .size(criteria.size())
+                .totalPages(0)
+                .build();
         }
     }
 

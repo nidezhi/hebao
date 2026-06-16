@@ -24,3 +24,4 @@
 22. 所有定时任务必须由配置定义并动态生成调度，禁止在业务处理器中使用硬编码 @Scheduled；任务配置必须包含稳定 code、type、cron、zone、enabled 和参数集合，并允许通过环境变量覆盖。
 23. 定时任务触发与执行必须通过 Kafka 解耦，事件必须包含全局唯一 eventId 并以执行记录保证消费幂等；失败必须保存失败状态、原因摘要并记录完整异常堆栈。
 24. 每一种任务类型必须使用独立 InvestmentTaskHandler 实现单一职责，禁止聚合到任务工厂类；任务结果持久化必须遵循独立 Store、Impl、Mapper Java/XML 一一对应的规范。
+25. 可被前端使用的任务能力必须同步提供 Controller 接口、interfaces/request 请求 DTO、interfaces/dto/response 响应 DTO 和完整 Swagger 注解；任务配置、手动触发、执行记录、采集结果和分析快照都必须能通过接口查询或触发。

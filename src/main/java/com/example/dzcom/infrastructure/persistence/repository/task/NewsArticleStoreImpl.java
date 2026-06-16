@@ -1,6 +1,8 @@
 package com.example.dzcom.infrastructure.persistence.repository.task;
 
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.domain.model.task.NewsArticle;
+import com.example.dzcom.domain.repository.task.NewsArticleSearchCriteria;
 import com.example.dzcom.domain.repository.task.NewsArticleStore;
 import com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleEntity;
 import com.example.dzcom.infrastructure.persistence.mapper.task.NewsArticleMapper;
@@ -45,6 +47,35 @@ public class NewsArticleStoreImpl implements NewsArticleStore {
     @Override
     public long countByKeywords(List<String> keywords, LocalDateTime from) {
         return mapper.countByKeywords(keywords, from);
+    }
+
+    /** 根据筛选条件分页查询资讯。 */
+    @Override
+    public PageResult<NewsArticle> search(NewsArticleSearchCriteria criteria) {
+        int offset = (criteria.page() - 1) * criteria.size();
+        List<NewsArticle> items = mapper.search(criteria, offset, resolveSortColumn(criteria.sort()))
+            .stream()
+            .map(this::toDomain)
+            .toList();
+        long total = mapper.count(criteria);
+        return PageResult.<NewsArticle>builder()
+            .items(items)
+            .total(total)
+            .page(criteria.page())
+            .size(criteria.size())
+            .totalPages((int) Math.ceil((double) total / criteria.size()))
+            .build();
+    }
+
+    /** 将接口排序字段转换为固定数据库列。 */
+    private String resolveSortColumn(String sort) {
+        return switch (sort) {
+            case "title" -> "n.title";
+            case "sourceCode" -> "n.source_code";
+            case "collectedAt" -> "n.collected_at";
+            case "createdAt" -> "n.created_at";
+            default -> "n.publish_time";
+        };
     }
 
     /** 将持久化实体转换为领域对象。 */

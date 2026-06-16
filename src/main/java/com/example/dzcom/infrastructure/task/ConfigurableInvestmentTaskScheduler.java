@@ -1,5 +1,6 @@
-package com.example.dzcom.application.task;
+package com.example.dzcom.infrastructure.task;
 
+import com.example.dzcom.application.service.task.InvestmentTaskManagementService;
 import com.example.dzcom.infrastructure.config.task.InvestmentTaskProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,7 @@ import java.time.ZoneId;
 @ConditionalOnProperty(prefix = "investment.tasks", name = "enabled", havingValue = "true")
 public class ConfigurableInvestmentTaskScheduler {
     private final InvestmentTaskProperties properties;
-    private final InvestmentTaskEventPublisher publisher;
+    private final InvestmentTaskManagementService tasks;
     private final TaskScheduler investmentTaskScheduler;
 
     /** 应用启动时按配置生成全部启用任务。 */
@@ -29,7 +30,7 @@ public class ConfigurableInvestmentTaskScheduler {
             .forEach(definition -> {
                 validate(definition);
                 investmentTaskScheduler.schedule(
-                    () -> publisher.publish(definition),
+                    () -> tasks.trigger(definition.getCode(), definition.getParameters(), "SCHEDULE"),
                     new CronTrigger(definition.getCron(), ZoneId.of(definition.getZone()))
                 );
                 log.info("已注册投资任务: code={}, type={}, cron={}, zone={}",

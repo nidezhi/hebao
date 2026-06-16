@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.ScheduledTaskExecutionMapper">
+    <sql id="searchCondition">
+        from aiw_scheduled_task_execution e
+        where 1 = 1
+        <if test="criteria.taskCode != null and criteria.taskCode != ''">
+            and e.task_code = #{criteria.taskCode}
+        </if>
+        <if test="criteria.taskType != null and criteria.taskType != ''">
+            and e.task_type = #{criteria.taskType}
+        </if>
+        <if test="criteria.status != null and criteria.status != ''">
+            and e.status = #{criteria.status}
+        </if>
+        <if test="criteria.startedFrom != null">
+            and e.started_at &gt;= #{criteria.startedFrom}
+        </if>
+        <if test="criteria.startedTo != null">
+            and e.started_at &lt;= #{criteria.startedTo}
+        </if>
+    </sql>
     <select id="selectByEventId"
             resultType="com.example.dzcom.infrastructure.persistence.entity.task.ScheduledTaskExecutionEntity">
         select * from aiw_scheduled_task_execution where event_id = #{eventId}
@@ -16,4 +35,17 @@
         status = values(status), result_summary = values(result_summary),
         failure_reason = values(failure_reason), completed_at = values(completed_at)
     </insert>
+    <select id="search"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.ScheduledTaskExecutionEntity">
+        select e.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
 </mapper>

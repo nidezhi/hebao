@@ -1,5 +1,6 @@
 package com.example.dzcom.infrastructure.persistence.mapper.task;
 
+import com.example.dzcom.domain.repository.task.NewsArticleSearchCriteria;
 import com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -24,4 +25,12 @@ public interface NewsArticleMapper {
         @Param("keywords") List<String> keywords,
         @Param("from") LocalDateTime from
     );
+
+    /** 根据筛选条件分页查询资讯。 */
+    List<NewsArticleEntity> search(@Param("criteria") NewsArticleSearchCriteria criteria,
+                                   @Param("offset") int offset,
+                                   @Param("sortColumn") String sortColumn);
+
+    /** 统计符合筛选条件的资讯数量。 */
+    long count(@Param("criteria") NewsArticleSearchCriteria criteria);
 }

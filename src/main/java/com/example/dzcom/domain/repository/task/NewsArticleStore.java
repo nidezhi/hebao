@@ -1,5 +1,6 @@
 package com.example.dzcom.domain.repository.task;
 
+import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.domain.model.task.NewsArticle;
 
 import java.time.LocalDateTime;
@@ -12,4 +13,7 @@ public interface NewsArticleStore {
 
     /** 统计时间窗口内标题或摘要命中任一关键词的资讯数量。 */
     long countByKeywords(List<String> keywords, LocalDateTime from);
+
+    /** 根据筛选条件分页查询资讯。 */
+    PageResult<NewsArticle> search(NewsArticleSearchCriteria criteria);
 }

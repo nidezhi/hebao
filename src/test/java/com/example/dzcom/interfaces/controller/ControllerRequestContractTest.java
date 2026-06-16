@@ -6,6 +6,7 @@ import com.example.dzcom.interfaces.controller.account.AuthenticationController;
 import com.example.dzcom.interfaces.controller.account.CurrentUserController;
 import com.example.dzcom.interfaces.controller.product.AdminProductController;
 import com.example.dzcom.interfaces.controller.product.ProductController;
+import com.example.dzcom.interfaces.controller.task.InvestmentTaskController;
 import com.example.dzcom.interfaces.dto.response.account.PreferenceResponse;
 import com.example.dzcom.interfaces.dto.response.account.RoleResponse;
 import com.example.dzcom.interfaces.dto.response.account.UserResponse;
@@ -13,6 +14,11 @@ import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.market.MarketQuoteResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductAttributeResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductResponse;
+import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
+import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskTriggerResponse;
+import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeSnapshotResponse;
+import com.example.dzcom.interfaces.dto.response.task.NewsArticleResponse;
+import com.example.dzcom.interfaces.dto.response.task.ScheduledTaskExecutionResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -47,7 +53,8 @@ class ControllerRequestContractTest {
         AuthenticationController.class,
         CurrentUserController.class,
         AdminProductController.class,
-        ProductController.class
+        ProductController.class,
+        InvestmentTaskController.class
     );
 
     private static final List<Class<?>> RESPONSE_DTOS = List.of(
@@ -57,6 +64,11 @@ class ControllerRequestContractTest {
         ProductResponse.class,
         ProductAttributeResponse.class,
         MarketQuoteResponse.class,
+        InvestmentTaskDefinitionResponse.class,
+        InvestmentTaskTriggerResponse.class,
+        ScheduledTaskExecutionResponse.class,
+        NewsArticleResponse.class,
+        InvestmentThemeSnapshotResponse.class,
         PageResponse.class
     );
 

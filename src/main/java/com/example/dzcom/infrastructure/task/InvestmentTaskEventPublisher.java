@@ -1,8 +1,9 @@
-package com.example.dzcom.application.task;
+package com.example.dzcom.infrastructure.task;
 
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.application.service.task.InvestmentTaskEvent;
+import com.example.dzcom.application.service.task.InvestmentTaskTriggerPort;
 import com.example.dzcom.infrastructure.config.task.InvestmentTaskProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "investment.tasks", name = "enabled", havingValue = "true")
-public class InvestmentTaskEventPublisher {
+public class InvestmentTaskEventPublisher implements InvestmentTaskTriggerPort {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final InvestmentTaskProperties properties;
     private final ObjectMapper objectMapper;
@@ -23,7 +24,7 @@ public class InvestmentTaskEventPublisher {
     private final ClockProvider clock;
 
     /** 根据配置定义发布一次调度触发事件。 */
-    public void publish(InvestmentTaskProperties.TaskDefinition definition) {
+    public String publish(InvestmentTaskProperties.TaskDefinition definition) {
         InvestmentTaskEvent event = InvestmentTaskEvent.builder()
             .eventId(ids.newBizId())
             .taskCode(definition.getCode())
@@ -32,7 +33,14 @@ public class InvestmentTaskEventPublisher {
             .parameters(definition.getParameters())
             .triggeredAt(clock.now())
             .build();
-        kafkaTemplate.send(properties.getTopic(), definition.getCode(), serialize(event));
+        return publish(event);
+    }
+
+    /** 发布一次投资任务触发事件。 */
+    @Override
+    public String publish(InvestmentTaskEvent event) {
+        kafkaTemplate.send(properties.getTopic(), event.taskCode(), serialize(event));
+        return event.eventId();
     }
 
     /** 将任务事件序列化为 JSON。 */

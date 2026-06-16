@@ -47,6 +47,23 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:19092
 AI人工智能=AAPL,MSFT,NVDA;半导体=NVDA,AMD,TSM;黄金=GLD
 ```
 
+## 前端接口
+
+任务能力通过 `InvestmentTaskController` 暴露，统一使用 POST 和
+`Result<T>` 返回包装：
+
+| 路径 | 作用 |
+| --- | --- |
+| `/api/investment/tasks/definitions` | 查询当前生效任务配置、Cron、时区和参数 |
+| `/api/investment/tasks/trigger` | 按任务编码手动触发一次 Kafka 任务事件 |
+| `/api/investment/tasks/executions/list` | 分页查询任务执行记录、状态、摘要和失败原因 |
+| `/api/investment/tasks/articles/list` | 分页查询采集入库的投资资讯 |
+| `/api/investment/tasks/snapshots/list` | 分页查询热门方向收益、动量和资讯热度快照 |
+
+接口只使用 `interfaces/request/task` 和 `interfaces/dto/response/task`
+对象，不直接暴露 Domain、持久化实体或应用层分页对象。Swagger 注解必须描述
+筛选条件、分页、排序字段和返回模型，便于前端直接按接口文档接入。
+
 ## 配置原则
 
 - 本地和开发环境默认启用，可设置 `INVESTMENT_TASKS_ENABLED=false` 关闭。
@@ -55,6 +72,7 @@ AI人工智能=AAPL,MSFT,NVDA;半导体=NVDA,AMD,TSM;黄金=GLD
 - 任务失败必须写执行记录并记录完整异常堆栈。
 - 新增任务必须新增独立处理器，不得把多个任务逻辑聚合到统一工厂类。
 - 新增持久化对象必须具有独立 Store、Impl、Mapper Java 和 Mapper XML。
+- 新增前端可见任务能力必须同步提供接口、请求 DTO、响应 DTO 和 Swagger 文档。
 
 ## 数据说明
 

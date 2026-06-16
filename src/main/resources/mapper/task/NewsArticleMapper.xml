@@ -1,6 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.NewsArticleMapper">
+    <sql id="searchCondition">
+        from aiw_news_article n
+        where n.is_deleted = 0
+        <if test="criteria.keyword != null and criteria.keyword != ''">
+            and (lower(n.title) like concat('%', lower(#{criteria.keyword}), '%')
+              or lower(coalesce(n.summary, '')) like concat('%', lower(#{criteria.keyword}), '%'))
+        </if>
+        <if test="criteria.articleType != null and criteria.articleType != ''">
+            and n.article_type = #{criteria.articleType}
+        </if>
+        <if test="criteria.sourceCode != null and criteria.sourceCode != ''">
+            and n.source_code = #{criteria.sourceCode}
+        </if>
+        <if test="criteria.languageCode != null and criteria.languageCode != ''">
+            and n.language_code = #{criteria.languageCode}
+        </if>
+        <if test="criteria.publishFrom != null">
+            and n.publish_time &gt;= #{criteria.publishFrom}
+        </if>
+        <if test="criteria.publishTo != null">
+            and n.publish_time &lt;= #{criteria.publishTo}
+        </if>
+    </sql>
     <select id="selectBySourceAndExternalId"
             resultType="com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleEntity">
         select * from aiw_news_article
@@ -30,5 +53,17 @@
             </foreach>
             )
         </if>
+    </select>
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleEntity">
+        select n.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
     </select>
 </mapper>
