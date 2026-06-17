@@ -16,7 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
@@ -26,6 +26,9 @@ import java.util.stream.IntStream;
 /** 基于标准 XML 解析器的 RSS/Atom 投资资讯客户端。 */
 @Component
 public class RssInvestmentNewsFeedClient implements InvestmentNewsFeedClient {
+    /** 项目数据库时间统一使用北京时间。 */
+    private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
+
     private final RestClient restClient = RestClient.builder()
         .defaultHeader("User-Agent", "dzcom-investment-research/1.0 contact@example.com")
         .build();
@@ -114,15 +117,15 @@ public class RssInvestmentNewsFeedClient implements InvestmentNewsFeedClient {
         return child.getAttribute(attributeName);
     }
 
-    /** 解析常见 RSS 和 Atom 时间格式并统一为 UTC。 */
+    /** 解析常见 RSS 和 Atom 时间格式并统一为北京时间。 */
     private LocalDateTime parseTime(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         List<java.util.function.Supplier<LocalDateTime>> parsers = List.of(
             () -> ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
-                .withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime(),
-            () -> OffsetDateTime.parse(value).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
+                .withZoneSameInstant(BEIJING_ZONE).toLocalDateTime(),
+            () -> OffsetDateTime.parse(value).atZoneSameInstant(BEIJING_ZONE).toLocalDateTime(),
             () -> LocalDateTime.parse(value)
         );
         return parsers.stream()

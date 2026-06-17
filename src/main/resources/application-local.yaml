@@ -21,6 +21,8 @@ spring:
       min-idle: 5
       max-active: 20
       max-wait: 60000
+      connection-init-sqls:
+        - SET time_zone = '+08:00'
       stat-view-servlet:
         enabled: true
         url-pattern: /druid/*
@@ -101,18 +103,21 @@ investment:
         zone: Asia/Shanghai
         parameters:
           windowMinutes: "1440"
-          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=AAPL,MSFT,NVDA;半导体=NVDA,AMD,TSM;黄金=GLD;数字资产=BTC,ETH}
+          marketScope: CN_MAINLAND
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
       - code: market-momentum-scan
         type: MARKET_MOMENTUM_SCAN
         cron: ${MARKET_MOMENTUM_CRON:0 */5 * * * *}
         zone: Asia/Shanghai
         parameters:
           windowMinutes: "60"
-          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=AAPL,MSFT,NVDA;半导体=NVDA,AMD,TSM;黄金=GLD;数字资产=BTC,ETH}
+          marketScope: CN_MAINLAND
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
       - code: news-heat-aggregation
         type: NEWS_HEAT_AGGREGATION
         cron: ${NEWS_HEAT_CRON:45 */10 * * * *}
         zone: Asia/Shanghai
         parameters:
           windowMinutes: "1440"
-          themes: ${HOT_INVESTMENT_KEYWORDS:AI人工智能=AI,artificial intelligence,人工智能;半导体=semiconductor,chip,芯片;黄金=gold,黄金;数字资产=bitcoin,crypto,比特币}
+          marketScope: CN_MAINLAND
+          themes: ${HOT_INVESTMENT_KEYWORDS:AI人工智能=AI,人工智能,算力;半导体=半导体,芯片,集成电路;黄金=黄金,金价,贵金属}

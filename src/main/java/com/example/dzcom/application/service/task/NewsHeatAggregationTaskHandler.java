@@ -38,6 +38,7 @@ public class NewsHeatAggregationTaskHandler implements InvestmentTaskHandler {
     public String execute(InvestmentTaskEvent event) {
         int windowMinutes = TaskParameterParser.positiveInt(
             event.parameters(), "windowMinutes", 1440);
+        String marketScope = TaskParameterParser.marketScope(event.parameters());
         LocalDateTime now = clock.now();
         Map<String, List<String>> themes = TaskParameterParser.themes(event.parameters());
         themes.forEach((themeName, keywords) -> {
@@ -48,6 +49,7 @@ public class NewsHeatAggregationTaskHandler implements InvestmentTaskHandler {
                 .snapshotType("NEWS_HEAT")
                 .themeCode(TaskParameterParser.themeCode(themeName))
                 .themeName(themeName)
+                .marketScope(marketScope)
                 .windowMinutes(windowMinutes)
                 .sampleCount(Math.toIntExact(count))
                 .heatScore(BigDecimal.valueOf(count))

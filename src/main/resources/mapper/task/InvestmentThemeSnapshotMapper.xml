@@ -13,6 +13,9 @@
         <if test="criteria.themeCode != null and criteria.themeCode != ''">
             and s.theme_code = #{criteria.themeCode}
         </if>
+        <if test="criteria.marketScope != null and criteria.marketScope != ''">
+            and s.market_scope = #{criteria.marketScope}
+        </if>
         <if test="criteria.snapshotFrom != null">
             and s.snapshot_time &gt;= #{criteria.snapshotFrom}
         </if>
@@ -22,11 +25,11 @@
     </sql>
     <insert id="insert">
         insert into aiw_investment_theme_snapshot
-        (biz_id, task_code, snapshot_type, theme_code, theme_name, window_minutes, sample_count,
+        (biz_id, task_code, snapshot_type, theme_code, theme_name, market_scope, window_minutes, sample_count,
          return_rate, momentum_score, heat_score, top_product_biz_id, metrics,
          snapshot_time, created_at)
         values
-        (#{bizId}, #{taskCode}, #{snapshotType}, #{themeCode}, #{themeName}, #{windowMinutes},
+        (#{bizId}, #{taskCode}, #{snapshotType}, #{themeCode}, #{themeName}, #{marketScope}, #{windowMinutes},
          #{sampleCount}, #{returnRate}, #{momentumScore}, #{heatScore}, #{topProductBizId},
          #{metrics}, #{snapshotTime}, #{createdAt})
     </insert>

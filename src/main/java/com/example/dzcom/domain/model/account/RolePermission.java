@@ -12,9 +12,9 @@ public record RolePermission(
     @Schema(description = "映射业务标识") String bizId,
     @Schema(description = "角色编码") String roleCode,
     @Schema(description = "权限编码") String permissionCode,
-    @Schema(description = "创建时间（UTC）") LocalDateTime createdAt,
+    @Schema(description = "创建时间（北京时间）") LocalDateTime createdAt,
     @Schema(description = "创建者标识") String createdBy,
     @Schema(description = "逻辑删除标记（0/1）") int deleted,
-    @Schema(description = "删除时间（UTC）") LocalDateTime deletedAt
+    @Schema(description = "删除时间（北京时间）") LocalDateTime deletedAt
 ) {
 }

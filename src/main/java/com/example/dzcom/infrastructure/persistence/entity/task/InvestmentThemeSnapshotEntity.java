@@ -25,6 +25,7 @@ public class InvestmentThemeSnapshotEntity {
     private String snapshotType;
     private String themeCode;
     private String themeName;
+    private String marketScope;
     private int windowMinutes;
     private int sampleCount;
     private BigDecimal returnRate;

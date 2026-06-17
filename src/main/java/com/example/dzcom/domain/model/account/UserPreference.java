@@ -14,7 +14,7 @@ public record UserPreference(
     @Schema(description = "偏好键") String key,
     @Schema(description = "值类型") String valueType,
     @Schema(description = "JSON 文本值") String jsonValue,
-    @Schema(description = "更新时间（UTC）") LocalDateTime updatedAt,
+    @Schema(description = "更新时间（北京时间）") LocalDateTime updatedAt,
     @Schema(description = "逻辑删除标记（0/1）") int deleted
 ) {
 }

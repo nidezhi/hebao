@@ -21,7 +21,9 @@ public record InvestmentTaskDefinitionResponse(
     @Schema(description = "是否启用", example = "true")
     boolean enabled,
     @Schema(description = "任务参数；由不同任务处理器解释")
-    Map<String, String> parameters
+    Map<String, String> parameters,
+    @Schema(description = "配置说明")
+    String description
 ) {
     /** 将应用层配置视图转换为接口响应。 */
     public static InvestmentTaskDefinitionResponse from(InvestmentTaskDefinitionView view) {
@@ -32,6 +34,7 @@ public record InvestmentTaskDefinitionResponse(
             .zone(view.zone())
             .enabled(view.enabled())
             .parameters(view.parameters())
+            .description(view.description())
             .build();
     }
 }

@@ -24,17 +24,17 @@ public class User {
     private AccountStatus status;
     @Schema(description = "乐观锁版本")
     private int version;
-    @Schema(description = "注册时间（UTC）")
+    @Schema(description = "注册时间（北京时间）")
     private final LocalDateTime registeredAt;
-    @Schema(description = "最近登录时间（UTC）")
+    @Schema(description = "最近登录时间（北京时间）")
     private LocalDateTime lastLoginAt;
-    @Schema(description = "记录创建时间（UTC）")
+    @Schema(description = "记录创建时间（北京时间）")
     private final LocalDateTime createdAt;
-    @Schema(description = "记录最后更新时间（UTC）")
+    @Schema(description = "记录最后更新时间（北京时间）")
     private LocalDateTime updatedAt;
     @Schema(description = "逻辑删除标记（0/1）")
     private int deleted;
-    @Schema(description = "删除时间（UTC）")
+    @Schema(description = "删除时间（北京时间）")
     private LocalDateTime deletedAt;
 
     /**

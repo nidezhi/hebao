@@ -15,8 +15,8 @@ public record UserCredential(
     @Schema(description = "哈希算法", example = "bcrypt") String hashAlgorithm,
     @Schema(description = "凭据版本号，用于使历史会话失效") int credentialVersion,
     @Schema(description = "连续失败次数") int failedAttempts,
-    @Schema(description = "临时锁定截止时间（UTC）") LocalDateTime lockedUntil,
-    @Schema(description = "密码修改时间（UTC）") LocalDateTime changedAt,
+    @Schema(description = "临时锁定截止时间（北京时间）") LocalDateTime lockedUntil,
+    @Schema(description = "密码修改时间（北京时间）") LocalDateTime changedAt,
     @Schema(description = "逻辑删除标记（0/1）") int deleted
 ) {
     /**

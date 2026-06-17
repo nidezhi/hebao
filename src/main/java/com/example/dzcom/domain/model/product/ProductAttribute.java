@@ -22,8 +22,8 @@ public record ProductAttribute(
     @Schema(description = "JSON 文本值") String jsonValue,
     @Schema(description = "生效日期") LocalDate effectiveDate,
     @Schema(description = "来源编码") String sourceCode,
-    @Schema(description = "创建时间（UTC）") LocalDateTime createdAt,
-    @Schema(description = "更新时间（UTC）") LocalDateTime updatedAt,
+    @Schema(description = "创建时间（北京时间）") LocalDateTime createdAt,
+    @Schema(description = "更新时间（北京时间）") LocalDateTime updatedAt,
     @Schema(description = "逻辑删除标记（0/1）") int deleted
 ) {
 }

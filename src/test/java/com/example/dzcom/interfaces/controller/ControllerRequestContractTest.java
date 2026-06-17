@@ -4,12 +4,14 @@ import com.example.dzcom.interfaces.controller.account.AdminUserController;
 import com.example.dzcom.interfaces.controller.account.AdminRoleController;
 import com.example.dzcom.interfaces.controller.account.AuthenticationController;
 import com.example.dzcom.interfaces.controller.account.CurrentUserController;
+import com.example.dzcom.interfaces.controller.ai.InvestmentAnalysisController;
 import com.example.dzcom.interfaces.controller.product.AdminProductController;
 import com.example.dzcom.interfaces.controller.product.ProductController;
 import com.example.dzcom.interfaces.controller.task.InvestmentTaskController;
 import com.example.dzcom.interfaces.dto.response.account.PreferenceResponse;
 import com.example.dzcom.interfaces.dto.response.account.RoleResponse;
 import com.example.dzcom.interfaces.dto.response.account.UserResponse;
+import com.example.dzcom.interfaces.dto.response.ai.InvestmentAnalysisReportResponse;
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.market.MarketQuoteResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductAttributeResponse;
@@ -54,7 +56,8 @@ class ControllerRequestContractTest {
         CurrentUserController.class,
         AdminProductController.class,
         ProductController.class,
-        InvestmentTaskController.class
+        InvestmentTaskController.class,
+        InvestmentAnalysisController.class
     );
 
     private static final List<Class<?>> RESPONSE_DTOS = List.of(
@@ -69,6 +72,7 @@ class ControllerRequestContractTest {
         ScheduledTaskExecutionResponse.class,
         NewsArticleResponse.class,
         InvestmentThemeSnapshotResponse.class,
+        InvestmentAnalysisReportResponse.class,
         PageResponse.class
     );
 

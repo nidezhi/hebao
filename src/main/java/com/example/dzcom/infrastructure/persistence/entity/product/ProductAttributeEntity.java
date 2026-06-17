@@ -39,9 +39,9 @@ public class ProductAttributeEntity {
     private LocalDate effectiveDate;
     @Schema(description = "来源编码")
     private String sourceCode;
-    @Schema(description = "创建时间（UTC）")
+    @Schema(description = "创建时间（北京时间）")
     private LocalDateTime createdAt;
-    @Schema(description = "更新时间（UTC）")
+    @Schema(description = "更新时间（北京时间）")
     private LocalDateTime updatedAt;
     @TableField("is_deleted")
     @Schema(description = "逻辑删除标记（0/1）")

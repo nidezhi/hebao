@@ -7,16 +7,17 @@ import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.application.dto.task.InvestmentTaskDefinitionView;
 import com.example.dzcom.application.dto.task.InvestmentTaskTriggerResult;
+import com.example.dzcom.domain.model.task.InvestmentTaskDefinition;
 import com.example.dzcom.domain.model.task.InvestmentThemeSnapshot;
 import com.example.dzcom.domain.model.task.NewsArticle;
 import com.example.dzcom.domain.model.task.ScheduledTaskExecution;
+import com.example.dzcom.domain.repository.task.InvestmentTaskDefinitionStore;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotSearchCriteria;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotStore;
 import com.example.dzcom.domain.repository.task.NewsArticleSearchCriteria;
 import com.example.dzcom.domain.repository.task.NewsArticleStore;
 import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionSearchCriteria;
 import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionStore;
-import com.example.dzcom.infrastructure.config.task.InvestmentTaskProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -40,7 +41,7 @@ public class InvestmentTaskManagementService {
         Set.of("snapshotTime", "createdAt", "taskCode", "snapshotType", "themeCode",
             "returnRate", "momentumScore", "heatScore");
 
-    private final InvestmentTaskProperties properties;
+    private final InvestmentTaskDefinitionStore definitions;
     private final InvestmentTaskTriggerPort triggerPort;
     private final ScheduledTaskExecutionStore executions;
     private final NewsArticleStore articles;
@@ -51,32 +52,69 @@ public class InvestmentTaskManagementService {
     /** 查询当前生效的投资任务配置。 */
     @Transactional(readOnly = true)
     public List<InvestmentTaskDefinitionView> definitions() {
-        return properties.getDefinitions().stream()
+        return definitions.findAll().stream()
             .map(definition -> InvestmentTaskDefinitionView.builder()
-                .code(definition.getCode())
-                .type(definition.getType())
-                .cron(definition.getCron())
-                .zone(definition.getZone())
-                .enabled(definition.isEnabled())
-                .parameters(new LinkedHashMap<>(definition.getParameters()))
+                .code(definition.taskCode())
+                .type(definition.taskType())
+                .cron(definition.cron())
+                .zone(definition.zone())
+                .enabled(definition.enabled())
+                .parameters(new LinkedHashMap<>(definition.parameters()))
+                .description(definition.description())
                 .build())
             .toList();
+    }
+
+    /** 新增或更新投资任务配置。 */
+    @Transactional
+    public InvestmentTaskDefinitionView saveDefinition(
+        String code,
+        String type,
+        String cron,
+        String zone,
+        Boolean enabled,
+        Map<String, String> parameters,
+        String description
+    ) {
+        LocalDateTime now = clock.now();
+        InvestmentTaskDefinition existed = definitions.findByCode(code).orElse(null);
+        InvestmentTaskDefinition definition = definitions.save(InvestmentTaskDefinition.builder()
+            .bizId(existed == null ? ids.newBizId() : existed.bizId())
+            .taskCode(code)
+            .taskType(type)
+            .cron(cron)
+            .zone(zone == null || zone.isBlank() ? "Asia/Shanghai" : zone)
+            .enabled(enabled == null || enabled)
+            .parameters(parameters == null ? new LinkedHashMap<>() : new LinkedHashMap<>(parameters))
+            .description(description)
+            .createdAt(existed == null ? now : existed.createdAt())
+            .updatedAt(now)
+            .build());
+        return InvestmentTaskDefinitionView.builder()
+            .code(definition.taskCode())
+            .type(definition.taskType())
+            .cron(definition.cron())
+            .zone(definition.zone())
+            .enabled(definition.enabled())
+            .parameters(definition.parameters())
+            .description(definition.description())
+            .build();
     }
 
     /** 手动触发一次配置内的投资任务。 */
     @Transactional
     public InvestmentTaskTriggerResult trigger(String taskCode, Map<String, String> overrides,
                                                String triggerSource) {
-        InvestmentTaskProperties.TaskDefinition definition = requiredDefinition(taskCode);
+        InvestmentTaskDefinition definition = requiredDefinition(taskCode);
         LocalDateTime now = clock.now();
-        Map<String, String> parameters = new LinkedHashMap<>(definition.getParameters());
+        Map<String, String> parameters = new LinkedHashMap<>(definition.parameters());
         if (overrides != null) {
             parameters.putAll(overrides);
         }
         InvestmentTaskEvent event = InvestmentTaskEvent.builder()
             .eventId(ids.newBizId())
-            .taskCode(definition.getCode())
-            .taskType(definition.getType())
+            .taskCode(definition.taskCode())
+            .taskType(definition.taskType())
             .triggerSource(triggerSource == null || triggerSource.isBlank() ? "MANUAL" : triggerSource)
             .parameters(parameters)
             .triggeredAt(now)
@@ -121,11 +159,14 @@ public class InvestmentTaskManagementService {
     /** 分页查询投资方向收益、动量和资讯热度快照。 */
     @Transactional(readOnly = true)
     public PageResult<InvestmentThemeSnapshot> snapshots(String taskCode, String snapshotType,
-                                                         String themeCode, LocalDateTime snapshotFrom,
+                                                         String themeCode, String marketScope,
+                                                         LocalDateTime snapshotFrom,
                                                          LocalDateTime snapshotTo,
                                                          PageQuery pageQuery) {
         return snapshots.search(new InvestmentThemeSnapshotSearchCriteria(
-            taskCode, snapshotType, themeCode, snapshotFrom, snapshotTo,
+            taskCode, snapshotType, themeCode,
+            marketScope == null || marketScope.isBlank() ? TaskParameterParser.CN_MAINLAND : marketScope,
+            snapshotFrom, snapshotTo,
             pageQuery.page(), pageQuery.size(),
             pageQuery.safeSort(SNAPSHOT_SORTS, "snapshotTime"),
             "asc".equals(pageQuery.direction())
@@ -133,10 +174,8 @@ public class InvestmentTaskManagementService {
     }
 
     /** 获取配置内的任务定义。 */
-    private InvestmentTaskProperties.TaskDefinition requiredDefinition(String taskCode) {
-        return properties.getDefinitions().stream()
-            .filter(definition -> definition.getCode().equals(taskCode))
-            .findFirst()
+    private InvestmentTaskDefinition requiredDefinition(String taskCode) {
+        return definitions.findByCode(taskCode)
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "投资任务配置不存在"));
     }
 }

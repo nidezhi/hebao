@@ -10,6 +10,6 @@ import java.time.LocalDateTime;
 public record UserRoleAssignmentRequest(
     @Schema(description = "用户业务标识") @NotBlank String userBizId,
     @Schema(description = "角色编码") @NotBlank String roleCode,
-    @Schema(description = "角色失效时间（UTC），可选") LocalDateTime effectiveTo
+    @Schema(description = "角色失效时间（北京时间），可选") LocalDateTime effectiveTo
 ) {
 }

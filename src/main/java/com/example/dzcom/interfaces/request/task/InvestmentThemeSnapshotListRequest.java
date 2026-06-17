@@ -13,6 +13,8 @@ public record InvestmentThemeSnapshotListRequest(
     String snapshotType,
     @Schema(description = "投资主题编码", example = "AI")
     String themeCode,
+    @Schema(description = "市场范围，默认仅中国大陆", example = "CN_MAINLAND")
+    String marketScope,
     @Schema(description = "快照时间起点", example = "2026-06-16T00:00:00")
     LocalDateTime snapshotFrom,
     @Schema(description = "快照时间终点", example = "2026-06-16T23:59:59")

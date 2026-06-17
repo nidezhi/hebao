@@ -13,6 +13,7 @@ public record InvestmentThemeSnapshot(
     String snapshotType,
     String themeCode,
     String themeName,
+    String marketScope,
     int windowMinutes,
     int sampleCount,
     BigDecimal returnRate,

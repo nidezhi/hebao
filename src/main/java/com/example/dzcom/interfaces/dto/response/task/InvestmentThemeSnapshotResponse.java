@@ -16,6 +16,7 @@ public record InvestmentThemeSnapshotResponse(
     @Schema(description = "快照类型：RETURN/MOMENTUM/HEAT", example = "RETURN") String snapshotType,
     @Schema(description = "投资主题编码", example = "AI") String themeCode,
     @Schema(description = "投资主题名称", example = "AI人工智能") String themeName,
+    @Schema(description = "市场范围，默认仅中国大陆", example = "CN_MAINLAND") String marketScope,
     @Schema(description = "统计窗口分钟数", example = "1440") int windowMinutes,
     @Schema(description = "样本数量", example = "12") int sampleCount,
     @Schema(description = "窗口收益率，小数形式；0.052 表示 5.2%") BigDecimal returnRate,
@@ -34,6 +35,7 @@ public record InvestmentThemeSnapshotResponse(
             .snapshotType(snapshot.snapshotType())
             .themeCode(snapshot.themeCode())
             .themeName(snapshot.themeName())
+            .marketScope(snapshot.marketScope())
             .windowMinutes(snapshot.windowMinutes())
             .sampleCount(snapshot.sampleCount())
             .returnRate(snapshot.returnRate())

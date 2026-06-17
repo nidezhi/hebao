@@ -42,20 +42,20 @@ public class UserEntity {
     @Schema(description = "乐观锁版本")
     private int version;
 
-    /** 用户完成注册的 UTC 时间。 */
-    @Schema(description = "注册时间（UTC）")
+    /** 用户完成注册的北京时间。 */
+    @Schema(description = "注册时间（北京时间）")
     private LocalDateTime registeredAt;
 
-    /** 最近一次成功登录的 UTC 时间。 */
-    @Schema(description = "最近登录时间（UTC）")
+    /** 最近一次成功登录的北京时间。 */
+    @Schema(description = "最近登录时间（北京时间）")
     private LocalDateTime lastLoginAt;
 
     /** 记录创建时间。 */
-    @Schema(description = "记录创建时间（UTC）")
+    @Schema(description = "记录创建时间（北京时间）")
     private LocalDateTime createdAt;
 
     /** 记录最后更新时间。 */
-    @Schema(description = "记录最后更新时间（UTC）")
+    @Schema(description = "记录最后更新时间（北京时间）")
     private LocalDateTime updatedAt;
 
     /** 创建该用户的操作者业务标识或系统标识。 */
@@ -71,7 +71,7 @@ public class UserEntity {
     @Schema(description = "逻辑删除标记（0/1）")
     private int deleted;
 
-    /** 执行逻辑删除的 UTC 时间。 */
-    @Schema(description = "删除时间（UTC）")
+    /** 执行逻辑删除的北京时间。 */
+    @Schema(description = "删除时间（北京时间）")
     private LocalDateTime deletedAt;
 }

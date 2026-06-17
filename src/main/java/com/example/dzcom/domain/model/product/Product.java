@@ -54,9 +54,9 @@ public class Product {
     private String description;
     @Schema(description = "乐观锁版本")
     private int version;
-    @Schema(description = "记录创建时间（UTC）")
+    @Schema(description = "记录创建时间（北京时间）")
     private final LocalDateTime createdAt;
-    @Schema(description = "记录最后更新时间（UTC）")
+    @Schema(description = "记录最后更新时间（北京时间）")
     private LocalDateTime updatedAt;
     @Schema(description = "创建者标识")
     private final String createdBy;
@@ -64,7 +64,7 @@ public class Product {
     private String updatedBy;
     @Schema(description = "逻辑删除标记（0/1）")
     private int deleted;
-    @Schema(description = "删除时间（UTC）")
+    @Schema(description = "删除时间（北京时间）")
     private LocalDateTime deletedAt;
 
     /**

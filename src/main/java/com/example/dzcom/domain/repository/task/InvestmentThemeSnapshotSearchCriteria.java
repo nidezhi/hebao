@@ -7,6 +7,7 @@ public record InvestmentThemeSnapshotSearchCriteria(
     String taskCode,
     String snapshotType,
     String themeCode,
+    String marketScope,
     LocalDateTime snapshotFrom,
     LocalDateTime snapshotTo,
     int page,

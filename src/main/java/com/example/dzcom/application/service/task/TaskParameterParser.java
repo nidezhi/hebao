@@ -9,11 +9,17 @@ import java.util.stream.Collectors;
 
 /** 投资任务配置参数解析器。 */
 public final class TaskParameterParser {
+    /** 中国大陆市场范围编码。 */
+    public static final String CN_MAINLAND = "CN_MAINLAND";
+
     private TaskParameterParser() {
     }
 
     /** 读取正整数参数。 */
     public static int positiveInt(Map<String, String> parameters, String key, int defaultValue) {
+        if (parameters == null) {
+            return defaultValue;
+        }
         String value = parameters.get(key);
         if (value == null || value.isBlank()) {
             return defaultValue;
@@ -27,6 +33,9 @@ public final class TaskParameterParser {
 
     /** 按逗号解析非空字符串列表。 */
     public static List<String> list(Map<String, String> parameters, String key) {
+        if (parameters == null) {
+            return List.of();
+        }
         String value = parameters.getOrDefault(key, "");
         return Arrays.stream(value.split(","))
             .map(String::trim)
@@ -40,7 +49,10 @@ public final class TaskParameterParser {
      * @return 保持配置顺序的主题映射
      */
     public static Map<String, List<String>> themes(Map<String, String> parameters) {
-        return Arrays.stream(parameters.getOrDefault("themes", "").split(";"))
+        if (parameters == null) {
+            return new LinkedHashMap<>();
+        }
+        return filterByMarketScope(Arrays.stream(parameters.getOrDefault("themes", "").split(";"))
             .map(String::trim)
             .filter(item -> item.contains("="))
             .map(item -> item.split("=", 2))
@@ -51,6 +63,49 @@ public final class TaskParameterParser {
                     .filter(value -> !value.isBlank())
                     .map(value -> value.toUpperCase(Locale.ROOT))
                     .toList(),
+                (left, right) -> right,
+                LinkedHashMap::new
+            )), parameters, marketScope(parameters));
+    }
+
+    /** 读取市场范围参数，默认仅中国大陆。 */
+    public static String marketScope(Map<String, String> parameters) {
+        if (parameters == null) {
+            return CN_MAINLAND;
+        }
+        String value = parameters.getOrDefault("marketScope", CN_MAINLAND);
+        return value == null || value.isBlank() ? CN_MAINLAND : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /** 根据主题市场映射只保留指定市场范围的主题。 */
+    private static Map<String, List<String>> filterByMarketScope(
+        Map<String, List<String>> themes,
+        Map<String, String> parameters,
+        String marketScope
+    ) {
+        String mapping = parameters.getOrDefault("themeMarketScopes", "");
+        if (marketScope == null || marketScope.isBlank()) {
+            return themes;
+        }
+        return themes.entrySet().stream()
+            .filter(entry -> themeMarketScopes(mapping).getOrDefault(entry.getKey(), CN_MAINLAND).equals(marketScope))
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                Map.Entry::getValue,
+                (left, right) -> right,
+                LinkedHashMap::new
+            ));
+    }
+
+    /** 解析“主题名称=CN_MAINLAND;主题名称2=US”格式的主题市场映射。 */
+    private static Map<String, String> themeMarketScopes(String mapping) {
+        return Arrays.stream(mapping.split(";"))
+            .map(String::trim)
+            .filter(item -> item.contains("="))
+            .map(item -> item.split("=", 2))
+            .collect(Collectors.toMap(
+                item -> item[0].trim(),
+                item -> item[1].trim().toUpperCase(Locale.ROOT),
                 (left, right) -> right,
                 LinkedHashMap::new
             ));

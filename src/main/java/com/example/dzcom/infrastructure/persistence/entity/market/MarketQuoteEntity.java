@@ -37,7 +37,7 @@ public class MarketQuoteEntity {
     private String sourceCode;
     @Schema(description = "行情周期")
     private String quoteInterval;
-    @Schema(description = "行情时间（UTC）")
+    @Schema(description = "行情时间（北京时间）")
     private LocalDateTime quoteTime;
     @Schema(description = "开盘价")
     private BigDecimal openPrice;
@@ -55,8 +55,8 @@ public class MarketQuoteEntity {
     private BigDecimal turnoverAmount;
     @Schema(description = "行情状态编码")
     private int quoteStatus;
-    @Schema(description = "接收时间（UTC）")
+    @Schema(description = "接收时间（北京时间）")
     private LocalDateTime receivedAt;
-    @Schema(description = "记录创建时间（UTC）")
+    @Schema(description = "记录创建时间（北京时间）")
     private LocalDateTime createdAt;
 }

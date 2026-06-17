@@ -41,13 +41,14 @@ public class MarketMomentumTaskHandler implements InvestmentTaskHandler {
     public String execute(InvestmentTaskEvent event) {
         int windowMinutes = TaskParameterParser.positiveInt(
             event.parameters(), "windowMinutes", 60);
+        String marketScope = TaskParameterParser.marketScope(event.parameters());
         LocalDateTime now = clock.now();
         Map<String, List<String>> themes = TaskParameterParser.themes(event.parameters());
         themes.forEach((themeName, productCodes) -> {
             List<ThemeProductPerformance> performances = quotes.findPerformance(
                 productCodes, now.minusMinutes(windowMinutes), now);
             snapshots.save(buildSnapshot(
-                event.taskCode(), themeName, windowMinutes, performances, now));
+                event.taskCode(), themeName, marketScope, windowMinutes, performances, now));
         });
         return "已完成 " + themes.size() + " 个投资方向的市场动量扫描";
     }
@@ -56,6 +57,7 @@ public class MarketMomentumTaskHandler implements InvestmentTaskHandler {
     private InvestmentThemeSnapshot buildSnapshot(
         String taskCode,
         String themeName,
+        String marketScope,
         int windowMinutes,
         List<ThemeProductPerformance> performances,
         LocalDateTime now
@@ -83,6 +85,7 @@ public class MarketMomentumTaskHandler implements InvestmentTaskHandler {
             .snapshotType("MOMENTUM")
             .themeCode(TaskParameterParser.themeCode(themeName))
             .themeName(themeName)
+            .marketScope(marketScope)
             .windowMinutes(windowMinutes)
             .sampleCount(returns.size())
             .returnRate(average)

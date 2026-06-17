@@ -1,6 +1,10 @@
 spring:
   application:
     name: ai-wealth-platform
+  datasource:
+    druid:
+      connection-init-sqls:
+        - SET time_zone = '+08:00'
 
 # SpringDoc & Swagger UI 配置（生产环境禁用）
 springdoc:

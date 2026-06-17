@@ -20,7 +20,7 @@ public record MarketQuote(
     @Schema(description = "产品业务标识") String productBizId,
     @Schema(description = "数据源编码") String sourceCode,
     @Schema(description = "周期") String interval,
-    @Schema(description = "行情时间（UTC）") LocalDateTime quoteTime,
+    @Schema(description = "行情时间（北京时间）") LocalDateTime quoteTime,
     @Schema(description = "开盘价") BigDecimal openPrice,
     @Schema(description = "最高价") BigDecimal highPrice,
     @Schema(description = "最低价") BigDecimal lowPrice,
@@ -29,8 +29,8 @@ public record MarketQuote(
     @Schema(description = "成交量") BigDecimal volume,
     @Schema(description = "成交额") BigDecimal turnoverAmount,
     @Schema(description = "行情状态") QuoteStatus status,
-    @Schema(description = "接收时间（UTC）") LocalDateTime receivedAt,
-    @Schema(description = "创建时间（UTC）") LocalDateTime createdAt
+    @Schema(description = "接收时间（北京时间）") LocalDateTime receivedAt,
+    @Schema(description = "创建时间（北京时间）") LocalDateTime createdAt
 ) {
     public MarketQuote {
         if (productBizId == null || productBizId.isBlank()) {

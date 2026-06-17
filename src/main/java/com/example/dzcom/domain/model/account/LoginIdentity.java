@@ -19,7 +19,7 @@ public record LoginIdentity(
     @Schema(description = "用于唯一性查询的标准化值") String normalizedValue,
     @Schema(description = "是否已确认") boolean verified,
     @Schema(description = "是否激活") boolean active,
-    @Schema(description = "创建时间（UTC）") LocalDateTime createdAt,
+    @Schema(description = "创建时间（北京时间）") LocalDateTime createdAt,
     @Schema(description = "逻辑删除标记（0/1）") int deleted
 ) {
 }

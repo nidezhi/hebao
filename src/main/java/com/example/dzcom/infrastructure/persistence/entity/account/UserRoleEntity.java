@@ -27,11 +27,11 @@ public class UserRoleEntity {
     private String roleCode;
     @Schema(description = "作用域编码（可选）")
     private String scopeCode;
-    @Schema(description = "生效起始时间（UTC）")
+    @Schema(description = "生效起始时间（北京时间）")
     private LocalDateTime effectiveFrom;
-    @Schema(description = "生效截止时间（UTC）")
+    @Schema(description = "生效截止时间（北京时间）")
     private LocalDateTime effectiveTo;
-    @Schema(description = "创建时间（UTC）")
+    @Schema(description = "创建时间（北京时间）")
     private LocalDateTime createdAt;
     @Schema(description = "创建者标识")
     private String createdBy;

@@ -34,7 +34,7 @@ public class RolePermissionEntity {
     @Schema(description = "权限编码")
     private String permissionCode;
     /** 授权创建时间。 */
-    @Schema(description = "授权创建时间（UTC）")
+    @Schema(description = "授权创建时间（北京时间）")
     private LocalDateTime createdAt;
     /** 授权操作者。 */
     @Schema(description = "授权操作者标识")
@@ -44,6 +44,6 @@ public class RolePermissionEntity {
     @Schema(description = "逻辑删除标记（0/1）")
     private int deleted;
     /** 权限撤销时间。 */
-    @Schema(description = "权限撤销时间（UTC）")
+    @Schema(description = "权限撤销时间（北京时间）")
     private LocalDateTime deletedAt;
 }

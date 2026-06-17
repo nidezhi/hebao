@@ -12,6 +12,7 @@ public record InvestmentTaskDefinitionView(
     String cron,
     String zone,
     boolean enabled,
-    Map<String, String> parameters
+    Map<String, String> parameters,
+    String description
 ) {
 }

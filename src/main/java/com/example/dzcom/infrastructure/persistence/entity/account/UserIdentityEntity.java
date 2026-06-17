@@ -36,13 +36,13 @@ public class UserIdentityEntity {
     private String normalizedValue;
     @Schema(description = "是否已验证")
     private boolean verified;
-    @Schema(description = "验证时间（UTC）")
+    @Schema(description = "验证时间（北京时间）")
     private LocalDateTime verifiedAt;
     @Schema(description = "状态编码")
     private int status;
-    @Schema(description = "创建时间（UTC）")
+    @Schema(description = "创建时间（北京时间）")
     private LocalDateTime createdAt;
-    @Schema(description = "更新时间（UTC）")
+    @Schema(description = "更新时间（北京时间）")
     private LocalDateTime updatedAt;
     @TableField("is_deleted")
     @Schema(description = "逻辑删除标记（0/1）")

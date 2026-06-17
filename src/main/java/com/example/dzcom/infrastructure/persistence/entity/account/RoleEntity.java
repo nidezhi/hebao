@@ -46,10 +46,10 @@ public class RoleEntity {
     @Schema(description = "乐观锁版本号")
     private int version;
     /** 创建时间。 */
-    @Schema(description = "创建时间（UTC）")
+    @Schema(description = "创建时间（北京时间）")
     private LocalDateTime createdAt;
     /** 最后更新时间。 */
-    @Schema(description = "最后更新时间（UTC）")
+    @Schema(description = "最后更新时间（北京时间）")
     private LocalDateTime updatedAt;
     /** 创建操作者。 */
     @Schema(description = "创建操作者标识")
@@ -62,6 +62,6 @@ public class RoleEntity {
     @Schema(description = "逻辑删除标记（0/1）")
     private int deleted;
     /** 逻辑删除时间。 */
-    @Schema(description = "删除时间（UTC）")
+    @Schema(description = "删除时间（北京时间）")
     private LocalDateTime deletedAt;
 }

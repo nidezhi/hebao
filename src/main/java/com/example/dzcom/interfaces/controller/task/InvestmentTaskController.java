@@ -3,6 +3,7 @@ package com.example.dzcom.interfaces.controller.task;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.result.Result;
+import com.example.dzcom.application.service.task.InvestmentTaskScheduleRefreshPort;
 import com.example.dzcom.application.service.task.InvestmentTaskManagementService;
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
@@ -12,6 +13,7 @@ import com.example.dzcom.interfaces.dto.response.task.NewsArticleResponse;
 import com.example.dzcom.interfaces.dto.response.task.ScheduledTaskExecutionResponse;
 import com.example.dzcom.interfaces.request.task.InvestmentThemeSnapshotListRequest;
 import com.example.dzcom.interfaces.request.task.NewsArticleListRequest;
+import com.example.dzcom.interfaces.request.task.SaveInvestmentTaskDefinitionRequest;
 import com.example.dzcom.interfaces.request.task.TaskExecutionListRequest;
 import com.example.dzcom.interfaces.request.task.TriggerInvestmentTaskRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +41,7 @@ import java.util.List;
 @Tag(name = "投资任务与资讯", description = "配置驱动投资任务、Kafka 触发、资讯采集和热门方向收益查询接口")
 public class InvestmentTaskController {
     private final InvestmentTaskManagementService tasks;
+    private final InvestmentTaskScheduleRefreshPort scheduleRefreshPort;
 
     /**
      * 查询当前生效的投资任务配置。
@@ -57,6 +60,38 @@ public class InvestmentTaskController {
         return Result.success(tasks.definitions().stream()
             .map(InvestmentTaskDefinitionResponse::from)
             .toList());
+    }
+
+    /**
+     * 新增或更新投资任务配置。
+     *
+     * @param request 任务配置请求
+     * @return 保存后的任务配置
+     * @author dz
+     * @date 2026-06-17
+     */
+    @PostMapping("/definitions/save")
+    @Operation(summary = "保存投资任务配置", description = "新增或更新落库的投资任务配置。保存成功后会刷新当前节点的动态 Cron 调度，参数会覆盖后续自动触发。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回保存后的任务配置", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "参数校验失败"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<InvestmentTaskDefinitionResponse> saveDefinition(
+        @Valid @RequestBody SaveInvestmentTaskDefinitionRequest request
+    ) {
+        InvestmentTaskDefinitionResponse response = InvestmentTaskDefinitionResponse.from(
+            tasks.saveDefinition(
+                request.code(),
+                request.type(),
+                request.cron(),
+                request.zone(),
+                request.enabled(),
+                request.parameters(),
+                request.description()
+            ));
+        scheduleRefreshPort.refreshSchedules();
+        return Result.success(response);
     }
 
     /**
@@ -172,6 +207,7 @@ public class InvestmentTaskController {
             request.taskCode(),
             request.snapshotType(),
             request.themeCode(),
+            request.marketScope(),
             request.snapshotFrom(),
             request.snapshotTo(),
             new PageQuery(

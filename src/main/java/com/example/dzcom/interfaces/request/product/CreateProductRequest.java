@@ -27,8 +27,8 @@ public record CreateProductRequest(
     @Schema(description = "金额步长") @NotNull @DecimalMin("0") @Digits(integer = 16, fraction = 4) BigDecimal amountStep,
     @Schema(description = "数量步长") @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 8) BigDecimal quantityStep,
     @Schema(description = "费率（0-1）") @NotNull @DecimalMin("0") @DecimalMax("1") @Digits(integer = 4, fraction = 8) BigDecimal feeRate,
-    @Schema(description = "上市日期（UTC）", example = "2026-01-01") LocalDate listingDate,
-    @Schema(description = "退市日期（UTC）", example = "2028-01-01") LocalDate delistingDate,
+    @Schema(description = "上市日期（北京时间）", example = "2026-01-01") LocalDate listingDate,
+    @Schema(description = "退市日期（北京时间）", example = "2028-01-01") LocalDate delistingDate,
     @Schema(description = "产品说明") @Size(max = 5000) String description
 ) {
 }

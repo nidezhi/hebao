@@ -41,11 +41,12 @@ public class HotThemeReturnTaskHandler implements InvestmentTaskHandler {
     public String execute(InvestmentTaskEvent event) {
         int windowMinutes = TaskParameterParser.positiveInt(
             event.parameters(), "windowMinutes", 1440);
+        String marketScope = TaskParameterParser.marketScope(event.parameters());
         LocalDateTime now = clock.now();
         Map<String, List<String>> themes = TaskParameterParser.themes(event.parameters());
         themes.forEach((themeName, productCodes) ->
             saveSnapshot(event.taskCode(), "RETURN", themeName, windowMinutes,
-                quotes.findPerformance(productCodes, now.minusMinutes(windowMinutes), now), now));
+                marketScope, quotes.findPerformance(productCodes, now.minusMinutes(windowMinutes), now), now));
         return "已生成 " + themes.size() + " 个热门投资方向收益快照";
     }
 
@@ -55,6 +56,7 @@ public class HotThemeReturnTaskHandler implements InvestmentTaskHandler {
         String snapshotType,
         String themeName,
         int windowMinutes,
+        String marketScope,
         List<ThemeProductPerformance> performances,
         LocalDateTime now
     ) {
@@ -76,6 +78,7 @@ public class HotThemeReturnTaskHandler implements InvestmentTaskHandler {
             .snapshotType(snapshotType)
             .themeCode(TaskParameterParser.themeCode(themeName))
             .themeName(themeName)
+            .marketScope(marketScope)
             .windowMinutes(windowMinutes)
             .sampleCount(performances.size())
             .returnRate(average)

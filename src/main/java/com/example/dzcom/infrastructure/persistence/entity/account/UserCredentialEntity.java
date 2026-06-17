@@ -49,11 +49,11 @@ public class UserCredentialEntity {
     private int credentialVersion;
 
     /** 凭据过期时间，为空表示不强制过期。 */
-    @Schema(description = "凭据过期时间（UTC）")
+    @Schema(description = "凭据过期时间（北京时间）")
     private LocalDateTime expiresAt;
 
     /** 最近一次修改凭据的时间。 */
-    @Schema(description = "最近修改时间（UTC）")
+    @Schema(description = "最近修改时间（北京时间）")
     private LocalDateTime changedAt;
 
     /** 连续登录失败次数，成功登录后归零。 */
@@ -61,15 +61,15 @@ public class UserCredentialEntity {
     private int failedAttempts;
 
     /** 临时锁定截止时间。 */
-    @Schema(description = "临时锁定截止时间（UTC）")
+    @Schema(description = "临时锁定截止时间（北京时间）")
     private LocalDateTime lockedUntil;
 
     /** 记录创建时间。 */
-    @Schema(description = "记录创建时间（UTC）")
+    @Schema(description = "记录创建时间（北京时间）")
     private LocalDateTime createdAt;
 
     /** 记录最后更新时间。 */
-    @Schema(description = "记录最后更新时间（UTC）")
+    @Schema(description = "记录最后更新时间（北京时间）")
     private LocalDateTime updatedAt;
 
     /** 逻辑删除标记。 */

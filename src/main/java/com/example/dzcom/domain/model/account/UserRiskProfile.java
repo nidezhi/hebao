@@ -15,8 +15,8 @@ public record UserRiskProfile(
     @Schema(description = "KYC 状态") KycStatus kycStatus,
     @Schema(description = "风险等级（1-5）") int riskLevel,
     @Schema(description = "测评版本") String assessmentVersion,
-    @Schema(description = "最近测评时间（UTC）") LocalDateTime assessedAt,
-    @Schema(description = "KYC 最后审核时间（UTC）") LocalDateTime kycReviewedAt,
+    @Schema(description = "最近测评时间（北京时间）") LocalDateTime assessedAt,
+    @Schema(description = "KYC 最后审核时间（北京时间）") LocalDateTime kycReviewedAt,
     @Schema(description = "逻辑删除标记（0/1）") int deleted
 ) {
     /**

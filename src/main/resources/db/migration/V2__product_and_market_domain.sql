@@ -73,7 +73,7 @@ CREATE TABLE aiw_market_quote (
     product_biz_id CHAR(36) NOT NULL COMMENT '产品业务ID；逻辑关联产品，无外键',
     source_code VARCHAR(64) NOT NULL COMMENT '行情数据源编码',
     quote_interval VARCHAR(16) NOT NULL COMMENT '行情周期：TICK、1M、5M、1D等',
-    quote_time DATETIME(3) NOT NULL COMMENT '行情时间，统一以UTC或项目约定时区写入',
+    quote_time DATETIME(3) NOT NULL COMMENT '行情时间，统一以北京时间写入',
     open_price DECIMAL(24,8) NULL COMMENT '开盘价',
     high_price DECIMAL(24,8) NULL COMMENT '最高价',
     low_price DECIMAL(24,8) NULL COMMENT '最低价',
