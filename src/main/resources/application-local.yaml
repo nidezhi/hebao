@@ -83,13 +83,6 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
 
-ai:
-  secrets:
-    values:
-      OPENAI_MOCK_API_KEY: ${OPENAI_MOCK_API_KEY:83ec6f52-567b-40a7-87ad-8b60df196d6c}
-      DEEPSEEK_MOCK_API_KEY: ${DEEPSEEK_MOCK_API_KEY:b86ba542-3460-4932-8685-d113a095851e}
-      QWEN_MOCK_API_KEY: ${QWEN_MOCK_API_KEY:6020210c-4639-41d6-a2ec-c44c4be9cd5b}
-
 investment:
   tasks:
     enabled: ${INVESTMENT_TASKS_ENABLED:true}
