@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.ai.AiModelMapper">
+    <sql id="searchCondition">
+        from aiw_ai_model m
+        where 1 = 1
+        <if test="criteria.modelCode != null and criteria.modelCode != ''">
+            and m.model_code = #{criteria.modelCode}
+        </if>
+        <if test="criteria.modelType != null and criteria.modelType != ''">
+            and m.model_type = #{criteria.modelType}
+        </if>
+        <if test="criteria.provider != null and criteria.provider != ''">
+            and m.provider = #{criteria.provider}
+        </if>
+        <if test="criteria.status != null and criteria.status != ''">
+            and m.status = #{criteria.status}
+        </if>
+    </sql>
+    <select id="selectByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiModelEntity">
+        select *
+        from aiw_ai_model
+        where biz_id = #{bizId}
+    </select>
+    <select id="selectByCodeAndVersion" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiModelEntity">
+        select *
+        from aiw_ai_model
+        where model_code = #{modelCode} and model_version = #{modelVersion}
+    </select>
+    <select id="selectActiveByCode" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiModelEntity">
+        select *
+        from aiw_ai_model
+        where model_code = #{modelCode}
+          and status = 'ACTIVE'
+        order by activated_at desc, updated_at desc
+        limit 1
+    </select>
+    <insert id="save">
+        insert into aiw_ai_model
+        (biz_id, model_code, model_version, model_name, model_type, provider, artifact_uri,
+         model_config, metrics, status, activated_at, retired_at, created_at, updated_at)
+        values
+        (#{bizId}, #{modelCode}, #{modelVersion}, #{modelName}, #{modelType}, #{provider}, #{artifactUri},
+         #{modelConfig}, #{metrics}, #{status}, #{activatedAt}, #{retiredAt}, #{createdAt}, #{updatedAt})
+        on duplicate key update
+        model_name = values(model_name),
+        model_type = values(model_type),
+        provider = values(provider),
+        artifact_uri = values(artifact_uri),
+        model_config = values(model_config),
+        metrics = values(metrics),
+        status = values(status),
+        activated_at = values(activated_at),
+        retired_at = values(retired_at),
+        updated_at = values(updated_at)
+    </insert>
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiModelEntity">
+        select m.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

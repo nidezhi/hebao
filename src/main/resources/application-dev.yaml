@@ -81,6 +81,13 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
 
+ai:
+  secrets:
+    values:
+      OPENAI_MOCK_API_KEY: ${OPENAI_MOCK_API_KEY:83ec6f52-567b-40a7-87ad-8b60df196d6c}
+      DEEPSEEK_MOCK_API_KEY: ${DEEPSEEK_MOCK_API_KEY:b86ba542-3460-4932-8685-d113a095851e}
+      QWEN_MOCK_API_KEY: ${QWEN_MOCK_API_KEY:6020210c-4639-41d6-a2ec-c44c4be9cd5b}
+
 investment:
   tasks:
     enabled: ${INVESTMENT_TASKS_ENABLED:true}
@@ -91,10 +98,11 @@ investment:
         cron: ${NEWS_COLLECTION_CRON:0 */10 * * * *}
         zone: Asia/Shanghai
         parameters:
-          feedUrls: ${INVESTMENT_NEWS_FEEDS:https://www.sec.gov/news/pressreleases.rss}
-          sourceCode: OFFICIAL_RSS
-          languageCode: en-US
+          feedUrls: ${INVESTMENT_NEWS_FEEDS:}
+          sourceCode: CN_MAINLAND_NEWS
+          languageCode: zh-CN
           maxItems: "50"
+          fallbackArticles: ${INVESTMENT_FALLBACK_ARTICLES:AI人工智能|人工智能主题关注度提升|算力、模型应用和国产软件方向持续受到中国大陆投资者关注;半导体|半导体产业链景气跟踪|芯片设备、材料和晶圆制造环节维持较高市场热度;黄金|黄金资产避险需求升温|贵金属价格波动加大，黄金 ETF 相关产品关注度提升}
       - code: hot-theme-return
         type: HOT_THEME_RETURN
         cron: ${HOT_THEME_RETURN_CRON:30 */5 * * * *}

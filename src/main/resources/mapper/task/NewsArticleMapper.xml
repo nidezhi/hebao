@@ -54,6 +54,22 @@
             )
         </if>
     </select>
+    <select id="findRecentByKeywords"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleEntity">
+        select *
+        from aiw_news_article
+        where is_deleted = 0 and publish_time &gt;= #{from}
+        <if test="keywords != null and !keywords.isEmpty()">
+            and (
+            <foreach collection="keywords" item="keyword" separator=" or ">
+                lower(concat(title, ' ', coalesce(summary, ''), ' ', coalesce(content, ''))) like
+                concat('%', lower(#{keyword}), '%')
+            </foreach>
+            )
+        </if>
+        order by publish_time desc
+        limit #{limit}
+    </select>
     <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleEntity">
         select n.* <include refid="searchCondition"/>
         order by ${sortColumn}

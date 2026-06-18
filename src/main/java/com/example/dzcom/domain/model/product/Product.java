@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
  * {@link BigDecimal}，避免金融计算中使用浮点数造成精度损失。状态和删除操作只能通过
  * 领域行为变更，应用服务不能直接拼装非法生命周期。</p>
  */
+@Schema(description = "产品目录聚合根领域模型")
 @Getter
 @Builder(toBuilder = true)
 public class Product {

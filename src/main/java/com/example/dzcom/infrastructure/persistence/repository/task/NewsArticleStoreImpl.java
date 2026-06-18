@@ -49,6 +49,14 @@ public class NewsArticleStoreImpl implements NewsArticleStore {
         return mapper.countByKeywords(keywords, from);
     }
 
+    /** 查询窗口内关键词命中的近期资讯。 */
+    @Override
+    public List<NewsArticle> findRecentByKeywords(List<String> keywords, LocalDateTime from, int limit) {
+        return mapper.findRecentByKeywords(keywords, from, limit).stream()
+            .map(this::toDomain)
+            .toList();
+    }
+
     /** 根据筛选条件分页查询资讯。 */
     @Override
     public PageResult<NewsArticle> search(NewsArticleSearchCriteria criteria) {

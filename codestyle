@@ -1,30 +1,155 @@
-开发铁律
+# DZCOM 开发铁律
 
-1. 本 session 中确认的开发约定必须持续补充到本文件，后续代码修改必须遵守。
-2. 所有接口的异常必须由全局异常处理器统一 try/catch 语义处理，Controller 禁止重复编写 try/catch。
-3. 全局异常处理必须记录完整异常堆栈，未识别异常统一返回 HTTP 500 和 Result.error("系统错误")。
-4. 仓储端口和仓储实现必须按领域对象一一对应，禁止使用一个聚合仓储或工厂集中组装多个仓储职责。
-5. 一个仓储接口只能由一个对应实现类实现，接口方法必须在该实现类中逐一对应实现。
-6. 跨仓储的数据写入、删除和事务协调必须放在应用服务，不得放入仓储实现。
-7. 对象创建和转换统一使用 Builder；集合查询、映射、过滤和批量处理统一使用 Stream。
-8. 领域仓储接口的持久化实现统一命名为 Impl；禁止再拆分 JpaRepository 和 Adapter 两层。
-9. 仓储 Impl 必须直接完成数据库访问、实体转换和接口方法实现，不得依赖同领域的二级仓储接口。
-10. 类、字段、公开方法和复杂私有方法必须编写准确的中文注释，禁止无注释实现和无意义模板注释。
-11. 持久化层全面使用 MyBatis Mapper XML，禁止使用 JPA、EntityManager、JPQL、QueryWrapper 或 BaseMapper 内置 CRUD。
-12. 每个 Mapper 方法必须在对应 XML 中提供 SQL，实现简单查询与复杂查询时均不得把 SQL 写入 Java。
-13. 每个持久化实体必须创建独立的 MyBatis-Plus Mapper 文件；StoreImpl 负责领域转换和仓储契约，Mapper 只负责数据库执行。
-14. Mapper 禁止承担领域对象组装、跨仓储协调和业务判断，必须保持为纯持久化执行层。
-15. 每个 Mapper Java 文件必须存在同名 Mapper XML，接口方法与 XML statement 必须逐一对应。
-16. README、docs_new 和项目 skills 的持久化规范必须与 MyBatis Mapper XML 基线一致，禁止保留会诱导重新引入 JPA 的旧说明。
-17. 角色权限采用三层 RBAC：aiw_role 定义角色、aiw_user_role 分配用户角色、aiw_role_permission 映射角色权限；禁止将用户、角色和权限聚合到单表，禁止以 ADMIN 角色隐式绕过权限校验。
-18. 所有受保护业务接口必须使用 PermissionCodes 中的稳定权限编码鉴权；角色、角色权限或用户角色发生变化后，必须撤销受影响用户会话，且任何操作不得移除最后一个有效角色管理员。
-19. 所有 Controller 类必须提供带详细 description 的 @Tag；每个接口必须提供非空 summary 和 description 的 @Operation、完整 @ApiResponses，并明确 500 系统错误响应。
-20. Swagger 成功响应必须使用 useReturnTypeSchema=true 保留 Result<T> 的真实泛型返回模型；统一返回包装、分页模型、请求类和响应 DTO 必须为类及字段提供准确的 @Schema 说明、约束和必要示例。
-21. Controller 层必须使用 interfaces/request 下的独立请求 DTO 和 interfaces/dto/response 下的独立响应 DTO；Controller 公开返回签名和响应 DTO 字段禁止直接或间接暴露 Domain 对象、持久化实体、application.dto View 或应用层分页对象，应用结果必须在接口边界使用 Builder 和 Stream 转换为接口 DTO。
-22. 所有定时任务必须由配置定义并动态生成调度，禁止在业务处理器中使用硬编码 @Scheduled；任务配置必须包含稳定 code、type、cron、zone、enabled 和参数集合，并允许通过环境变量覆盖。
-23. 定时任务触发与执行必须通过 Kafka 解耦，事件必须包含全局唯一 eventId 并以执行记录保证消费幂等；失败必须保存失败状态、原因摘要并记录完整异常堆栈。
-24. 每一种任务类型必须使用独立 InvestmentTaskHandler 实现单一职责，禁止聚合到任务工厂类；任务结果持久化必须遵循独立 Store、Impl、Mapper Java/XML 一一对应的规范。
-25. 可被前端使用的任务能力必须同步提供 Controller 接口、interfaces/request 请求 DTO、interfaces/dto/response 响应 DTO 和完整 Swagger 注解；任务配置、手动触发、执行记录、采集结果和分析快照都必须能通过接口查询或触发。
-26. 定时任务定义必须落库并以数据库配置作为运行时生效来源；YAML 和环境变量仅用于启动初始化或覆盖默认值，接口保存配置后必须刷新当前节点动态调度。
-27. 投资分析大模型能力必须通过可插拔 Provider 扩展，输出必须包含投资信息汇总、趋势、投资方案、模拟收益和可供前端生成图表的结构化数据，默认只分析中国大陆市场范围。
-28. 项目数据库时间统一按北京时间（Asia/Shanghai）写入和展示；应用 ClockProvider、数据库连接会话 time_zone、外部数据时间转换必须保持 +08:00 语义一致。
+本文件是当前仓库最高优先级的编码约束。功能能够运行不代表代码完成；只要结构不清晰、注释缺失、对象转换风格不一致或无法快速理解业务，即视为未完成。
+
+## 一、铁律中的铁律
+
+1. 可读性优先于少写代码。禁止为了减少行数把多步业务判断、对象创建、异常处理和数据转换压缩到一行。
+2. 类、字段、公开方法和复杂私有方法必须有准确的中文注释。注释必须说明业务含义、数据来源、取值范围、空值语义和副作用，禁止只重复类名或字段名。
+3. 所有持久化实体、领域对象、接口请求 DTO、接口响应 DTO 必须同时具有：
+   - 类级中文说明；
+   - 每个字段或 record component 的中文说明；
+   - 接口可见类型必须具有完整 `@Schema`；
+   - 状态、类型、JSON 字段、时间字段必须说明允许值、结构或时区。
+4. 对象创建、复制、领域转换、Entity/Domain/View/Response 转换统一使用 Builder。禁止使用超长构造器、位置参数堆叠或无语义的数组、Map 代替稳定类型。
+5. 集合查询、过滤、映射、分组、去重、排序和汇总统一优先使用 Stream。涉及事务写入顺序、外部调用、异常短路或复杂副作用时，可以使用清晰的命令式代码，但必须说明原因，禁止为了形式强行使用 Stream。
+6. 一个方法只表达一个清晰步骤。方法超过一个业务层次时，必须拆分为有业务语义的私有方法；禁止在 Controller、Application Service 或 Provider 中堆叠无法命名的大段逻辑。
+7. 复杂条件、嵌套三元表达式和多层链式调用必须拆成有意义的局部变量或私有方法。禁止使用嵌套三元表达式。
+8. 本 session 中确认的新约定必须持续补充到本文件，后续代码修改必须遵守。
+
+## 二、方法注释强制模板
+
+所有公开方法和复杂私有方法必须使用以下模板，并根据实际情况填写，不允许保留无意义占位描述：
+
+```java
+/**
+ * 用一句完整中文描述方法完成的业务动作。
+ *
+ * <p>必要时补充前置条件、核心规则、数据来源、事务边界、
+ * 幂等语义、状态变化或失败处理。</p>
+ *
+ * @param request 请求参数的业务含义
+ * @return 返回结果的业务含义
+ * @throws BusinessException 明确说明哪些业务条件会抛出该异常
+ * @author dz
+ * @date 2026-06-18
+ */
+```
+
+执行要求：
+
+1. 无参数方法可以省略 `@param`，无返回值方法可以省略 `@return`，不抛出显式异常的方法可以省略 `@throws`。
+2. `@param` 禁止写“xxx 参数”；必须描述参数在业务中的作用。
+3. `@return` 禁止写“方法执行后的结果”；必须描述返回数据及关键状态。
+4. 私有方法如果承担序列化、状态转换、指标计算、领域转换、参数解析等关键步骤，也必须使用完整模板。
+5. Controller 方法必须说明接口用途、输入、输出和主要异常；Application Service 方法必须说明事务和业务规则；Repository/Mapper 方法必须说明查询或写入语义。
+
+## 三、代码结构与可读性
+
+1. Controller 只负责请求校验、调用应用服务、使用 Builder/Stream 转换响应，不承载业务规则。
+2. Application Service 负责编排用例、事务、跨仓储协调和状态变化。
+3. Domain 负责稳定业务概念、领域状态和领域规则，不依赖接口层或基础设施层。
+4. Repository Impl 负责数据库访问、Entity/Domain 转换和仓储契约，不负责跨仓储业务。
+5. Mapper 只负责持久化执行，禁止领域对象组装、跨仓储协调和业务判断。
+6. Provider、Handler 和 Client 必须保持单一职责；一个实现只处理一种明确能力。
+7. 局部变量必须表达业务含义。禁止 `data`、`obj`、`temp`、`result1` 等无法说明用途的命名。
+8. JSON 字符串必须在字段注释和文档中说明结构；稳定且高频使用的 JSON 结构应优先提升为明确 DTO。
+9. 时间统一使用北京时间 `Asia/Shanghai`；应用时钟、数据库会话和外部数据转换必须保持 `+08:00` 语义一致。
+
+## 四、Builder 与 Stream 规范
+
+1. Entity、Domain、Command、View、Response 的创建和转换统一使用 Builder。
+2. Builder 赋值必须按业务分组排列，禁止把无关字段交叉排列。
+3. Entity 转 Domain、Domain 转 Response 等转换必须放在职责明确的方法中，方法名使用 `toDomain`、`toEntity`、`from` 等既有模式。
+4. 集合转换统一使用：
+
+```java
+List<Target> targets = sources.stream()
+    .filter(this::isValid)
+    .map(this::toTarget)
+    .toList();
+```
+
+5. Stream 每一阶段独占一行；禁止把完整 Stream 链压缩到一行。
+6. 不允许在 `map` 中执行数据库写入或外部调用；有副作用时使用明确的 `forEach` 或命令式循环，并保持异常语义清晰。
+7. 禁止为了“一行完成”使用嵌套 `Map.of`、嵌套三元表达式或超长 Lambda。复杂结构必须拆成命名方法。
+
+## 五、异常、日志与事务
+
+1. 所有接口异常由全局异常处理器统一处理，Controller 禁止重复编写 `try/catch`。
+2. 全局异常处理必须记录完整异常堆栈；未识别异常统一返回 HTTP 500 和 `Result.error("系统错误")`。
+3. 业务异常必须使用明确 HTTP 状态和面向调用方的中文说明。
+4. 外部数据源、Kafka、模型 Provider 和任务执行失败必须记录完整上下文和异常堆栈。
+5. 跨仓储写入、删除和事务协调必须放在应用服务，不得放入仓储实现。
+6. 任务执行必须保存 `RUNNING/SUCCEEDED/FAILED` 状态和失败原因摘要。
+
+## 六、持久化铁律
+
+1. 持久化层全面使用 MyBatis Mapper XML，禁止使用 JPA、EntityManager、JPQL、QueryWrapper 或 BaseMapper 内置 CRUD。
+2. 每个持久化实体必须有独立 Mapper Java 接口和同名 Mapper XML。
+3. 每个 Mapper 方法必须在 XML 中有一一对应的 SQL statement，SQL 禁止写在 Java 中。
+4. 仓储端口和仓储实现必须按领域对象一一对应。
+5. 一个仓储接口只能有一个对应实现，持久化实现统一命名为 `Impl`。
+6. Repository Impl 必须直接完成数据库访问和 Entity/Domain 转换，禁止依赖同领域二级仓储。
+7. 动态排序列必须由 Java 白名单映射生成，禁止将接口传入值直接拼接到 SQL。
+8. README、`docs_new` 和项目 skills 的持久化规范必须与 MyBatis Mapper XML 基线一致。
+
+## 七、接口与 Swagger 铁律
+
+1. 所有 Controller 类必须提供带详细 `description` 的 `@Tag`。
+2. 每个接口必须提供非空 `summary`、详细 `description`、完整 `@ApiResponses`，并明确 500 系统错误响应。
+3. Swagger 成功响应必须使用 `useReturnTypeSchema=true` 保留 `Result<T>` 真实泛型。
+4. Controller 必须使用 `interfaces/request` 下的独立请求 DTO 和 `interfaces/dto/response` 下的独立响应 DTO。
+5. Controller 返回签名和响应 DTO 禁止直接或间接暴露 Domain、Entity、Application View 或应用层分页对象。
+6. 请求 DTO、响应 DTO、统一响应和分页模型必须为类及每个字段提供准确 `@Schema`、约束和必要示例。
+7. 接口边界的集合转换必须使用 Stream，单对象转换必须使用 Builder。
+
+## 八、账户与权限
+
+1. 角色权限采用三层 RBAC：
+   - `aiw_role` 定义角色；
+   - `aiw_user_role` 分配用户角色；
+   - `aiw_role_permission` 映射角色权限。
+2. 禁止将用户、角色和权限聚合到单表。
+3. 禁止以 ADMIN 角色隐式绕过权限校验。
+4. 所有受保护业务接口必须使用 `PermissionCodes` 中的稳定权限编码鉴权。
+5. 角色、角色权限或用户角色变化后，必须撤销受影响用户会话。
+6. 任何操作不得移除最后一个有效角色管理员。
+
+## 九、定时任务铁律
+
+1. 所有定时任务必须由数据库配置定义并动态生成调度，禁止在业务处理器中使用硬编码 `@Scheduled`。
+2. 任务定义必须包含稳定 `code`、`type`、`cron`、`zone`、`enabled` 和参数集合。
+3. YAML 和环境变量只用于初始化系统默认任务；数据库配置是运行时生效来源。
+4. 接口保存任务配置后必须刷新当前节点动态调度。
+5. 定时任务触发与执行必须通过 Kafka 解耦。
+6. 事件必须包含全局唯一 `eventId`，执行记录必须保证消费幂等。
+7. 每种任务类型必须有独立 `InvestmentTaskHandler`，禁止使用聚合任务工厂承载多种业务。
+8. 可供前端使用的任务能力必须提供配置、手动触发、执行记录、采集结果和分析快照接口。
+
+## 十、AI 与投资分析铁律
+
+1. AI 模型必须通过模型注册表管理编码、版本、Provider、配置、指标和生命周期状态。
+2. 投资分析能力必须通过可插拔 `InvestmentAnalysisProvider` 扩展。
+3. 分析输出必须包含：
+   - 投资信息汇总；
+   - 趋势；
+   - 投资方案；
+   - 模拟收益；
+   - 前端图表结构化数据。
+4. 投资分析默认只处理中国大陆市场范围 `CN_MAINLAND`。
+5. 分析报告必须保存模型、输入、输出和生成时间快照，保证可解释和可追溯。
+6. 大模型输出只能作为投资辅助建议，禁止直接驱动真实交易。
+7. 模型输入必须脱敏，密钥、口令和完整敏感身份信息禁止写入模型配置或提示词快照。
+
+## 十一、完成标准
+
+一次代码修改只有同时满足以下条件才算完成：
+
+1. 功能链路实现完整。
+2. 类型、字段、公开方法和复杂私有方法注释完整。
+3. Builder、Stream、分层和 MyBatis XML 规范全部满足。
+4. 接口 Swagger 和 DTO 边界完整。
+5. 数据库迁移和初始化逻辑明确。
+6. 相关业务文档同步更新。
+7. 编译、测试和接口合约测试通过。

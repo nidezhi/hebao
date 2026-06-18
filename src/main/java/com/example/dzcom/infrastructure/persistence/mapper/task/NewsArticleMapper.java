@@ -26,6 +26,13 @@ public interface NewsArticleMapper {
         @Param("from") LocalDateTime from
     );
 
+    /** 查询指定时间后命中任一关键词的近期资讯。 */
+    List<NewsArticleEntity> findRecentByKeywords(
+        @Param("keywords") List<String> keywords,
+        @Param("from") LocalDateTime from,
+        @Param("limit") int limit
+    );
+
     /** 根据筛选条件分页查询资讯。 */
     List<NewsArticleEntity> search(@Param("criteria") NewsArticleSearchCriteria criteria,
                                    @Param("offset") int offset,

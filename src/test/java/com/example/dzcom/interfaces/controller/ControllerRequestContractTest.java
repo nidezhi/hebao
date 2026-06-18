@@ -4,6 +4,7 @@ import com.example.dzcom.interfaces.controller.account.AdminUserController;
 import com.example.dzcom.interfaces.controller.account.AdminRoleController;
 import com.example.dzcom.interfaces.controller.account.AuthenticationController;
 import com.example.dzcom.interfaces.controller.account.CurrentUserController;
+import com.example.dzcom.interfaces.controller.ai.AiModelController;
 import com.example.dzcom.interfaces.controller.ai.InvestmentAnalysisController;
 import com.example.dzcom.interfaces.controller.product.AdminProductController;
 import com.example.dzcom.interfaces.controller.product.ProductController;
@@ -11,6 +12,7 @@ import com.example.dzcom.interfaces.controller.task.InvestmentTaskController;
 import com.example.dzcom.interfaces.dto.response.account.PreferenceResponse;
 import com.example.dzcom.interfaces.dto.response.account.RoleResponse;
 import com.example.dzcom.interfaces.dto.response.account.UserResponse;
+import com.example.dzcom.interfaces.dto.response.ai.AiModelResponse;
 import com.example.dzcom.interfaces.dto.response.ai.InvestmentAnalysisReportResponse;
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.market.MarketQuoteResponse;
@@ -57,6 +59,7 @@ class ControllerRequestContractTest {
         AdminProductController.class,
         ProductController.class,
         InvestmentTaskController.class,
+        AiModelController.class,
         InvestmentAnalysisController.class
     );
 
@@ -72,6 +75,7 @@ class ControllerRequestContractTest {
         ScheduledTaskExecutionResponse.class,
         NewsArticleResponse.class,
         InvestmentThemeSnapshotResponse.class,
+        AiModelResponse.class,
         InvestmentAnalysisReportResponse.class,
         PageResponse.class
     );

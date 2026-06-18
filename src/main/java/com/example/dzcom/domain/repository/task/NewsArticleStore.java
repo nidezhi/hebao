@@ -14,6 +14,9 @@ public interface NewsArticleStore {
     /** 统计时间窗口内标题或摘要命中任一关键词的资讯数量。 */
     long countByKeywords(List<String> keywords, LocalDateTime from);
 
+    /** 查询时间窗口内标题或摘要命中任一关键词的近期资讯。 */
+    List<NewsArticle> findRecentByKeywords(List<String> keywords, LocalDateTime from, int limit);
+
     /** 根据筛选条件分页查询资讯。 */
     PageResult<NewsArticle> search(NewsArticleSearchCriteria criteria);
 }

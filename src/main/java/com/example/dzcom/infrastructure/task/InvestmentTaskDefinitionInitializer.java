@@ -27,11 +27,11 @@ public class InvestmentTaskDefinitionInitializer {
         LocalDateTime now = clock.now();
         properties.getDefinitions().forEach(source -> {
             InvestmentTaskDefinition existed = definitions.findByCode(source.getCode()).orElse(null);
-            if (existed != null) {
+            if (existed != null && !"由应用配置初始化".equals(existed.description())) {
                 return;
             }
             definitions.save(InvestmentTaskDefinition.builder()
-                .bizId(ids.newBizId())
+                .bizId(existed == null ? ids.newBizId() : existed.bizId())
                 .taskCode(source.getCode())
                 .taskType(source.getType())
                 .cron(source.getCron())
@@ -39,7 +39,7 @@ public class InvestmentTaskDefinitionInitializer {
                 .enabled(source.isEnabled())
                 .parameters(new LinkedHashMap<>(source.getParameters()))
                 .description("由应用配置初始化")
-                .createdAt(now)
+                .createdAt(existed == null ? now : existed.createdAt())
                 .updatedAt(now)
                 .build());
         });

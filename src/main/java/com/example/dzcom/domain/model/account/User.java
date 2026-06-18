@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
  * <p>只负责账户生命周期行为，不混入登录标识、密码、资料和风险画像。
  * 状态只能通过领域方法变更，以保证禁用、锁定和删除规则集中维护。</p>
  */
+@Schema(description = "用户账户主体领域模型")
 @Getter
 @Builder(toBuilder = true)
 public class User {

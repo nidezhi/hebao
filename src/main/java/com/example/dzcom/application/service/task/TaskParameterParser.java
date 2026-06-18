@@ -43,6 +43,15 @@ public final class TaskParameterParser {
             .toList();
     }
 
+    /** 读取原始字符串参数。 */
+    public static String string(Map<String, String> parameters, String key, String defaultValue) {
+        if (parameters == null) {
+            return defaultValue;
+        }
+        String value = parameters.get(key);
+        return value == null || value.isBlank() ? defaultValue : value;
+    }
+
     /**
      * 解析“主题名称=值1,值2;主题名称2=值3”格式。
      *

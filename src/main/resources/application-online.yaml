@@ -6,6 +6,13 @@ spring:
       connection-init-sqls:
         - SET time_zone = '+08:00'
 
+ai:
+  secrets:
+    values:
+      OPENAI_MOCK_API_KEY: ${OPENAI_MOCK_API_KEY:}
+      DEEPSEEK_MOCK_API_KEY: ${DEEPSEEK_MOCK_API_KEY:}
+      QWEN_MOCK_API_KEY: ${QWEN_MOCK_API_KEY:}
+
 # SpringDoc & Swagger UI 配置（生产环境禁用）
 springdoc:
   api-docs:
