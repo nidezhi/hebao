@@ -22,6 +22,8 @@ class DocumentationContractTest {
     private static final List<String> DOCUMENTED_PACKAGES = List.of(
         "com.example.dzcom.infrastructure.persistence.entity",
         "com.example.dzcom.domain.model",
+        "com.example.dzcom.application.command",
+        "com.example.dzcom.application.dto",
         "com.example.dzcom.interfaces.request",
         "com.example.dzcom.interfaces.dto.response"
     );
