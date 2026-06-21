@@ -9,9 +9,11 @@ import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskTriggerResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeSnapshotResponse;
+import com.example.dzcom.interfaces.dto.response.task.NewsArticleRelationResponse;
 import com.example.dzcom.interfaces.dto.response.task.NewsArticleResponse;
 import com.example.dzcom.interfaces.dto.response.task.ScheduledTaskExecutionResponse;
 import com.example.dzcom.interfaces.request.task.InvestmentThemeSnapshotListRequest;
+import com.example.dzcom.interfaces.request.task.NewsArticleRelationListRequest;
 import com.example.dzcom.interfaces.request.task.NewsArticleListRequest;
 import com.example.dzcom.interfaces.request.task.SaveInvestmentTaskDefinitionRequest;
 import com.example.dzcom.interfaces.request.task.TaskExecutionListRequest;
@@ -183,6 +185,44 @@ public class InvestmentTaskController {
                 request.direction() == null ? "desc" : request.direction()
             )
         ), NewsArticleResponse::from));
+    }
+
+    /**
+     * 分页查询资讯主题产品关联。
+     *
+     * <p>该接口用于前端解释 NEWS_HEAT 快照的热度来源。前端可以按主题编码、
+     * 产品代码或资讯业务 ID 查询命中的关键词、来源质量分、综合关联分和证据摘要。</p>
+     *
+     * @param request 资讯、主题、产品和分页排序筛选条件
+     * @return 资讯主题产品关联分页结果
+     * @author dz
+     * @date 2026-06-21
+     */
+    @PostMapping("/article-relations/list")
+    @Operation(
+        summary = "分页查询资讯主题产品关联",
+        description = "查询新闻与投资主题、产品代码的显式关联。前端可用该接口展示资讯热度来源、命中关键词、来源质量分和关联证据。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回资讯主题产品关联分页响应", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "分页或排序参数不合法"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<PageResponse<NewsArticleRelationResponse>> articleRelations(
+        @Valid @RequestBody NewsArticleRelationListRequest request
+    ) {
+        return Result.success(PageResponse.from(tasks.articleRelations(
+            request.articleBizId(),
+            request.themeCode(),
+            request.productCode(),
+            request.relationType(),
+            new PageQuery(
+                request.page() == null ? 1 : request.page(),
+                request.size() == null ? 20 : request.size(),
+                request.sort() == null ? "createdAt" : request.sort(),
+                request.direction() == null ? "desc" : request.direction()
+            )
+        ), NewsArticleRelationResponse::from));
     }
 
     /**

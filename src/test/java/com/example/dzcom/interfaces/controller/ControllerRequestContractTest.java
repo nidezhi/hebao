@@ -21,6 +21,7 @@ import com.example.dzcom.interfaces.dto.response.product.ProductResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskTriggerResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeSnapshotResponse;
+import com.example.dzcom.interfaces.dto.response.task.NewsArticleRelationResponse;
 import com.example.dzcom.interfaces.dto.response.task.NewsArticleResponse;
 import com.example.dzcom.interfaces.dto.response.task.ScheduledTaskExecutionResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -74,6 +75,7 @@ class ControllerRequestContractTest {
         InvestmentTaskTriggerResponse.class,
         ScheduledTaskExecutionResponse.class,
         NewsArticleResponse.class,
+        NewsArticleRelationResponse.class,
         InvestmentThemeSnapshotResponse.class,
         AiModelResponse.class,
         InvestmentAnalysisReportResponse.class,

@@ -414,6 +414,14 @@ NEWS_HEAT_AGGREGATION
 | `relation_score` | 关键词命中、来源质量和时效综合得分 |
 | `evidence` | 关联证据摘要，当前保存新闻标题 |
 
+前端查询接口：
+
+```text
+POST /api/investment/tasks/article-relations/list
+```
+
+该接口按资讯业务 ID、主题编码、产品代码和关联类型分页查询关联记录。前端可展示命中关键词、来源质量分、综合关联分和证据摘要，用于解释资讯热度来源。
+
 ### 8.7 预期输出
 
 - 新闻标题、摘要、正文、来源和原文地址。
@@ -941,6 +949,25 @@ AI 模型管理
 | 投资任务 | `InvestmentTaskController` | 配置、触发、执行记录、新闻和快照 |
 | AI 模型 | `AiModelController` | 模型版本、配置和状态 |
 | 投资分析 | `InvestmentAnalysisController` | 分析报告和图表数据 |
+
+投资任务接口中，本轮新增或增强的前端可见能力：
+
+| 接口 | 用途 |
+| --- | --- |
+| `/api/investment/tasks/article-relations/list` | 查询新闻、主题和产品代码的显式关联 |
+| `/api/investment/tasks/snapshots/list` | 查询收益、动量和热度快照；`metrics` 已展开为质量指标和样本说明 |
+| `/api/investment/tasks/definitions` | 查询任务配置；可查看 `themeProducts` 参数 |
+| `/api/investment/tasks/definitions/save` | 保存任务配置；可维护 `themeProducts` 参数 |
+| `/api/investment/tasks/trigger` | 手动触发任务；可临时覆盖 `themeProducts` |
+
+投资分析接口中，本轮增强的前端可见能力：
+
+| 接口 | 用途 |
+| --- | --- |
+| `/api/investment/analysis/generate` | 生成含数据质量、参考仓位、情景收益和图表数据的分析报告 |
+| `/api/investment/analysis/reports/list` | 查询历史分析报告，响应结构与生成接口一致 |
+
+完整 JSON 展开说明见 `docs_new/10-frontend-interface-changes.md`。
 
 ## 16. 阅读代码建议
 

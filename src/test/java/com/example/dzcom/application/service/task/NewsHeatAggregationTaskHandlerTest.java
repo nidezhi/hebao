@@ -7,6 +7,7 @@ import com.example.dzcom.domain.model.task.NewsArticle;
 import com.example.dzcom.domain.model.task.NewsArticleRelation;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotSearchCriteria;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotStore;
+import com.example.dzcom.domain.repository.task.NewsArticleRelationSearchCriteria;
 import com.example.dzcom.domain.repository.task.NewsArticleRelationStore;
 import com.example.dzcom.domain.repository.task.NewsArticleSearchCriteria;
 import com.example.dzcom.domain.repository.task.NewsArticleStore;
@@ -146,6 +147,17 @@ class NewsHeatAggregationTaskHandlerTest {
         @Override
         public void saveBatch(List<NewsArticleRelation> relations) {
             saved.addAll(relations);
+        }
+
+        @Override
+        public PageResult<NewsArticleRelation> search(NewsArticleRelationSearchCriteria criteria) {
+            return PageResult.<NewsArticleRelation>builder()
+                .items(saved)
+                .total(saved.size())
+                .page(criteria.page())
+                .size(criteria.size())
+                .totalPages(1)
+                .build();
         }
     }
 

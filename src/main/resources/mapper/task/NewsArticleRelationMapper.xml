@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.NewsArticleRelationMapper">
+    <sql id="searchCondition">
+        from aiw_news_article_relation r
+        where 1 = 1
+        <if test="criteria.articleBizId != null and criteria.articleBizId != ''">
+            and r.article_biz_id = #{criteria.articleBizId}
+        </if>
+        <if test="criteria.themeCode != null and criteria.themeCode != ''">
+            and r.theme_code = #{criteria.themeCode}
+        </if>
+        <if test="criteria.productCode != null and criteria.productCode != ''">
+            and r.product_code = #{criteria.productCode}
+        </if>
+        <if test="criteria.relationType != null and criteria.relationType != ''">
+            and r.relation_type = #{criteria.relationType}
+        </if>
+    </sql>
+
     <insert id="saveBatch">
         insert into aiw_news_article_relation
         (biz_id, article_biz_id, theme_code, theme_name, product_code, relation_type,
@@ -18,4 +35,19 @@
         relation_score = values(relation_score),
         evidence = values(evidence)
     </insert>
+
+    <select id="search"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.NewsArticleRelationEntity">
+        select r.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
 </mapper>

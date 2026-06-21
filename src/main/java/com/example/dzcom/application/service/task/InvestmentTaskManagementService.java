@@ -10,11 +10,14 @@ import com.example.dzcom.application.dto.task.InvestmentTaskTriggerResult;
 import com.example.dzcom.domain.model.task.InvestmentTaskDefinition;
 import com.example.dzcom.domain.model.task.InvestmentThemeSnapshot;
 import com.example.dzcom.domain.model.task.NewsArticle;
+import com.example.dzcom.domain.model.task.NewsArticleRelation;
 import com.example.dzcom.domain.model.task.ScheduledTaskExecution;
 import com.example.dzcom.domain.repository.task.InvestmentTaskDefinitionStore;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotSearchCriteria;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotStore;
 import com.example.dzcom.domain.repository.task.NewsArticleSearchCriteria;
+import com.example.dzcom.domain.repository.task.NewsArticleRelationSearchCriteria;
+import com.example.dzcom.domain.repository.task.NewsArticleRelationStore;
 import com.example.dzcom.domain.repository.task.NewsArticleStore;
 import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionSearchCriteria;
 import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionStore;
@@ -40,11 +43,14 @@ public class InvestmentTaskManagementService {
     private static final Set<String> SNAPSHOT_SORTS =
         Set.of("snapshotTime", "createdAt", "taskCode", "snapshotType", "themeCode",
             "returnRate", "momentumScore", "heatScore");
+    private static final Set<String> RELATION_SORTS =
+        Set.of("createdAt", "relationScore", "sourceQualityScore", "themeCode", "productCode");
 
     private final InvestmentTaskDefinitionStore definitions;
     private final InvestmentTaskTriggerPort triggerPort;
     private final ScheduledTaskExecutionStore executions;
     private final NewsArticleStore articles;
+    private final NewsArticleRelationStore relations;
     private final InvestmentThemeSnapshotStore snapshots;
     private final IdGenerator ids;
     private final ClockProvider clock;
@@ -169,6 +175,38 @@ public class InvestmentTaskManagementService {
             snapshotFrom, snapshotTo,
             pageQuery.page(), pageQuery.size(),
             pageQuery.safeSort(SNAPSHOT_SORTS, "snapshotTime"),
+            "asc".equals(pageQuery.direction())
+        ));
+    }
+
+    /**
+     * 分页查询资讯与主题、产品的显式关联。
+     *
+     * @param articleBizId 资讯业务 ID 筛选条件
+     * @param themeCode 投资主题编码筛选条件
+     * @param productCode 产品代码筛选条件
+     * @param relationType 关联类型筛选条件
+     * @param pageQuery 分页和排序参数
+     * @return 资讯主题产品关联分页结果
+     * @author dz
+     * @date 2026-06-21
+     */
+    @Transactional(readOnly = true)
+    public PageResult<NewsArticleRelation> articleRelations(
+        String articleBizId,
+        String themeCode,
+        String productCode,
+        String relationType,
+        PageQuery pageQuery
+    ) {
+        return relations.search(new NewsArticleRelationSearchCriteria(
+            articleBizId,
+            themeCode,
+            productCode,
+            relationType,
+            pageQuery.page(),
+            pageQuery.size(),
+            pageQuery.safeSort(RELATION_SORTS, "createdAt"),
             "asc".equals(pageQuery.direction())
         ));
     }
