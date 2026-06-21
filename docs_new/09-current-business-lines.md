@@ -330,13 +330,37 @@ Cron 到点或手动触发
 
 已实现 RSS/Atom 采集、数据源独立容错、幂等保存和兜底资讯。
 
+当前资讯采集仍是轻量级接入，目标不是直接替代专业金融数据供应商，而是先建立稳定的数据入库、质量评分和主题关联链路。后续接入财联社、Wind、同花顺 iFinD、东方财富、巨潮资讯、交易所公告或供应商 API 时，只需要扩展数据源客户端，后续热度统计、投资分析和图表接口可以复用。
+
 ### 8.2 核心实体
 
 | 领域对象 | 对应表 | 业务职责 |
 | --- | --- | --- |
 | `NewsArticle` | `aiw_news_article` | 保存新闻、公告或研报文本和来源信息 |
+| `NewsArticleRelation` | `aiw_news_article_relation` | 保存新闻与主题、产品代码、命中关键词和关联分 |
 
-### 8.3 采集流
+### 8.3 数据来源分层
+
+优质数据来源按可信度和投资可用性分层：
+
+| 层级 | 数据来源类型 | 建议来源 | 适用输出 | 当前接入状态 |
+| --- | --- | --- | --- | --- |
+| 一级 | 监管和交易所公告 | 证监会、上交所、深交所、北交所、巨潮资讯 | 政策变化、上市公司公告、行业监管信号 | 预留来源编码，待接入 API 或可解析源 |
+| 二级 | 主流财经媒体 | 东方财富、证券时报、中国证券报、新华社财经 | 新闻热度、主题情绪、事件驱动 | 可通过 RSS/Atom 或后续 API 接入 |
+| 三级 | 专业行情和研报供应商 | Wind、同花顺 iFinD、财联社、Choice | 机构研报、行业景气、资金流和专业标签 | 待采购或配置供应商接口 |
+| 四级 | 项目兜底资讯 | `fallbackArticles` | 本地联调、断源兜底、演示数据 | 已实现，但质量分较低 |
+
+当前代码中 `NewsHeatAggregationTaskHandler` 内置来源质量评分：
+
+| 来源类型 | 质量分 |
+| --- | --- |
+| 监管、交易所、主流可信来源 | `1.00` |
+| 普通 RSS/Atom 来源 | `0.70` |
+| 兜底资讯 | `0.35` |
+
+这意味着兜底资讯可以保证流程可跑通，但不会在热度评分中与真实可靠来源等权。
+
+### 8.4 采集流
 
 ```text
 INVESTMENT_NEWS_COLLECTION
@@ -348,7 +372,7 @@ INVESTMENT_NEWS_COLLECTION
   -> sourceCode + externalId 幂等保存
 ```
 
-### 8.4 兜底流
+### 8.5 兜底流
 
 ```text
 全部外部 feed 无有效数据
@@ -364,11 +388,39 @@ INVESTMENT_NEWS_COLLECTION
 - 资讯热度任务有关键词样本。
 - 投资分析报告有近期新闻上下文。
 
-### 8.5 预期输出
+### 8.6 新闻与主题、产品显式关联
+
+资讯热度汇总任务会根据主题关键词将新闻与主题、产品代码建立显式关联：
+
+```text
+NEWS_HEAT_AGGREGATION
+  -> 根据 themes 读取主题关键词
+  -> 查询窗口内命中新闻
+  -> 根据 themeProducts 生成产品代码关联
+  -> 计算 matchedKeywords、sourceQualityScore、relationScore
+  -> 保存 aiw_news_article_relation
+  -> 保存 NEWS_HEAT 快照
+```
+
+关联表核心字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `article_biz_id` | 关联的新闻业务 ID |
+| `theme_code` / `theme_name` | 关联主题 |
+| `product_code` | 关联产品代码；空字符串表示主题级关联 |
+| `matched_keywords` | 命中的关键词集合 |
+| `source_quality_score` | 来源质量分 |
+| `relation_score` | 关键词命中、来源质量和时效综合得分 |
+| `evidence` | 关联证据摘要，当前保存新闻标题 |
+
+### 8.7 预期输出
 
 - 新闻标题、摘要、正文、来源和原文地址。
 - 发布时间和采集时间。
 - 可按关键字、类型、来源、语言和时间查询的资讯分页。
+- 新闻、主题和产品代码的显式关联数据。
+- 来源质量和关联分，供热度统计和 AI 分析解释使用。
 
 ## 9. 投资主题汇总业务线
 
@@ -396,10 +448,24 @@ HotThemeReturnTaskHandler
 themes 中的产品代码
   -> 查询产品窗口起止行情
   -> 计算每个产品 returnRate
-  -> 计算主题平均收益率
+  -> 过滤无有效收益样本
+  -> 计算主题有效样本平均收益率
+  -> 计算覆盖率、波动、头部贡献和质量分
   -> 选择收益最高产品
   -> 保存 RETURN 快照
 ```
+
+输出质量评估：
+
+| 指标 | 含义 |
+| --- | --- |
+| `requestedProductCount` | 配置中要求统计的产品数量 |
+| `validReturnCount` | 实际有起止行情并能计算收益的产品数量 |
+| `coverageRate` | 有效样本覆盖率，越高越可信 |
+| `volatility` | 主题内部产品收益平均绝对偏离 |
+| `topContribution` | 头部产品对收益解释的集中度 |
+| `qualityScore` | 覆盖率、样本数和波动稳定性综合评分 |
+| `qualityLevel` | `HIGH` / `MEDIUM` / `LOW` |
 
 ### 9.4 市场动量
 
@@ -414,7 +480,8 @@ MarketMomentumTaskHandler
 ```text
 平均收益率 = 有效产品收益率之和 / 有效产品数量
 上涨广度 = 正收益产品数量 / 有效产品数量
-动量分数 = 平均收益率 * 上涨广度
+质量分 = 覆盖率 * 0.55 + 样本分 * 0.25 + 稳定性分 * 0.20
+动量分数 = 平均收益率 * 上涨广度 * 质量分
 ```
 
 输出：
@@ -423,6 +490,10 @@ MarketMomentumTaskHandler
 - `momentumScore`
 - `topProductBizId`
 - `metrics.positiveBreadth`
+- `metrics.coverageRate`
+- `metrics.volatility`
+- `metrics.qualityScore`
+- `metrics.qualityLevel`
 - 产品收益样本明细
 
 ### 9.5 资讯热度
@@ -438,10 +509,25 @@ NewsHeatAggregationTaskHandler
 ```text
 主题关键词
   -> 查询回看窗口内新闻标题和摘要
-  -> 统计命中数量
-  -> heatScore = 命中数量
+  -> 识别命中关键词
+  -> 计算来源质量分
+  -> 计算新闻时效分
+  -> relationScore = 关键词命中数 * 来源质量分 * 时效分
+  -> heatScore = relationScore 汇总
+  -> 保存新闻、主题、产品代码显式关联
   -> 保存 NEWS_HEAT 快照
 ```
+
+输出质量评估：
+
+| 指标 | 含义 |
+| --- | --- |
+| `articleCount` | 命中的新闻数量 |
+| `uniqueSourceCount` | 去重来源数量 |
+| `averageSourceQuality` | 平均来源质量 |
+| `dataQualityScore` | 样本数、来源多样性和来源质量综合评分 |
+| `qualityLevel` | `HIGH` / `MEDIUM` / `LOW` |
+| `sampleArticles` | 最多十条样本新闻，便于前端解释热度来源 |
 
 ### 9.6 预期输出
 
@@ -450,6 +536,7 @@ NewsHeatAggregationTaskHandler
 - 主题资讯热度榜。
 - 按时间绘制的收益、动量和热度趋势。
 - 可供投资分析 Provider 使用的结构化样本。
+- 可解释的统计质量分，避免把低质量样本误判为投资机会。
 
 ## 10. AI 模型管理业务线
 
@@ -483,7 +570,26 @@ DRAFT
 | `INACTIVE` | 暂停使用但保留配置 |
 | `ARCHIVED` | 逻辑删除，不再参与新业务 |
 
-### 10.4 数据流
+### 10.4 ACTIVE 模型与 Provider 强关联
+
+投资分析生成时，实际 Provider 不以接口传参为准，而是以 `aiw_ai_model` 中最近启用的 `ACTIVE` 模型为准：
+
+```text
+GenerateInvestmentAnalysisRequest.modelCode
+  -> AiModelStore.findActiveByCode
+  -> 读取 ACTIVE AiModel.provider
+  -> 校验请求 providerCode 是否与模型 provider 一致
+  -> AiModelRuntimeConfigResolver 注入 secretRef 对应 API Key
+  -> providers.stream().filter(candidate.supports(model.provider()))
+  -> InvestmentAnalysisProvider.analyze
+```
+
+这条规则解决两个问题：
+
+- 业务侧只能选择已经激活的模型配置，不能绕过模型生命周期直接选择 Provider。
+- `providerCode` 只做一致性校验，防止前端传错 Provider 后调用到错误的大模型实现。
+
+### 10.5 数据流
 
 ```text
 POST /api/ai/models/save
@@ -511,7 +617,7 @@ application-local/dev.yaml 或部署平台 Secret
 当前初始化了本地规则、OpenAI、DeepSeek 和通义千问兼容配置。后三者使用
 UUID 格式模拟 API Key，并开启 `mockEnabled=true`，用于验证配置注入链路。
 
-### 10.5 预期输出
+### 10.6 预期输出
 
 - 模型版本清单。
 - 提供方和制品地址。
@@ -557,9 +663,13 @@ GenerateInvestmentAnalysisRequest
 公共计算：
 
 - 平均收益率。
+- 平均动量。
+- 加权资讯热度。
+- 快照质量分。
 - 最近主题快照。
 - 新闻数量。
-- 模拟收益和期末资金。
+- 参考配置比例。
+- 模拟收益、压力情景和乐观情景。
 
 ### 11.5 报告输出
 
@@ -570,20 +680,31 @@ GenerateInvestmentAnalysisRequest
 - 快照样本数量。
 - 相关新闻数量。
 - 平均收益率。
+- 平均动量。
+- 加权资讯热度。
+- 数据质量分和质量等级。
 - 最近快照时间。
 - 近期新闻标题和摘要。
 
 #### 趋势
 
 - `UP` 或 `DOWN`。
+- `NEUTRAL`。
 - 平均收益率。
+- 平均动量。
 - 新闻热度。
+- 加权热度分。
+- 数据质量分。
 - 回看天数。
 
 #### 投资方案
 
 - 方案类型。
 - 建议动作。
+- 参考配置比例。
+- 参考配置金额。
+- 再平衡规则。
+- 数据质量等级。
 - 风险提示。
 
 投资方案仅用于辅助决策，不构成收益承诺，不自动执行交易。
@@ -591,9 +712,14 @@ GenerateInvestmentAnalysisRequest
 #### 模拟收益
 
 - 初始资金。
+- 参考配置比例。
+- 实际参与模拟的配置本金。
 - 模拟收益金额。
 - 模拟期末资金。
 - 模拟收益率。
+- 压力情景收益。
+- 乐观情景收益。
+- 模拟假设说明。
 
 #### 图表数据
 
@@ -601,9 +727,102 @@ GenerateInvestmentAnalysisRequest
 - 新闻事件时间点。
 - 主题和来源信息。
 
-## 12. 当前仅有表结构或尚未闭环的业务线
+## 12. 投资决策质量设计
 
-### 12.1 投资组合与持仓
+这一节是后续优化投资分析输出时必须优先关注的三类输入。
+
+### 12.1 数据来源
+
+当前系统将数据源拆成三类输入：
+
+| 输入 | 当前状态 | 后续增强方向 |
+| --- | --- | --- |
+| 新闻资讯 | RSS/Atom + 兜底资讯，已入库并支持主题关联 | 接入监管、交易所、巨潮、财联社、东方财富等稳定来源 |
+| 行情数据 | 已有行情表、保存和查询服务，但缺少独立前端 Controller | 接入实时行情、分钟线、日线和复权收益 |
+| 产品主数据 | 已有产品目录和产品属性 | 建立主题、产品、行业、指数成分的显式映射 |
+
+优质数据的判断标准：
+
+- 来源稳定：监管、交易所、官方公告和专业数据商优先。
+- 内容可追溯：必须保留 `sourceCode`、`sourceUrl`、`externalId`。
+- 时效明确：发布时间统一转换为北京时间。
+- 可解释：新闻必须能追溯到主题、产品代码、命中关键词和证据摘要。
+- 可降级：外部源失败时允许兜底，但兜底来源质量分低于真实来源。
+
+### 12.2 输出质量评估
+
+投资任务输出不再只看“有没有数据”，而是同时输出质量字段：
+
+| 输出类型 | 核心质量字段 | 质量含义 |
+| --- | --- | --- |
+| 收益快照 | `coverageRate`、`volatility`、`topContribution`、`qualityScore` | 判断样本覆盖是否充足、主题是否被单一产品拉动 |
+| 动量快照 | `positiveBreadth`、`coverageRate`、`volatility`、`qualityScore` | 判断上涨是否有广度，避免单点行情误导 |
+| 资讯热度 | `uniqueSourceCount`、`averageSourceQuality`、`dataQualityScore` | 判断新闻热度是否来自多源、可信、近期资讯 |
+| 分析报告 | `dataQualityScore`、`dataQualityLevel` | 决定建议仓位和是否提示补充数据源 |
+
+质量等级规则：
+
+| 等级 | 解释 | 投资分析动作 |
+| --- | --- | --- |
+| `HIGH` | 样本覆盖、来源质量和一致性较好 | 可以输出正常参考仓位 |
+| `MEDIUM` | 数据可用但存在覆盖或来源不足 | 轻仓跟踪，等待趋势确认 |
+| `LOW` | 数据不足或主要依赖兜底资讯 | 仅观察，不应生成激进配置建议 |
+
+### 12.3 投资模拟方案
+
+当前投资模拟方案是“主题级辅助决策”，不是自动交易策略。
+
+模拟输入：
+
+| 输入 | 来源 |
+| --- | --- |
+| 初始资金 | `GenerateInvestmentAnalysisRequest.initialCapital` |
+| 平均收益率 | `RETURN` 和 `MOMENTUM` 快照中的有效收益样本 |
+| 平均动量 | 动量快照 |
+| 数据质量分 | 各类快照 metrics 中的质量字段 |
+| 新闻热度 | `NEWS_HEAT` 快照和近期新闻 |
+
+参考配置比例规则：
+
+| 条件 | 参考配置比例 |
+| --- | --- |
+| 数据质量低于 `0.45` | `10%` 观察仓位 |
+| 平均收益和平均动量均为正 | `30%` 分批配置 |
+| 平均收益非负但动量不足 | `20%` 轻仓跟踪 |
+| 平均收益为负 | `5%` 防守观察 |
+
+模拟输出：
+
+| 字段 | 说明 |
+| --- | --- |
+| `initialCapital` | 初始资金 |
+| `allocationRate` | 参考配置比例 |
+| `simulatedPrincipal` | 实际参与模拟的资金 |
+| `estimatedProfit` | 基准情景模拟收益 |
+| `estimatedFinalCapital` | 初始资金 + 模拟收益 |
+| `stressLoss` | 压力情景，按平均收益率下调 5% 模拟 |
+| `optimisticProfit` | 乐观情景，按平均收益率上调 3% 模拟 |
+| `assumption` | 模拟假设，明确不代表未来收益 |
+
+### 12.4 后续闭环目标
+
+后续要把这条链路从“主题辅助分析”升级为“用户组合级投资建议”：
+
+```text
+用户风险画像
+  -> 真实投资组合和持仓
+  -> 产品风险等级和流动性
+  -> 新闻、行情和主题快照
+  -> AI 信号
+  -> 推荐方案
+  -> 回测验证
+  -> 风控审计
+  -> 用户确认或拒绝
+```
+
+## 13. 当前仅有表结构或尚未闭环的业务线
+
+### 13.1 投资组合与持仓
 
 状态：仅有数据库结构或未形成完整 Java 闭环。
 
@@ -625,7 +844,7 @@ GenerateInvestmentAnalysisRequest
   -> AI 分析和再平衡建议
 ```
 
-### 12.2 订单与交易
+### 13.2 订单与交易
 
 状态：仅有数据库结构或未形成完整 Java 闭环。
 
@@ -642,7 +861,7 @@ GenerateInvestmentAnalysisRequest
 - 失败原因。
 - 持仓变化。
 
-### 12.3 AI 信号与推荐
+### 13.3 AI 信号与推荐
 
 状态：`aiw_ai_signal`、`aiw_ai_recommendation` 表已存在，完整应用服务和接口尚未闭环。
 
@@ -656,7 +875,7 @@ GenerateInvestmentAnalysisRequest
   -> 用户查看、接受或拒绝
 ```
 
-### 12.4 策略回测
+### 13.4 策略回测
 
 状态：`aiw_backtest_result` 表已存在，执行引擎和接口尚未闭环。
 
@@ -668,7 +887,7 @@ GenerateInvestmentAnalysisRequest
 - 基准比较。
 - 回测明细。
 
-### 12.5 风控、通知和审计
+### 13.5 风控、通知和审计
 
 状态：数据库结构已规划或部分存在，完整业务接口尚未全部闭环。
 
@@ -682,7 +901,7 @@ GenerateInvestmentAnalysisRequest
   -> 审计日志
 ```
 
-## 13. 当前业务线依赖关系
+## 14. 当前业务线依赖关系
 
 ```text
 账户与权限
@@ -709,7 +928,7 @@ AI 模型管理
   -> 投资分析报告
 ```
 
-## 14. 当前主要接口分组
+## 15. 当前主要接口分组
 
 | 接口分组 | Controller | 主要输出 |
 | --- | --- | --- |
@@ -723,7 +942,7 @@ AI 模型管理
 | AI 模型 | `AiModelController` | 模型版本、配置和状态 |
 | 投资分析 | `InvestmentAnalysisController` | 分析报告和图表数据 |
 
-## 15. 阅读代码建议
+## 16. 阅读代码建议
 
 理解一条业务线时按以下顺序阅读：
 
@@ -737,11 +956,11 @@ AI 模型管理
 8. 看 Flyway migration，确认表结构、索引和唯一约束。
 9. 看测试，确认核心规则和接口契约。
 
-## 16. 后续建设优先级建议
+## 17. 后续建设优先级建议
 
-1. 将 AI 模型 `ACTIVE` 状态与 Provider 实际选择建立强关联。
-2. 接入稳定的中国大陆新闻数据源，逐步减少兜底资讯依赖。
-3. 增加新闻与主题、产品的显式关联数据。
+1. 接入稳定的中国大陆新闻数据源，逐步减少兜底资讯依赖。
+2. 完善行情数据接入，补齐真实分钟线、日线和复权收益。
+3. 建立主题、产品、行业和指数成分的正式映射表。
 4. 完善主题快照和投资分析的集成测试。
 5. 落地投资组合与持仓业务线。
 6. 将投资分析扩展到用户风险画像和真实组合。

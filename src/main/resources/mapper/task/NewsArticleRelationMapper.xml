@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.NewsArticleRelationMapper">
+    <insert id="saveBatch">
+        insert into aiw_news_article_relation
+        (biz_id, article_biz_id, theme_code, theme_name, product_code, relation_type,
+         matched_keywords, source_quality_score, relation_score, evidence, created_at)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.bizId}, #{item.articleBizId}, #{item.themeCode}, #{item.themeName},
+             #{item.productCode}, #{item.relationType}, #{item.matchedKeywords},
+             #{item.sourceQualityScore}, #{item.relationScore}, #{item.evidence},
+             #{item.createdAt})
+        </foreach>
+        on duplicate key update
+        matched_keywords = values(matched_keywords),
+        source_quality_score = values(source_quality_score),
+        relation_score = values(relation_score),
+        evidence = values(evidence)
+    </insert>
+</mapper>

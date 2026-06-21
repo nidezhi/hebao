@@ -58,10 +58,23 @@ public final class TaskParameterParser {
      * @return 保持配置顺序的主题映射
      */
     public static Map<String, List<String>> themes(Map<String, String> parameters) {
+        return themes(parameters, "themes");
+    }
+
+    /**
+     * 按指定参数键解析“主题名称=值1,值2;主题名称2=值3”格式。
+     *
+     * @param parameters 任务参数集合
+     * @param key 参数键
+     * @return 保持配置顺序的主题映射
+     * @author dz
+     * @date 2026-06-21
+     */
+    public static Map<String, List<String>> themes(Map<String, String> parameters, String key) {
         if (parameters == null) {
             return new LinkedHashMap<>();
         }
-        return filterByMarketScope(Arrays.stream(parameters.getOrDefault("themes", "").split(";"))
+        return filterByMarketScope(Arrays.stream(parameters.getOrDefault(key, "").split(";"))
             .map(String::trim)
             .filter(item -> item.contains("="))
             .map(item -> item.split("=", 2))

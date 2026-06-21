@@ -13,6 +13,7 @@ import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotSearchCri
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotStore;
 import com.example.dzcom.domain.repository.task.NewsArticleStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -132,8 +133,20 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .filter(value -> value != null)
             .toList();
         BigDecimal averageReturn = average(returnRates);
+        BigDecimal averageMomentum = average(themeSnapshots.stream()
+            .map(InvestmentThemeSnapshot::momentumScore)
+            .filter(value -> value != null)
+            .toList());
+        BigDecimal averageHeat = average(themeSnapshots.stream()
+            .map(InvestmentThemeSnapshot::heatScore)
+            .filter(value -> value != null)
+            .toList());
+        BigDecimal dataQualityScore = average(snapshotQualityScores(themeSnapshots));
         BigDecimal initialCapital = resolveInitialCapital(command.initialCapital());
-        BigDecimal estimatedProfit = initialCapital.multiply(averageReturn)
+        BigDecimal allocationRate = allocationRate(averageReturn, averageMomentum, dataQualityScore);
+        BigDecimal simulatedPrincipal = initialCapital.multiply(allocationRate)
+            .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal estimatedProfit = simulatedPrincipal.multiply(averageReturn)
             .setScale(4, RoundingMode.HALF_UP);
 
         return AnalysisContext.builder()
@@ -146,7 +159,13 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .recentNews(recentNews)
             .latestSnapshot(latestSnapshot)
             .averageReturn(averageReturn)
+            .averageMomentum(averageMomentum)
+            .averageHeat(averageHeat)
+            .dataQualityScore(dataQualityScore)
+            .dataQualityLevel(resolveQualityLevel(dataQualityScore))
             .initialCapital(initialCapital)
+            .allocationRate(allocationRate)
+            .simulatedPrincipal(simulatedPrincipal)
             .estimatedProfit(estimatedProfit)
             .build();
     }
@@ -169,6 +188,10 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         summary.put("sampleCount", context.themeSnapshots().size());
         summary.put("newsCount", context.recentNews().size());
         summary.put("averageReturn", context.averageReturn());
+        summary.put("averageMomentum", context.averageMomentum());
+        summary.put("averageHeat", context.averageHeat());
+        summary.put("dataQualityScore", context.dataQualityScore());
+        summary.put("dataQualityLevel", context.dataQualityLevel());
         summary.put("latestSnapshotTime", context.latestSnapshot() == null
             ? ""
             : context.latestSnapshot().snapshotTime());
@@ -196,35 +219,58 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
     /** 构建趋势输出。 */
     private Map<String, Object> buildTrend(AnalysisContext context) {
         Map<String, Object> trend = new LinkedHashMap<>();
-        trend.put("direction", context.averageReturn().signum() >= 0 ? "UP" : "DOWN");
+        trend.put("direction", resolveTrendDirection(context));
         trend.put("averageReturn", context.averageReturn());
+        trend.put("averageMomentum", context.averageMomentum());
         trend.put("newsHeat", context.recentNews().size());
+        trend.put("weightedHeatScore", context.averageHeat());
+        trend.put("dataQualityScore", context.dataQualityScore());
         trend.put("lookbackDays", context.lookbackDays());
         return trend;
     }
 
-    /** 构建参考投资方案和风险提示。 */
+    /**
+     * 构建参考投资方案和风险提示。
+     *
+     * @param context 已完成数据查询和公共指标计算的分析上下文
+     * @return 投资方案结构
+     * @author dz
+     * @date 2026-06-21
+     */
     private Map<String, Object> buildInvestmentPlan(AnalysisContext context) {
-        String suggestedAction = context.averageReturn().signum() >= 0
-            ? "关注并分批配置"
-            : "降低仓位并等待确认";
         Map<String, Object> plan = new LinkedHashMap<>();
         plan.put("planType", "REFERENCE_ALLOCATION");
+        plan.put("suggestedAction", suggestedAction(context));
+        plan.put("referenceAllocationRate", context.allocationRate());
+        plan.put("referenceAllocationAmount", context.simulatedPrincipal());
+        plan.put("dataQualityLevel", context.dataQualityLevel());
+        plan.put("rebalanceRule", "仅当收益、动量和资讯热度连续两个统计窗口同向时提高仓位。");
         plan.put("riskNotice", "AI 分析仅为投资辅助信息，不构成收益承诺或自动交易指令。");
-        plan.put("suggestedAction", suggestedAction);
         return plan;
     }
 
-    /** 构建模拟收益结果。 */
+    /**
+     * 构建模拟收益结果。
+     *
+     * @param context 已完成数据查询和公共指标计算的分析上下文
+     * @return 模拟收益结构
+     * @author dz
+     * @date 2026-06-21
+     */
     private Map<String, Object> buildSimulatedReturn(AnalysisContext context) {
         Map<String, Object> simulatedReturn = new LinkedHashMap<>();
         simulatedReturn.put("initialCapital", context.initialCapital());
+        simulatedReturn.put("allocationRate", context.allocationRate());
+        simulatedReturn.put("simulatedPrincipal", context.simulatedPrincipal());
         simulatedReturn.put("estimatedProfit", context.estimatedProfit());
         simulatedReturn.put(
             "estimatedFinalCapital",
             context.initialCapital().add(context.estimatedProfit())
         );
         simulatedReturn.put("returnRate", context.averageReturn());
+        simulatedReturn.put("stressLoss", stressLoss(context));
+        simulatedReturn.put("optimisticProfit", optimisticProfit(context));
+        simulatedReturn.put("assumption", "按回看窗口平均收益率模拟，仅反映历史样本，不代表未来收益。");
         return simulatedReturn;
     }
 
@@ -267,9 +313,12 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
     private Map<String, Object> buildInputSnapshot(AnalysisContext context) {
         Map<String, Object> inputSnapshot = new LinkedHashMap<>();
         inputSnapshot.put("providerCode", "LOCAL_RULE");
+        inputSnapshot.put("providerSelection", "ACTIVE_AI_MODEL_PROVIDER");
         inputSnapshot.put("marketScope", context.marketScope());
         inputSnapshot.put("themeCode", context.themeCode());
         inputSnapshot.put("lookbackDays", context.lookbackDays());
+        inputSnapshot.put("dataQualityScore", context.dataQualityScore());
+        inputSnapshot.put("dataQualityLevel", context.dataQualityLevel());
         return inputSnapshot;
     }
 
@@ -313,6 +362,160 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
     }
 
     /**
+     * 从快照 metrics 中读取统计质量分。
+     *
+     * @param themeSnapshots 主题快照集合
+     * @return 已解析的质量分集合
+     * @author dz
+     * @date 2026-06-21
+     */
+    private List<BigDecimal> snapshotQualityScores(List<InvestmentThemeSnapshot> themeSnapshots) {
+        return themeSnapshots.stream()
+            .map(InvestmentThemeSnapshot::metrics)
+            .map(this::readQualityScore)
+            .filter(value -> value != null)
+            .toList();
+    }
+
+    /**
+     * 从单条 metrics JSON 中读取质量分。
+     *
+     * @param metrics 快照指标 JSON
+     * @return 质量分；无法读取时返回 null
+     * @author dz
+     * @date 2026-06-21
+     */
+    private BigDecimal readQualityScore(String metrics) {
+        if (metrics == null || metrics.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(metrics);
+            JsonNode score = root.hasNonNull("dataQualityScore")
+                ? root.get("dataQualityScore")
+                : root.get("qualityScore");
+            if (score == null || !score.isNumber()) {
+                return null;
+            }
+            return score.decimalValue();
+        } catch (JsonProcessingException exception) {
+            return null;
+        }
+    }
+
+    /**
+     * 根据收益、动量和数据质量计算参考配置比例。
+     *
+     * @param averageReturn 平均收益
+     * @param averageMomentum 平均动量
+     * @param dataQualityScore 数据质量分
+     * @return 参考配置比例
+     * @author dz
+     * @date 2026-06-21
+     */
+    private BigDecimal allocationRate(
+        BigDecimal averageReturn,
+        BigDecimal averageMomentum,
+        BigDecimal dataQualityScore
+    ) {
+        if (dataQualityScore.compareTo(BigDecimal.valueOf(0.45)) < 0) {
+            return BigDecimal.valueOf(0.10);
+        }
+        if (averageReturn.signum() > 0 && averageMomentum.signum() > 0) {
+            return BigDecimal.valueOf(0.30);
+        }
+        if (averageReturn.signum() >= 0) {
+            return BigDecimal.valueOf(0.20);
+        }
+        return BigDecimal.valueOf(0.05);
+    }
+
+    /**
+     * 判断趋势方向。
+     *
+     * @param context 分析上下文
+     * @return UP/NEUTRAL/DOWN
+     * @author dz
+     * @date 2026-06-21
+     */
+    private String resolveTrendDirection(AnalysisContext context) {
+        if (context.averageReturn().signum() > 0 && context.averageMomentum().signum() > 0) {
+            return "UP";
+        }
+        if (context.averageReturn().signum() < 0 && context.averageMomentum().signum() <= 0) {
+            return "DOWN";
+        }
+        return "NEUTRAL";
+    }
+
+    /**
+     * 生成建议动作。
+     *
+     * @param context 分析上下文
+     * @return 建议动作
+     * @author dz
+     * @date 2026-06-21
+     */
+    private String suggestedAction(AnalysisContext context) {
+        if ("LOW".equals(context.dataQualityLevel())) {
+            return "数据质量不足，维持观察仓位并补充数据源";
+        }
+        if ("UP".equals(resolveTrendDirection(context))) {
+            return "关注并分批配置";
+        }
+        if ("NEUTRAL".equals(resolveTrendDirection(context))) {
+            return "轻仓跟踪并等待趋势确认";
+        }
+        return "降低仓位并等待确认";
+    }
+
+    /**
+     * 计算压力情景亏损。
+     *
+     * @param context 分析上下文
+     * @return 压力情景收益
+     * @author dz
+     * @date 2026-06-21
+     */
+    private BigDecimal stressLoss(AnalysisContext context) {
+        return context.simulatedPrincipal()
+            .multiply(context.averageReturn().subtract(BigDecimal.valueOf(0.05)))
+            .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 计算乐观情景收益。
+     *
+     * @param context 分析上下文
+     * @return 乐观情景收益
+     * @author dz
+     * @date 2026-06-21
+     */
+    private BigDecimal optimisticProfit(AnalysisContext context) {
+        return context.simulatedPrincipal()
+            .multiply(context.averageReturn().add(BigDecimal.valueOf(0.03)))
+            .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 将质量分转换为等级。
+     *
+     * @param qualityScore 质量分
+     * @return HIGH/MEDIUM/LOW
+     * @author dz
+     * @date 2026-06-21
+     */
+    private String resolveQualityLevel(BigDecimal qualityScore) {
+        if (qualityScore.compareTo(BigDecimal.valueOf(0.75)) >= 0) {
+            return "HIGH";
+        }
+        if (qualityScore.compareTo(BigDecimal.valueOf(0.45)) >= 0) {
+            return "MEDIUM";
+        }
+        return "LOW";
+    }
+
+    /**
      * 将结构化分析片段序列化为 JSON。
      *
      * @param value 待序列化的有序分析结构
@@ -341,7 +544,13 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         List<NewsArticle> recentNews,
         InvestmentThemeSnapshot latestSnapshot,
         BigDecimal averageReturn,
+        BigDecimal averageMomentum,
+        BigDecimal averageHeat,
+        BigDecimal dataQualityScore,
+        String dataQualityLevel,
         BigDecimal initialCapital,
+        BigDecimal allocationRate,
+        BigDecimal simulatedPrincipal,
         BigDecimal estimatedProfit
     ) {
     }
