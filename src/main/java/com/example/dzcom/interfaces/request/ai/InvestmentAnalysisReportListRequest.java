@@ -17,7 +17,7 @@ public record InvestmentAnalysisReportListRequest(
     Integer page,
     @Schema(description = "每页条数，1-100", example = "20")
     Integer size,
-    @Schema(description = "排序字段：generatedAt/createdAt/providerCode/modelCode/themeCode/status",
+    @Schema(description = "排序字段：generatedAt/createdAt/providerCode/modelCode/themeCode/status/confidenceLevel/dataQualityScore",
         example = "generatedAt")
     String sort,
     @Schema(description = "排序方向：asc/desc", example = "desc")

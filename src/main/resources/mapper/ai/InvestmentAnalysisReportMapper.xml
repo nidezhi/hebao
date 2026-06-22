@@ -20,12 +20,14 @@
     <insert id="insert">
         insert into aiw_investment_analysis_report
         (biz_id, request_id, provider_code, model_code, market_scope, theme_code, theme_name, status,
-         investment_summary, trend, investment_plan, simulated_return, chart_payload, prompt_snapshot,
-         failure_reason, generated_at, created_at)
+         confidence_level, data_quality_score, data_quality_gate, investment_summary, trend,
+         investment_plan, simulated_return, chart_payload, prompt_snapshot, failure_reason,
+         generated_at, created_at)
         values
         (#{bizId}, #{requestId}, #{providerCode}, #{modelCode}, #{marketScope}, #{themeCode}, #{themeName},
-         #{status}, #{investmentSummary}, #{trend}, #{investmentPlan}, #{simulatedReturn}, #{chartPayload},
-         #{promptSnapshot}, #{failureReason}, #{generatedAt}, #{createdAt})
+         #{status}, #{confidenceLevel}, #{dataQualityScore}, #{dataQualityGate}, #{investmentSummary},
+         #{trend}, #{investmentPlan}, #{simulatedReturn}, #{chartPayload}, #{promptSnapshot},
+         #{failureReason}, #{generatedAt}, #{createdAt})
     </insert>
     <select id="search"
             resultType="com.example.dzcom.infrastructure.persistence.entity.ai.InvestmentAnalysisReportEntity">

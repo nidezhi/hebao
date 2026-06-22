@@ -26,7 +26,8 @@ import java.util.Set;
 public class InvestmentAnalysisApplicationService {
     private static final String DEFAULT_MODEL_CODE = "local-rule-analysis";
     private static final Set<String> SORTS =
-        Set.of("generatedAt", "createdAt", "providerCode", "modelCode", "themeCode", "status");
+        Set.of("generatedAt", "createdAt", "providerCode", "modelCode", "themeCode",
+            "status", "confidenceLevel", "dataQualityScore");
 
     private final List<InvestmentAnalysisProvider> providers;
     private final AiModelStore models;

@@ -4,6 +4,8 @@
 
 本文档从业务视角整理当前仓库已经存在的业务实体、接口、应用服务、数据库表、串联方式、数据流转和预期输出。
 
+投资平台后续重构和闭环建设以 `docs_new/11-investment-platform-closed-loop-plan.md` 为准。当前文档描述“现状”，闭环方案描述“目标状态、阶段计划和验收标准”。
+
 阅读时需要区分三种状态：
 
 | 状态 | 含义 |
@@ -680,6 +682,18 @@ GenerateInvestmentAnalysisRequest
 - 模拟收益、压力情景和乐观情景。
 
 ### 11.5 报告输出
+
+#### 报告质量门禁
+
+报告现在有三个前端可见的一等字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `confidenceLevel` | 报告可信等级：`HIGH_CONFIDENCE`、`MEDIUM_CONFIDENCE`、`LOW_CONFIDENCE`、`UNUSABLE` |
+| `dataQualityScore` | 报告输入数据质量分，0-1 |
+| `dataQualityGate` | 数据质量门禁 JSON，包含是否通过、降级原因、提示文案和允许动作 |
+
+当 `dataQualityGate.passed=false` 时，系统只输出数据缺口报告，不生成积极配置建议，不开放 Mock 交易动作。
 
 #### 投资信息汇总
 

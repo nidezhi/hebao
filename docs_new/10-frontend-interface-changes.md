@@ -4,6 +4,8 @@
 
 本文档整理本轮投资任务、资讯热度、主题快照和投资分析相关接口变化。
 
+投资平台后续闭环建设以 `docs_new/11-investment-platform-closed-loop-plan.md` 为准。当前接口文档只描述已暴露给前端的能力，不能替代产品池、数据源、Prompt 版本和 Mock 交易闭环。
+
 按照开发铁律，任何后端统计和分析优化都必须能被前端展示、查询或生成图表。因此本文档重点说明：
 
 1. 哪些接口发生变化。
@@ -22,6 +24,14 @@
 | `POST /api/investment/tasks/trigger` | 参数约定增强 | 手动触发 `NEWS_HEAT_AGGREGATION` 时可临时覆盖 `themeProducts` |
 | `POST /api/investment/analysis/generate` | 响应增强 | 分析报告增加数据质量、参考配置比例、压力/乐观模拟收益 |
 | `POST /api/investment/analysis/reports/list` | 响应增强 | 分页查询报告时返回同样增强后的 JSON 字段 |
+
+本轮阶段 0 止损字段：
+
+| 字段 | 接口 | 前端用途 |
+| --- | --- | --- |
+| `confidenceLevel` | `/generate`、`/reports/list` | 报告可信等级，列表页必须展示 |
+| `dataQualityScore` | `/generate`、`/reports/list` | 报告输入数据质量分，列表页可排序 |
+| `dataQualityGate` | `/generate`、`/reports/list` | 数据质量门禁详情，详情页展示降级原因和允许动作 |
 
 ## 3. 新增接口：资讯主题产品关联查询
 
@@ -312,6 +322,48 @@ POST /api/investment/analysis/reports/list
 
 ## 8. 投资分析报告 JSON 展开说明
 
+### 8.0 报告级止损字段
+
+投资分析报告响应现在新增三个一等字段，不能只在 JSON 内部隐藏：
+
+```json
+{
+  "confidenceLevel": "LOW_CONFIDENCE",
+  "dataQualityScore": 0.35,
+  "dataQualityGate": {
+    "passed": false,
+    "confidenceLevel": "LOW_CONFIDENCE",
+    "dataQualityScore": 0.35,
+    "snapshotCount": 3,
+    "newsCount": 1,
+    "fallbackNewsRatio": 0.5,
+    "reasons": ["LOW_DATA_QUALITY", "FALLBACK_NEWS_RATIO_TOO_HIGH"],
+    "displayMessage": "数据质量不足，当前仅展示数据缺口，不生成投资配置建议。",
+    "allowedActions": ["VIEW_REPORT", "SHOW_DATA_GAP"]
+  }
+}
+```
+
+字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `confidenceLevel` | string | `HIGH_CONFIDENCE`、`MEDIUM_CONFIDENCE`、`LOW_CONFIDENCE`、`UNUSABLE` |
+| `dataQualityScore` | number | 报告输入质量分，0-1 |
+| `dataQualityGate.passed` | boolean | 是否允许生成参考投资方案 |
+| `dataQualityGate.snapshotCount` | number | 快照样本数量 |
+| `dataQualityGate.newsCount` | number | 相关新闻数量 |
+| `dataQualityGate.fallbackNewsRatio` | number | 兜底资讯占比 |
+| `dataQualityGate.reasons` | string[] | 降级原因编码 |
+| `dataQualityGate.displayMessage` | string | 前端直接展示的中文提示 |
+| `dataQualityGate.allowedActions` | string[] | 允许动作；低质量时不包含 `GENERATE_PROMPT` 和 `MOCK_TRADE` |
+
+前端要求：
+
+- 报告列表页展示 `confidenceLevel` 和 `dataQualityScore`。
+- 报告详情页展示 `dataQualityGate.displayMessage` 和 `reasons`。
+- `dataQualityGate.passed=false` 时，隐藏生成 Prompt、生成 Mock 交易和配置建议入口。
+
 ### 8.1 `investmentSummary`
 
 ```json
@@ -325,6 +377,9 @@ POST /api/investment/analysis/reports/list
   "averageHeat": 18.5,
   "dataQualityScore": 0.78,
   "dataQualityLevel": "HIGH",
+  "confidenceLevel": "HIGH_CONFIDENCE",
+  "dataQualityPassed": true,
+  "dataGapReasons": [],
   "latestSnapshotTime": "2026-06-21T10:00:00",
   "recentNews": [
     {
@@ -352,6 +407,8 @@ POST /api/investment/analysis/reports/list
   "newsHeat": 12,
   "weightedHeatScore": 18.5,
   "dataQualityScore": 0.78,
+  "confidenceLevel": "HIGH_CONFIDENCE",
+  "dataQualityPassed": true,
   "lookbackDays": 30
 }
 ```
@@ -382,6 +439,22 @@ POST /api/investment/analysis/reports/list
 }
 ```
 
+低质量数据时，`investmentPlan` 会降级为数据缺口报告：
+
+```json
+{
+  "planType": "DATA_GAP_REPORT",
+  "suggestedAction": "数据质量不足，当前仅展示数据缺口，不生成投资配置建议。",
+  "referenceAllocationRate": 0,
+  "referenceAllocationAmount": 0,
+  "dataQualityLevel": "LOW",
+  "confidenceLevel": "LOW_CONFIDENCE",
+  "dataGapReasons": ["LOW_DATA_QUALITY"],
+  "rebalanceRule": "数据质量未达标，禁止生成调仓或配置建议。",
+  "riskNotice": "当前报告仅用于暴露数据缺口，不构成投资建议。"
+}
+```
+
 前端展示建议：
 
 - `referenceAllocationRate` 展示为建议仓位。
@@ -400,6 +473,8 @@ POST /api/investment/analysis/reports/list
   "returnRate": 0.035,
   "stressLoss": -450,
   "optimisticProfit": 1950,
+  "confidenceLevel": "HIGH_CONFIDENCE",
+  "dataQualityPassed": true,
   "assumption": "按回看窗口平均收益率模拟，仅反映历史样本，不代表未来收益。"
 }
 ```

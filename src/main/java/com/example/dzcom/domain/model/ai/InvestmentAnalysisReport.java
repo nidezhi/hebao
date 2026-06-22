@@ -3,6 +3,7 @@ package com.example.dzcom.domain.model.ai;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** 包含投资汇总、趋势、方案、模拟收益和图表数据的可追溯分析报告。 */
@@ -25,6 +26,12 @@ public record InvestmentAnalysisReport(
     String themeName,
     @Schema(description = "报告生成状态")
     String status,
+    @Schema(description = "报告可信等级：HIGH_CONFIDENCE/MEDIUM_CONFIDENCE/LOW_CONFIDENCE/UNUSABLE")
+    String confidenceLevel,
+    @Schema(description = "报告输入数据质量分，0-1")
+    BigDecimal dataQualityScore,
+    @Schema(description = "数据质量门禁 JSON，说明是否通过、降级原因和前端提示")
+    String dataQualityGate,
     @Schema(description = "投资数据和近期资讯汇总 JSON")
     String investmentSummary,
     @Schema(description = "收益方向与新闻热度趋势 JSON")

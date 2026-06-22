@@ -49,6 +49,8 @@ public class InvestmentAnalysisReportStoreImpl implements InvestmentAnalysisRepo
             case "modelCode" -> "r.model_code";
             case "themeCode" -> "r.theme_code";
             case "status" -> "r.status";
+            case "confidenceLevel" -> "r.confidence_level";
+            case "dataQualityScore" -> "r.data_quality_score";
             case "createdAt" -> "r.created_at";
             default -> "r.generated_at";
         };
@@ -65,6 +67,9 @@ public class InvestmentAnalysisReportStoreImpl implements InvestmentAnalysisRepo
             .themeCode(report.themeCode())
             .themeName(report.themeName())
             .status(report.status())
+            .confidenceLevel(report.confidenceLevel())
+            .dataQualityScore(report.dataQualityScore())
+            .dataQualityGate(report.dataQualityGate())
             .investmentSummary(report.investmentSummary())
             .trend(report.trend())
             .investmentPlan(report.investmentPlan())
@@ -88,6 +93,9 @@ public class InvestmentAnalysisReportStoreImpl implements InvestmentAnalysisRepo
             .themeCode(entity.getThemeCode())
             .themeName(entity.getThemeName())
             .status(entity.getStatus())
+            .confidenceLevel(entity.getConfidenceLevel())
+            .dataQualityScore(entity.getDataQualityScore())
+            .dataQualityGate(entity.getDataQualityGate())
             .investmentSummary(entity.getInvestmentSummary())
             .trend(entity.getTrend())
             .investmentPlan(entity.getInvestmentPlan())

@@ -4,6 +4,7 @@ import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** 投资分析报告响应。 */
@@ -18,6 +19,23 @@ public record InvestmentAnalysisReportResponse(
     @Schema(description = "投资主题编码") String themeCode,
     @Schema(description = "投资主题名称") String themeName,
     @Schema(description = "状态：SUCCEEDED/FAILED") String status,
+    @Schema(description = "报告可信等级：HIGH_CONFIDENCE/MEDIUM_CONFIDENCE/LOW_CONFIDENCE/UNUSABLE")
+    String confidenceLevel,
+    @Schema(description = "报告输入数据质量分，0-1；前端列表页可直接展示")
+    BigDecimal dataQualityScore,
+    @Schema(description = """
+        数据质量门禁 JSON 字符串。
+        passed:boolean，是否通过质量门禁；
+        confidenceLevel:string，可信等级；
+        dataQualityScore:number，数据质量分；
+        snapshotCount:number，快照样本数量；
+        newsCount:number，相关新闻数量；
+        fallbackNewsRatio:number，兜底资讯占比；
+        reasons:array，降级原因编码；
+        displayMessage:string，前端直接展示的中文提示；
+        allowedActions:array，允许动作，例如 VIEW_REPORT/SHOW_DATA_GAP/GENERATE_PROMPT/MOCK_TRADE。
+        """)
+    String dataQualityGate,
     @Schema(description = """
         投资信息汇总 JSON 字符串。
         marketScope:string，市场范围；
@@ -85,6 +103,9 @@ public record InvestmentAnalysisReportResponse(
             .themeCode(report.themeCode())
             .themeName(report.themeName())
             .status(report.status())
+            .confidenceLevel(report.confidenceLevel())
+            .dataQualityScore(report.dataQualityScore())
+            .dataQualityGate(report.dataQualityGate())
             .investmentSummary(report.investmentSummary())
             .trend(report.trend())
             .investmentPlan(report.investmentPlan())

@@ -31,6 +31,9 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisProvider {
+    private static final BigDecimal MIN_REPORT_QUALITY_SCORE = BigDecimal.valueOf(0.45);
+    private static final BigDecimal MAX_FALLBACK_NEWS_RATIO = BigDecimal.valueOf(0.20);
+
     private final InvestmentThemeSnapshotStore snapshots;
     private final NewsArticleStore articles;
     private final IdGenerator ids;
@@ -79,6 +82,9 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .themeCode(context.themeCode())
             .themeName(context.themeName())
             .status("SUCCEEDED")
+            .confidenceLevel(context.qualityGate().confidenceLevel())
+            .dataQualityScore(context.dataQualityScore())
+            .dataQualityGate(writeJson(buildDataQualityGate(context)))
             .investmentSummary(writeJson(buildInvestmentSummary(context)))
             .trend(writeJson(buildTrend(context)))
             .investmentPlan(writeJson(buildInvestmentPlan(context)))
@@ -142,8 +148,15 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .filter(value -> value != null)
             .toList());
         BigDecimal dataQualityScore = average(snapshotQualityScores(themeSnapshots));
+        DataQualityGate qualityGate = buildQualityGate(
+            themeSnapshots,
+            recentNews,
+            dataQualityScore
+        );
         BigDecimal initialCapital = resolveInitialCapital(command.initialCapital());
-        BigDecimal allocationRate = allocationRate(averageReturn, averageMomentum, dataQualityScore);
+        BigDecimal allocationRate = qualityGate.passed()
+            ? allocationRate(averageReturn, averageMomentum, dataQualityScore)
+            : BigDecimal.ZERO;
         BigDecimal simulatedPrincipal = initialCapital.multiply(allocationRate)
             .setScale(4, RoundingMode.HALF_UP);
         BigDecimal estimatedProfit = simulatedPrincipal.multiply(averageReturn)
@@ -163,6 +176,7 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .averageHeat(averageHeat)
             .dataQualityScore(dataQualityScore)
             .dataQualityLevel(resolveQualityLevel(dataQualityScore))
+            .qualityGate(qualityGate)
             .initialCapital(initialCapital)
             .allocationRate(allocationRate)
             .simulatedPrincipal(simulatedPrincipal)
@@ -192,6 +206,9 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         summary.put("averageHeat", context.averageHeat());
         summary.put("dataQualityScore", context.dataQualityScore());
         summary.put("dataQualityLevel", context.dataQualityLevel());
+        summary.put("confidenceLevel", context.qualityGate().confidenceLevel());
+        summary.put("dataQualityPassed", context.qualityGate().passed());
+        summary.put("dataGapReasons", context.qualityGate().reasons());
         summary.put("latestSnapshotTime", context.latestSnapshot() == null
             ? ""
             : context.latestSnapshot().snapshotTime());
@@ -225,6 +242,8 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         trend.put("newsHeat", context.recentNews().size());
         trend.put("weightedHeatScore", context.averageHeat());
         trend.put("dataQualityScore", context.dataQualityScore());
+        trend.put("confidenceLevel", context.qualityGate().confidenceLevel());
+        trend.put("dataQualityPassed", context.qualityGate().passed());
         trend.put("lookbackDays", context.lookbackDays());
         return trend;
     }
@@ -239,6 +258,18 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
      */
     private Map<String, Object> buildInvestmentPlan(AnalysisContext context) {
         Map<String, Object> plan = new LinkedHashMap<>();
+        if (!context.qualityGate().passed()) {
+            plan.put("planType", "DATA_GAP_REPORT");
+            plan.put("suggestedAction", context.qualityGate().displayMessage());
+            plan.put("referenceAllocationRate", BigDecimal.ZERO);
+            plan.put("referenceAllocationAmount", BigDecimal.ZERO);
+            plan.put("dataQualityLevel", context.dataQualityLevel());
+            plan.put("confidenceLevel", context.qualityGate().confidenceLevel());
+            plan.put("dataGapReasons", context.qualityGate().reasons());
+            plan.put("rebalanceRule", "数据质量未达标，禁止生成调仓或配置建议。");
+            plan.put("riskNotice", "当前报告仅用于暴露数据缺口，不构成投资建议。");
+            return plan;
+        }
         plan.put("planType", "REFERENCE_ALLOCATION");
         plan.put("suggestedAction", suggestedAction(context));
         plan.put("referenceAllocationRate", context.allocationRate());
@@ -270,6 +301,8 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         simulatedReturn.put("returnRate", context.averageReturn());
         simulatedReturn.put("stressLoss", stressLoss(context));
         simulatedReturn.put("optimisticProfit", optimisticProfit(context));
+        simulatedReturn.put("confidenceLevel", context.qualityGate().confidenceLevel());
+        simulatedReturn.put("dataQualityPassed", context.qualityGate().passed());
         simulatedReturn.put("assumption", "按回看窗口平均收益率模拟，仅反映历史样本，不代表未来收益。");
         return simulatedReturn;
     }
@@ -319,6 +352,8 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         inputSnapshot.put("lookbackDays", context.lookbackDays());
         inputSnapshot.put("dataQualityScore", context.dataQualityScore());
         inputSnapshot.put("dataQualityLevel", context.dataQualityLevel());
+        inputSnapshot.put("confidenceLevel", context.qualityGate().confidenceLevel());
+        inputSnapshot.put("dataQualityGate", buildDataQualityGate(context));
         return inputSnapshot;
     }
 
@@ -342,6 +377,169 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
     /** 将可空指标转换为图表可直接使用的零值。 */
     private BigDecimal defaultZero(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    /**
+     * 构建报告级数据质量门禁。
+     *
+     * <p>门禁结果直接落库并暴露给前端。未通过门禁时，报告只能展示数据缺口，
+     * 不能生成配置比例、调仓方案或 Mock 交易入口。</p>
+     *
+     * @param themeSnapshots 投资主题快照样本
+     * @param recentNews 近期新闻样本
+     * @param dataQualityScore 快照解析得到的数据质量分
+     * @return 报告质量门禁结果
+     * @author dz
+     * @date 2026-06-22
+     */
+    private DataQualityGate buildQualityGate(
+        List<InvestmentThemeSnapshot> themeSnapshots,
+        List<NewsArticle> recentNews,
+        BigDecimal dataQualityScore
+    ) {
+        BigDecimal fallbackNewsRatio = fallbackNewsRatio(recentNews);
+        List<String> reasons = buildQualityReasons(
+            themeSnapshots,
+            recentNews,
+            dataQualityScore,
+            fallbackNewsRatio
+        );
+        boolean passed = reasons.isEmpty();
+        String confidenceLevel = resolveConfidenceLevel(passed, dataQualityScore);
+        return DataQualityGate.builder()
+            .passed(passed)
+            .confidenceLevel(confidenceLevel)
+            .snapshotCount(themeSnapshots.size())
+            .newsCount(recentNews.size())
+            .fallbackNewsRatio(fallbackNewsRatio)
+            .reasons(reasons)
+            .displayMessage(displayMessage(passed, reasons))
+            .allowedActions(allowedActions(passed))
+            .build();
+    }
+
+    /**
+     * 构建前端可展示的数据质量门禁 JSON。
+     *
+     * @param context 分析上下文
+     * @return 数据质量门禁有序结构
+     * @author dz
+     * @date 2026-06-22
+     */
+    private Map<String, Object> buildDataQualityGate(AnalysisContext context) {
+        Map<String, Object> gate = new LinkedHashMap<>();
+        gate.put("passed", context.qualityGate().passed());
+        gate.put("confidenceLevel", context.qualityGate().confidenceLevel());
+        gate.put("dataQualityScore", context.dataQualityScore());
+        gate.put("snapshotCount", context.qualityGate().snapshotCount());
+        gate.put("newsCount", context.qualityGate().newsCount());
+        gate.put("fallbackNewsRatio", context.qualityGate().fallbackNewsRatio());
+        gate.put("reasons", context.qualityGate().reasons());
+        gate.put("displayMessage", context.qualityGate().displayMessage());
+        gate.put("allowedActions", context.qualityGate().allowedActions());
+        return gate;
+    }
+
+    /**
+     * 汇总报告降级原因。
+     *
+     * @param themeSnapshots 投资主题快照样本
+     * @param recentNews 近期新闻样本
+     * @param dataQualityScore 数据质量分
+     * @param fallbackNewsRatio 兜底资讯占比
+     * @return 降级原因编码集合
+     * @author dz
+     * @date 2026-06-22
+     */
+    private List<String> buildQualityReasons(
+        List<InvestmentThemeSnapshot> themeSnapshots,
+        List<NewsArticle> recentNews,
+        BigDecimal dataQualityScore,
+        BigDecimal fallbackNewsRatio
+    ) {
+        Map<String, Boolean> checks = new LinkedHashMap<>();
+        checks.put("NO_THEME_SNAPSHOT", themeSnapshots.isEmpty());
+        checks.put("NO_RECENT_NEWS", recentNews.isEmpty());
+        checks.put("LOW_DATA_QUALITY", dataQualityScore.compareTo(MIN_REPORT_QUALITY_SCORE) < 0);
+        checks.put("FALLBACK_NEWS_RATIO_TOO_HIGH",
+            fallbackNewsRatio.compareTo(MAX_FALLBACK_NEWS_RATIO) > 0);
+        return checks.entrySet().stream()
+            .filter(Map.Entry::getValue)
+            .map(Map.Entry::getKey)
+            .toList();
+    }
+
+    /**
+     * 计算兜底资讯占比。
+     *
+     * @param recentNews 近期新闻样本
+     * @return 兜底资讯数量占比，0-1
+     * @author dz
+     * @date 2026-06-22
+     */
+    private BigDecimal fallbackNewsRatio(List<NewsArticle> recentNews) {
+        if (recentNews.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        long fallbackCount = recentNews.stream()
+            .map(NewsArticle::sourceCode)
+            .filter(sourceCode -> sourceCode != null && sourceCode.contains("FALLBACK"))
+            .count();
+        return BigDecimal.valueOf(fallbackCount)
+            .divide(BigDecimal.valueOf(recentNews.size()), 4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 根据门禁结果和质量分确定报告可信等级。
+     *
+     * @param passed 是否通过质量门禁
+     * @param dataQualityScore 数据质量分
+     * @return 报告可信等级
+     * @author dz
+     * @date 2026-06-22
+     */
+    private String resolveConfidenceLevel(boolean passed, BigDecimal dataQualityScore) {
+        if (!passed && dataQualityScore.compareTo(BigDecimal.ZERO) == 0) {
+            return "UNUSABLE";
+        }
+        if (!passed) {
+            return "LOW_CONFIDENCE";
+        }
+        if (dataQualityScore.compareTo(BigDecimal.valueOf(0.75)) >= 0) {
+            return "HIGH_CONFIDENCE";
+        }
+        return "MEDIUM_CONFIDENCE";
+    }
+
+    /**
+     * 构建前端直接展示的门禁提示文案。
+     *
+     * @param passed 是否通过质量门禁
+     * @param reasons 降级原因编码
+     * @return 中文展示文案
+     * @author dz
+     * @date 2026-06-22
+     */
+    private String displayMessage(boolean passed, List<String> reasons) {
+        if (passed) {
+            return "数据质量已达到生成参考投资方案的最低要求。";
+        }
+        return "数据质量不足，当前仅展示数据缺口，不生成投资配置建议。原因：" + String.join(",", reasons);
+    }
+
+    /**
+     * 构建前端允许展示的动作集合。
+     *
+     * @param passed 是否通过质量门禁
+     * @return 允许动作编码集合
+     * @author dz
+     * @date 2026-06-22
+     */
+    private List<String> allowedActions(boolean passed) {
+        if (passed) {
+            return List.of("VIEW_REPORT", "GENERATE_PROMPT", "MOCK_TRADE");
+        }
+        return List.of("VIEW_REPORT", "SHOW_DATA_GAP");
     }
 
     /**
@@ -548,10 +746,25 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         BigDecimal averageHeat,
         BigDecimal dataQualityScore,
         String dataQualityLevel,
+        DataQualityGate qualityGate,
         BigDecimal initialCapital,
         BigDecimal allocationRate,
         BigDecimal simulatedPrincipal,
         BigDecimal estimatedProfit
+    ) {
+    }
+
+    /** 报告级数据质量门禁结果。 */
+    @Builder
+    private record DataQualityGate(
+        boolean passed,
+        String confidenceLevel,
+        int snapshotCount,
+        int newsCount,
+        BigDecimal fallbackNewsRatio,
+        List<String> reasons,
+        String displayMessage,
+        List<String> allowedActions
     ) {
     }
 }

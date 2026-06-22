@@ -10,6 +10,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -51,6 +52,15 @@ public class InvestmentAnalysisReportEntity {
     /** 报告生成状态。 */
     @Schema(description = "报告状态：SUCCEEDED/FAILED", example = "SUCCEEDED")
     private String status;
+    /** 报告可信等级，前端列表页可直接展示。 */
+    @Schema(description = "报告可信等级：HIGH_CONFIDENCE/MEDIUM_CONFIDENCE/LOW_CONFIDENCE/UNUSABLE")
+    private String confidenceLevel;
+    /** 报告输入数据质量分，0-1。 */
+    @Schema(description = "报告输入数据质量分，0-1")
+    private BigDecimal dataQualityScore;
+    /** 数据质量门禁 JSON，包含是否通过和降级原因。 */
+    @Schema(description = "数据质量门禁 JSON 字符串")
+    private String dataQualityGate;
     /** 投资数据和近期资讯的汇总 JSON。 */
     @Schema(description = "投资信息汇总 JSON 字符串")
     private String investmentSummary;
