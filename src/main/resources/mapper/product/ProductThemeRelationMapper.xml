@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.product.ProductThemeRelationMapper">
+    <delete id="deleteByProductBizId">
+        delete from aiw_product_theme_relation
+        where product_biz_id = #{productBizId}
+    </delete>
+
+    <insert id="insertBatch">
+        insert into aiw_product_theme_relation
+        (biz_id, product_biz_id, relation_type, relation_code, relation_name, relation_weight,
+         source_code, evidence, created_at, updated_at)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.bizId}, #{item.productBizId}, #{item.relationType}, #{item.relationCode},
+             #{item.relationName}, #{item.relationWeight}, #{item.sourceCode}, #{item.evidence},
+             #{item.createdAt}, #{item.updatedAt})
+        </foreach>
+    </insert>
+
+    <select id="selectByProductBizId"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductThemeRelationEntity">
+        select * from aiw_product_theme_relation
+        where product_biz_id = #{productBizId}
+        order by relation_type asc, relation_weight desc, relation_code asc
+    </select>
+</mapper>

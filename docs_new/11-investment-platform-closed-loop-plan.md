@@ -367,6 +367,25 @@ DRAFT
 - 产品资产类别和市场范围。
 - 产品后台管理接口。
 
+当前落地状态：
+
+| 能力 | 状态 | 前端出口 |
+| --- | --- | --- |
+| 产品投资风险和交易画像表 `aiw_product_investment_profile` | 已落地 | `/api/admin/products/investment-profile/save`、`/api/products/detail` |
+| 产品主题关系表 `aiw_product_theme_relation` | 已落地 | `/api/admin/products/investment-profile/save`、`/api/products/detail` |
+| 资产类别 `assetClass` | 已落地 | 产品详情 `investmentProfile.assetClass` |
+| 风险摘要 `riskSummary` | 已落地 | 产品详情风险说明 |
+| 波动等级和流动性等级 | 已落地 | 产品详情风险标签 |
+| Mock 交易开关 `mockTradable` | 已落地 | 产品详情和后续 Mock 交易入口判断 |
+| 主题、行业、指数、资产类别关系 | 已落地 | 产品详情 `themeRelations` |
+
+前端必须展示：
+
+- 产品详情页展示 `investmentProfile`。
+- 产品详情页展示 `themeRelations`。
+- `mockTradable=false` 时，不显示 Mock 买入或加入模拟组合入口。
+- `dataQualityScore` 低时，提示“产品画像质量不足”。
+
 验收：
 
 - 任一投资方案都能说明涉及哪些产品、产品风险和交易约束。

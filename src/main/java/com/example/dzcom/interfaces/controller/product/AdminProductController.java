@@ -3,6 +3,7 @@ package com.example.dzcom.interfaces.controller.product;
 import com.example.dzcom.application.command.market.SaveMarketQuoteCommand;
 import com.example.dzcom.application.command.product.CreateProductCommand;
 import com.example.dzcom.application.command.product.SaveProductAttributeCommand;
+import com.example.dzcom.application.command.product.SaveProductInvestmentProfileCommand;
 import com.example.dzcom.application.command.product.UpdateProductCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.service.market.MarketQuoteApplicationService;
@@ -14,6 +15,7 @@ import com.example.dzcom.interfaces.request.market.SaveMarketQuoteRequest;
 import com.example.dzcom.interfaces.request.product.CreateProductRequest;
 import com.example.dzcom.interfaces.request.product.ProductAttributeRequest;
 import com.example.dzcom.interfaces.request.product.ProductBizIdRequest;
+import com.example.dzcom.interfaces.request.product.SaveProductInvestmentProfileRequest;
 import com.example.dzcom.interfaces.request.product.ProductStatusRequest;
 import com.example.dzcom.interfaces.request.product.UpdateProductRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -165,6 +167,57 @@ public class AdminProductController {
     }
 
     /**
+     * 保存产品投资画像和主题关系。
+     *
+     * <p>该接口是阶段 1 产品池建设的管理端入口。前端后台可维护资产类别、
+     * 风险摘要、波动和流动性、Mock 交易开关、最短持有天数，以及主题、行业、
+     * 指数和资产类别关系。</p>
+     *
+     * @param request 产品投资画像和主题关系请求
+     * @return 包含投资画像和主题关系的产品响应
+     * @throws BusinessException 当产品不存在或画像参数不合法时抛出
+     * @author dz
+     * @date 2026-06-22
+     */
+    @PostMapping("/investment-profile/save")
+    @Operation(
+        summary = "保存产品投资画像",
+        description = "保存产品风险、波动、流动性、Mock交易约束和主题关系。保存后 /api/products/detail 会返回 investmentProfile 和 themeRelations。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回包含投资画像的产品响应", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "参数校验失败或画像规则不合法"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无产品画像维护权限"),
+        @ApiResponse(responseCode = "404", description = "产品不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<ProductResponse> investmentProfile(
+        @Valid @RequestBody SaveProductInvestmentProfileRequest request
+    ) {
+        return Result.success(ProductResponse.from(products.saveInvestmentProfile(
+            SaveProductInvestmentProfileCommand.builder()
+                .productBizId(request.productBizId())
+                .assetClass(request.assetClass())
+                .riskSummary(request.riskSummary())
+                .volatilityLevel(request.volatilityLevel())
+                .liquidityLevel(request.liquidityLevel())
+                .maxDrawdown(request.maxDrawdown())
+                .suitableRiskLevel(request.suitableRiskLevel())
+                .mockTradable(request.mockTradable())
+                .minHoldingDays(request.minHoldingDays())
+                .tradingNotes(request.tradingNotes())
+                .dataQualityScore(request.dataQualityScore())
+                .relations(request.relations() == null
+                    ? java.util.List.of()
+                    : request.relations().stream()
+                        .map(this::toRelationCommand)
+                        .toList())
+                .build()
+        )));
+    }
+
+    /**
      * 写入或修正指定产品的行情点。
      *
      * @param request 产品业务标识和标准行情数据
@@ -222,5 +275,26 @@ public class AdminProductController {
     public Result<Void> delete(@Valid @RequestBody ProductBizIdRequest request) {
         products.delete(request.bizId());
         return Result.success();
+    }
+
+    /**
+     * 将接口请求中的产品关系转换为应用命令。
+     *
+     * @param request 产品主题关系请求项
+     * @return 产品主题关系应用命令项
+     * @author dz
+     * @date 2026-06-22
+     */
+    private SaveProductInvestmentProfileCommand.Relation toRelationCommand(
+        SaveProductInvestmentProfileRequest.RelationRequest request
+    ) {
+        return SaveProductInvestmentProfileCommand.Relation.builder()
+            .relationType(request.relationType())
+            .relationCode(request.relationCode())
+            .relationName(request.relationName())
+            .relationWeight(request.relationWeight())
+            .sourceCode(request.sourceCode())
+            .evidence(request.evidence())
+            .build();
     }
 }

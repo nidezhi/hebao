@@ -1,12 +1,17 @@
 package com.example.dzcom.application.assembler.product;
 
 import com.example.dzcom.application.dto.product.ProductAttributeView;
+import com.example.dzcom.application.dto.product.ProductInvestmentProfileView;
+import com.example.dzcom.application.dto.product.ProductThemeRelationView;
 import com.example.dzcom.application.dto.product.ProductView;
 import com.example.dzcom.domain.model.product.Product;
 import com.example.dzcom.domain.model.product.ProductAttribute;
+import com.example.dzcom.domain.model.product.ProductInvestmentProfile;
+import com.example.dzcom.domain.model.product.ProductThemeRelation;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 
 /** 将产品领域数据转换为稳定的接口视图。 */
 @Component
@@ -20,7 +25,7 @@ public class ProductViewAssembler {
      * @date 2026-06-14
      */
     public ProductView assembleSummary(Product product) {
-        return assemble(product, List.of());
+        return assemble(product, List.of(), null, List.of());
     }
 
     /**
@@ -33,7 +38,38 @@ public class ProductViewAssembler {
      * @date 2026-06-14
      */
     public ProductView assembleDetail(Product product, List<ProductAttribute> attributes) {
-        return assemble(product, attributes.stream().map(this::toView).toList());
+        return assemble(product, attributes.stream().map(this::toView).toList(), null, List.of());
+    }
+
+    /**
+     * 组装包含产品投资画像和主题关系的产品详情。
+     *
+     * @param product 产品领域对象
+     * @param attributes 产品扩展属性集合
+     * @param investmentProfile 产品投资风险和交易画像
+     * @param themeRelations 产品主题、行业、指数和资产类别关系集合
+     * @return 产品详情视图
+     * @author dz
+     * @date 2026-06-22
+     */
+    public ProductView assembleInvestmentDetail(
+        Product product,
+        List<ProductAttribute> attributes,
+        Optional<ProductInvestmentProfile> investmentProfile,
+        List<ProductThemeRelation> themeRelations
+    ) {
+        ProductInvestmentProfileView profileView = investmentProfile
+            .map(this::toProfileView)
+            .orElse(null);
+        List<ProductThemeRelationView> relationViews = themeRelations.stream()
+            .map(this::toRelationView)
+            .toList();
+        return assemble(
+            product,
+            attributes.stream().map(this::toView).toList(),
+            profileView,
+            relationViews
+        );
     }
 
     /**
@@ -45,7 +81,12 @@ public class ProductViewAssembler {
      * @author dz
      * @date 2026-06-14
      */
-    private ProductView assemble(Product product, List<ProductAttributeView> attributes) {
+    private ProductView assemble(
+        Product product,
+        List<ProductAttributeView> attributes,
+        ProductInvestmentProfileView investmentProfile,
+        List<ProductThemeRelationView> themeRelations
+    ) {
         return ProductView.builder()
             .bizId(product.getBizId())
             .productNo(product.getProductNo())
@@ -64,6 +105,8 @@ public class ProductViewAssembler {
             .delistingDate(product.getDelistingDate())
             .description(product.getDescription())
             .attributes(attributes)
+            .investmentProfile(investmentProfile)
+            .themeRelations(themeRelations)
             .createdAt(product.getCreatedAt())
             .updatedAt(product.getUpdatedAt())
             .build();
@@ -84,6 +127,48 @@ public class ProductViewAssembler {
             .jsonValue(attribute.jsonValue())
             .effectiveDate(attribute.effectiveDate())
             .sourceCode(attribute.sourceCode())
+            .build();
+    }
+
+    /**
+     * 将产品投资画像领域对象转换为应用视图。
+     *
+     * @param profile 产品投资风险和交易画像
+     * @return 产品投资画像视图
+     * @author dz
+     * @date 2026-06-22
+     */
+    private ProductInvestmentProfileView toProfileView(ProductInvestmentProfile profile) {
+        return ProductInvestmentProfileView.builder()
+            .assetClass(profile.assetClass())
+            .riskSummary(profile.riskSummary())
+            .volatilityLevel(profile.volatilityLevel())
+            .liquidityLevel(profile.liquidityLevel())
+            .maxDrawdown(profile.maxDrawdown())
+            .suitableRiskLevel(profile.suitableRiskLevel())
+            .mockTradable(profile.mockTradable())
+            .minHoldingDays(profile.minHoldingDays())
+            .tradingNotes(profile.tradingNotes())
+            .dataQualityScore(profile.dataQualityScore())
+            .build();
+    }
+
+    /**
+     * 将产品主题关系领域对象转换为应用视图。
+     *
+     * @param relation 产品主题、行业、指数或资产类别关系
+     * @return 产品主题关系视图
+     * @author dz
+     * @date 2026-06-22
+     */
+    private ProductThemeRelationView toRelationView(ProductThemeRelation relation) {
+        return ProductThemeRelationView.builder()
+            .relationType(relation.relationType())
+            .relationCode(relation.relationCode())
+            .relationName(relation.relationName())
+            .relationWeight(relation.relationWeight())
+            .sourceCode(relation.sourceCode())
+            .evidence(relation.evidence())
             .build();
     }
 }

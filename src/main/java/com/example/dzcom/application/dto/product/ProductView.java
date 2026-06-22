@@ -52,6 +52,10 @@ public record ProductView(
     String description,
     @Schema(description = "产品扩展属性集合")
     List<ProductAttributeView> attributes,
+    @Schema(description = "产品投资风险和交易画像；列表页可为空，详情页返回")
+    ProductInvestmentProfileView investmentProfile,
+    @Schema(description = "产品主题、行业、指数和资产类别关系集合；列表页可为空，详情页返回")
+    List<ProductThemeRelationView> themeRelations,
     @Schema(description = "产品创建时间，北京时间")
     LocalDateTime createdAt,
     @Schema(description = "产品最后更新时间，北京时间")

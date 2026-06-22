@@ -24,6 +24,8 @@
 | `POST /api/investment/tasks/trigger` | 参数约定增强 | 手动触发 `NEWS_HEAT_AGGREGATION` 时可临时覆盖 `themeProducts` |
 | `POST /api/investment/analysis/generate` | 响应增强 | 分析报告增加数据质量、参考配置比例、压力/乐观模拟收益 |
 | `POST /api/investment/analysis/reports/list` | 响应增强 | 分页查询报告时返回同样增强后的 JSON 字段 |
+| `POST /api/admin/products/investment-profile/save` | 新增 | 后台维护产品投资画像和主题关系 |
+| `POST /api/products/detail` | 响应增强 | 返回产品投资画像 `investmentProfile` 和主题关系 `themeRelations` |
 
 本轮阶段 0 止损字段：
 
@@ -33,9 +35,154 @@
 | `dataQualityScore` | `/generate`、`/reports/list` | 报告输入数据质量分，列表页可排序 |
 | `dataQualityGate` | `/generate`、`/reports/list` | 数据质量门禁详情，详情页展示降级原因和允许动作 |
 
-## 3. 新增接口：资讯主题产品关联查询
+## 3. 新增接口：保存产品投资画像
 
 ### 3.1 接口信息
+
+```text
+POST /api/admin/products/investment-profile/save
+```
+
+前端使用场景：
+
+- 产品后台维护产品风险摘要、资产类别、波动等级和流动性等级。
+- 配置产品是否允许进入 Mock 交易。
+- 建立产品与主题、行业、指数和资产类别的显式关系。
+- 为后续投资报告和 Mock 交易提供产品风险依据。
+
+### 3.2 请求 JSON
+
+```json
+{
+  "productBizId": "product-1",
+  "assetClass": "ETF",
+  "riskSummary": "跟踪人工智能主题，波动较高，适合中高风险用户观察配置。",
+  "volatilityLevel": "HIGH",
+  "liquidityLevel": "MEDIUM",
+  "maxDrawdown": 0.18,
+  "suitableRiskLevel": 4,
+  "mockTradable": true,
+  "minHoldingDays": 30,
+  "tradingNotes": "仅用于模拟交易，不代表真实可交易。",
+  "dataQualityScore": 0.75,
+  "relations": [
+    {
+      "relationType": "THEME",
+      "relationCode": "AI人工智能",
+      "relationName": "AI人工智能",
+      "relationWeight": 0.8,
+      "sourceCode": "MANUAL",
+      "evidence": "后台人工维护的主题关系"
+    },
+    {
+      "relationType": "ASSET_CLASS",
+      "relationCode": "ETF",
+      "relationName": "ETF基金",
+      "relationWeight": 1.0,
+      "sourceCode": "MANUAL",
+      "evidence": "产品资产类别"
+    }
+  ]
+}
+```
+
+字段说明：
+
+| 字段 | 类型 | 是否必填 | 说明 |
+| --- | --- | --- | --- |
+| `productBizId` | string | 是 | 产品业务 ID |
+| `assetClass` | string | 是 | 资产类别：`STOCK`、`ETF`、`FUND`、`BOND`、`BANK_WMP`、`GOLD`、`REIT` 等 |
+| `riskSummary` | string | 否 | 风险摘要，产品详情页直接展示 |
+| `volatilityLevel` | string | 否 | 波动等级：`LOW`、`MEDIUM`、`HIGH` |
+| `liquidityLevel` | string | 否 | 流动性等级：`LOW`、`MEDIUM`、`HIGH` |
+| `maxDrawdown` | number | 否 | 最大回撤，小数形式 |
+| `suitableRiskLevel` | number | 否 | 适配用户风险等级，1-5 |
+| `mockTradable` | boolean | 否 | 是否允许进入 Mock 交易 |
+| `minHoldingDays` | number | 否 | 建议最短持有天数 |
+| `tradingNotes` | string | 否 | 交易约束说明 |
+| `dataQualityScore` | number | 否 | 产品画像质量分，0-1 |
+| `relations` | array | 否 | 产品与主题、行业、指数、资产类别的关系集合 |
+
+`relations` 字段说明：
+
+| 字段 | 类型 | 是否必填 | 说明 |
+| --- | --- | --- | --- |
+| `relationType` | string | 是 | `THEME`、`INDUSTRY`、`INDEX`、`ASSET_CLASS` |
+| `relationCode` | string | 是 | 关系稳定编码 |
+| `relationName` | string | 是 | 前端展示名称 |
+| `relationWeight` | number | 否 | 关系权重，0-1 |
+| `sourceCode` | string | 否 | 来源编码，默认 `MANUAL` |
+| `evidence` | string | 否 | 关系证据摘要 |
+
+### 3.3 响应变化：产品详情
+
+`POST /api/products/detail` 和保存接口都会返回 `ProductResponse`，新增：
+
+```json
+{
+  "investmentProfile": {
+    "assetClass": "ETF",
+    "riskSummary": "跟踪人工智能主题，波动较高，适合中高风险用户观察配置。",
+    "volatilityLevel": "HIGH",
+    "liquidityLevel": "MEDIUM",
+    "maxDrawdown": 0.18,
+    "suitableRiskLevel": 4,
+    "mockTradable": true,
+    "minHoldingDays": 30,
+    "tradingNotes": "仅用于模拟交易，不代表真实可交易。",
+    "dataQualityScore": 0.75
+  },
+  "themeRelations": [
+    {
+      "relationType": "THEME",
+      "relationCode": "AI人工智能",
+      "relationName": "AI人工智能",
+      "relationWeight": 0.8,
+      "sourceCode": "MANUAL",
+      "evidence": "后台人工维护的主题关系"
+    }
+  ]
+}
+```
+
+前端要求：
+
+- 产品详情页必须展示 `investmentProfile`。
+- `mockTradable=false` 时隐藏 Mock 交易入口。
+- `dataQualityScore < 0.45` 时展示“产品画像质量不足”。
+- `themeRelations` 用标签或分组列表展示，不能只展示原始 JSON。
+
+### 3.4 字段展开说明
+
+`investmentProfile` 是产品进入投资分析和 Mock 交易前必须展示的风险画像，不是后台内部配置。
+
+| 字段 | 类型 | 前端展示建议 |
+| --- | --- | --- |
+| `assetClass` | string | 资产类别标签，用于产品筛选、资产分布图和组合占比图 |
+| `riskSummary` | string | 产品详情页风险说明，建议放在风险区域首行 |
+| `volatilityLevel` | string | 波动等级标签，`HIGH` 需要高亮风险 |
+| `liquidityLevel` | string | 流动性等级标签，用于判断赎回或模拟卖出限制 |
+| `maxDrawdown` | number | 最大回撤，可展示为百分比 |
+| `suitableRiskLevel` | number | 适配用户风险等级，后续和用户画像匹配 |
+| `mockTradable` | boolean | Mock 交易入口开关，`false` 时禁止创建模拟持仓 |
+| `minHoldingDays` | number | 最短建议持有天数，Mock 交易和前端提示共同使用 |
+| `tradingNotes` | string | 交易限制、费用、赎回或人工确认说明 |
+| `dataQualityScore` | number | 产品画像质量分，低于阈值时只允许展示风险提示 |
+
+`themeRelations` 是产品与投资主题、行业、指数和资产类别的显式关系。
+
+| 字段 | 类型 | 前端展示建议 |
+| --- | --- | --- |
+| `relationType` | string | 分组标题，区分主题、行业、指数、资产类别 |
+| `relationCode` | string | 稳定筛选值，可用于跳转主题页或图表筛选 |
+| `relationName` | string | 前端展示名称 |
+| `relationWeight` | number | 关系权重，可展示为进度条或排序依据 |
+| `sourceCode` | string | 来源标签，区分人工维护、官方来源或后续模型抽取 |
+| `evidence` | string | 关系证据，详情页可折叠展示 |
+
+## 4. 新增接口：资讯主题产品关联查询
+
+### 4.1 接口信息
 
 ```text
 POST /api/investment/tasks/article-relations/list
@@ -48,7 +195,7 @@ POST /api/investment/tasks/article-relations/list
 - 在投资分析报告中点击新闻热度，展开命中关键词和证据。
 - 给图表事件点提供可解释弹窗。
 
-### 3.2 请求 JSON
+### 4.2 请求 JSON
 
 ```json
 {
@@ -76,7 +223,7 @@ POST /api/investment/tasks/article-relations/list
 | `sort` | string | 否 | 排序字段：`createdAt`、`relationScore`、`sourceQualityScore`、`themeCode`、`productCode` |
 | `direction` | string | 否 | 排序方向：`asc`、`desc`，默认 `desc` |
 
-### 3.3 响应 JSON
+### 4.3 响应 JSON
 
 ```json
 {
@@ -122,15 +269,15 @@ POST /api/investment/tasks/article-relations/list
 | `evidence` | string | 证据摘要，当前主要是新闻标题 |
 | `createdAt` | datetime | 关联生成时间，北京时间 |
 
-## 4. 变更接口：投资方向快照分页
+## 5. 变更接口：投资方向快照分页
 
-### 4.1 接口信息
+### 5.1 接口信息
 
 ```text
 POST /api/investment/tasks/snapshots/list
 ```
 
-### 4.2 请求 JSON
+### 5.2 请求 JSON
 
 ```json
 {
@@ -147,7 +294,7 @@ POST /api/investment/tasks/snapshots/list
 }
 ```
 
-### 4.3 响应核心字段
+### 5.3 响应核心字段
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -157,7 +304,7 @@ POST /api/investment/tasks/snapshots/list
 | `heatScore` | number | 加权资讯热度分 |
 | `metrics` | string | JSON 字符串，前端必须按 `snapshotType` 展开 |
 
-### 4.4 `metrics`：RETURN 结构
+### 5.4 `metrics`：RETURN 结构
 
 ```json
 {
@@ -187,7 +334,7 @@ POST /api/investment/tasks/snapshots/list
 - `performances` 展示产品收益明细表。
 - `returnRate` 绘制收益趋势线。
 
-### 4.5 `metrics`：MOMENTUM 结构
+### 5.5 `metrics`：MOMENTUM 结构
 
 ```json
 {
@@ -215,7 +362,7 @@ POST /api/investment/tasks/snapshots/list
 - `momentumScore` 绘制动量趋势线。
 - `volatility` 展示主题内部分化程度。
 
-### 4.6 `metrics`：NEWS_HEAT 结构
+### 5.6 `metrics`：NEWS_HEAT 结构
 
 ```json
 {
@@ -245,9 +392,9 @@ POST /api/investment/tasks/snapshots/list
 - `sampleArticles` 做热度来源弹窗。
 - 点击 `articleBizId` 后可结合 `/articles/list` 和 `/article-relations/list` 展示完整新闻和关联证据。
 
-## 5. 变更接口：任务配置保存和查询
+## 6. 变更接口：任务配置保存和查询
 
-### 5.1 影响接口
+### 6.1 影响接口
 
 ```text
 POST /api/investment/tasks/definitions
@@ -255,7 +402,7 @@ POST /api/investment/tasks/definitions/save
 POST /api/investment/tasks/trigger
 ```
 
-### 5.2 `NEWS_HEAT_AGGREGATION` 参数新增约定
+### 6.2 `NEWS_HEAT_AGGREGATION` 参数新增约定
 
 ```json
 {
@@ -283,15 +430,15 @@ POST /api/investment/tasks/trigger
 | `marketScope` | 市场范围，当前默认 `CN_MAINLAND` |
 | `windowMinutes` | 统计回看窗口分钟数 |
 
-## 6. 变更接口：生成投资分析报告
+## 7. 变更接口：生成投资分析报告
 
-### 6.1 接口信息
+### 7.1 接口信息
 
 ```text
 POST /api/investment/analysis/generate
 ```
 
-### 6.2 请求 JSON
+### 7.2 请求 JSON
 
 ```json
 {
@@ -310,9 +457,9 @@ POST /api/investment/analysis/generate
 - `providerCode` 只做一致性校验，不能绕过模型表直接选择 Provider。
 - `initialCapital` 用于模拟收益，不会触发真实交易。
 
-## 7. 变更接口：投资分析报告列表
+## 8. 变更接口：投资分析报告列表
 
-### 7.1 接口信息
+### 8.1 接口信息
 
 ```text
 POST /api/investment/analysis/reports/list
@@ -320,9 +467,9 @@ POST /api/investment/analysis/reports/list
 
 该接口返回的报告结构与 `/generate` 一致，适合前端做历史报告列表和详情页。
 
-## 8. 投资分析报告 JSON 展开说明
+## 9. 投资分析报告 JSON 展开说明
 
-### 8.0 报告级止损字段
+### 9.0 报告级止损字段
 
 投资分析报告响应现在新增三个一等字段，不能只在 JSON 内部隐藏：
 
@@ -364,7 +511,7 @@ POST /api/investment/analysis/reports/list
 - 报告详情页展示 `dataQualityGate.displayMessage` 和 `reasons`。
 - `dataQualityGate.passed=false` 时，隐藏生成 Prompt、生成 Mock 交易和配置建议入口。
 
-### 8.1 `investmentSummary`
+### 9.1 `investmentSummary`
 
 ```json
 {
@@ -397,7 +544,7 @@ POST /api/investment/analysis/reports/list
 - 顶部摘要卡展示 `averageReturn`、`averageMomentum`、`averageHeat`、`dataQualityLevel`。
 - 新闻列表展示 `recentNews`。
 
-### 8.2 `trend`
+### 9.2 `trend`
 
 ```json
 {
@@ -425,7 +572,7 @@ POST /api/investment/analysis/reports/list
 | `dataQualityScore` | 输入数据质量分 |
 | `lookbackDays` | 回看天数 |
 
-### 8.3 `investmentPlan`
+### 9.3 `investmentPlan`
 
 ```json
 {
@@ -461,7 +608,7 @@ POST /api/investment/analysis/reports/list
 - `referenceAllocationAmount` 展示为模拟配置金额。
 - `riskNotice` 必须在报告详情页展示。
 
-### 8.4 `simulatedReturn`
+### 9.4 `simulatedReturn`
 
 ```json
 {
@@ -485,7 +632,7 @@ POST /api/investment/analysis/reports/list
 - `estimatedFinalCapital` 是初始资金加模拟收益，不是实际账户资产。
 - `assumption` 必须展示，避免用户误解为收益承诺。
 
-### 8.5 `chartPayload`
+### 9.5 `chartPayload`
 
 ```json
 {
@@ -522,10 +669,11 @@ POST /api/investment/analysis/reports/list
 - `series.heatScore` 绘制资讯热度线。
 - `news` 用作图表事件标记。
 
-## 9. 前端页面建议
+## 10. 前端页面建议
 
 | 页面 | 建议接口 |
 | --- | --- |
+| 产品管理页 | `/api/admin/products/create`、`/api/admin/products/update`、`/api/admin/products/investment-profile/save`、`/api/products/detail` |
 | 投资任务配置页 | `/definitions`、`/definitions/save` |
 | 任务执行记录页 | `/executions/list` |
 | 新闻列表页 | `/articles/list` |
@@ -534,10 +682,11 @@ POST /api/investment/analysis/reports/list
 | 投资分析生成页 | `/analysis/generate` |
 | 投资分析历史页 | `/analysis/reports/list` |
 
-## 10. 本轮接口结论
+## 11. 本轮接口结论
 
 本轮后端优化已经具备前端可见出口：
 
+- 产品投资画像通过 `/api/admin/products/investment-profile/save` 写入，通过 `/api/products/detail` 的 `investmentProfile` 和 `themeRelations` 展示。
 - 统计质量通过 `metrics` 暴露。
 - 新闻和主题、产品关联通过 `/article-relations/list` 暴露。
 - 投资模拟方案通过 `investmentPlan` 和 `simulatedReturn` 暴露。

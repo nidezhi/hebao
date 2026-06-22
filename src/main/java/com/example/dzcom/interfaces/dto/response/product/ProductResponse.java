@@ -30,6 +30,10 @@ public record ProductResponse(
     @Schema(description = "退市日期") LocalDate delistingDate,
     @Schema(description = "产品说明") String description,
     @Schema(description = "扩展属性列表") List<ProductAttributeResponse> attributes,
+    @Schema(description = "产品投资风险和交易画像；列表页可为空，详情页返回")
+    ProductInvestmentProfileResponse investmentProfile,
+    @Schema(description = "产品主题、行业、指数和资产类别关系集合；列表页可为空，详情页返回")
+    List<ProductThemeRelationResponse> themeRelations,
     @Schema(description = "创建时间") LocalDateTime createdAt,
     @Schema(description = "最后更新时间") LocalDateTime updatedAt
 ) {
@@ -63,6 +67,10 @@ public record ProductResponse(
             .attributes(source.attributes() == null
                 ? List.of()
                 : source.attributes().stream().map(ProductAttributeResponse::from).toList())
+            .investmentProfile(ProductInvestmentProfileResponse.from(source.investmentProfile()))
+            .themeRelations(source.themeRelations() == null
+                ? List.of()
+                : source.themeRelations().stream().map(ProductThemeRelationResponse::from).toList())
             .createdAt(source.createdAt())
             .updatedAt(source.updatedAt())
             .build();

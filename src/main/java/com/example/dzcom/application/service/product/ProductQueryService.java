@@ -9,8 +9,10 @@ import com.example.dzcom.domain.enums.product.ProductTradeStatus;
 import com.example.dzcom.domain.enums.product.ProductType;
 import com.example.dzcom.domain.model.product.Product;
 import com.example.dzcom.domain.repository.product.ProductSearchCriteria;
+import com.example.dzcom.domain.repository.product.ProductInvestmentProfileStore;
 import com.example.dzcom.domain.repository.product.ProductStore;
 import com.example.dzcom.domain.repository.product.ProductAttributeStore;
+import com.example.dzcom.domain.repository.product.ProductThemeRelationStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,8 @@ public class ProductQueryService {
 
     private final ProductStore store;
     private final ProductAttributeStore attributes;
+    private final ProductInvestmentProfileStore investmentProfiles;
+    private final ProductThemeRelationStore themeRelations;
     private final ProductViewAssembler assembler;
 
     /**
@@ -40,7 +44,12 @@ public class ProductQueryService {
     @Transactional(readOnly = true)
     public ProductView detail(String bizId) {
         Product product = requiredProduct(bizId);
-        return assembler.assembleDetail(product, attributes.findByProductBizId(bizId));
+        return assembler.assembleInvestmentDetail(
+            product,
+            attributes.findByProductBizId(bizId),
+            investmentProfiles.findByProductBizId(bizId),
+            themeRelations.findByProductBizId(bizId)
+        );
     }
 
     /**

@@ -196,6 +196,8 @@ POST /api/auth/login
 | --- | --- | --- |
 | `Product` | `aiw_product` | 产品代码、名称、类型、风险等级、交易状态和生命周期 |
 | `ProductAttribute` | `aiw_product_attribute` | 产品可扩展属性、值类型和属性值 |
+| `ProductInvestmentProfile` | `aiw_product_investment_profile` | 产品资产类别、风险摘要、波动等级、流动性等级、最大回撤、适配风险等级和 Mock 交易开关 |
+| `ProductThemeRelation` | `aiw_product_theme_relation` | 产品与主题、行业、指数、资产类别的显式关系，用于解释资讯命中、投资报告和后续模拟交易 |
 
 支持的产品类型由 `ProductType` 定义，交易状态由 `ProductTradeStatus` 定义。
 
@@ -211,6 +213,20 @@ POST /api/auth/login
   -> ProductStoreImpl / ProductAttributeStoreImpl
   -> MyBatis Mapper XML
   -> 返回 ProductResponse
+
+管理端保存产品投资画像
+  -> SaveProductInvestmentProfileRequest
+  -> ProductApplicationService.saveInvestmentProfile
+  -> 校验产品存在、资产类别、波动等级、流动性等级、风险等级和质量分
+  -> 保存 ProductInvestmentProfile
+  -> 删除并重建 ProductThemeRelation 集合
+  -> 返回带 investmentProfile 和 themeRelations 的 ProductResponse
+
+前端查询产品详情
+  -> ProductQueryService.detail
+  -> 查询 Product、ProductAttribute、ProductInvestmentProfile、ProductThemeRelation
+  -> ProductViewAssembler.assembleInvestmentDetail
+  -> ProductResponse
 ```
 
 ### 5.4 预期输出
@@ -220,6 +236,24 @@ POST /api/auth/login
 - 上市、退市日期。
 - 产品扩展属性集合。
 - 产品分页列表和详情。
+- 产品投资画像 `investmentProfile`，包括资产类别、风险摘要、波动等级、流动性等级、最大回撤、适配风险等级和 Mock 交易开关。
+- 产品主题关系 `themeRelations`，包括主题、行业、指数和资产类别关系。
+- 前端可根据 `mockTradable` 决定是否展示 Mock 交易入口。
+- 前端可根据 `dataQualityScore` 展示产品画像质量，低质量产品只能进入观察和补数流程。
+
+### 5.5 前端接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /api/admin/products/create` | 创建产品基础信息 |
+| `POST /api/admin/products/update` | 更新产品基础信息 |
+| `POST /api/admin/products/attributes/save` | 新增或覆盖产品扩展属性 |
+| `POST /api/admin/products/investment-profile/save` | 保存产品投资画像和主题关系 |
+| `POST /api/products/detail` | 查询产品详情，返回基础信息、扩展属性、投资画像和主题关系 |
+
+### 5.6 阶段 1 投资闭环位置
+
+产品池和风险架构是投资分析、Prompt 版本、Mock 交易和风控审计的前置条件。任何投资方案如果无法说明使用了哪些产品、产品风险是什么、是否允许 Mock 交易、和哪些主题或指数有关，都不能进入正式投资建议展示。
 
 ## 6. 市场行情业务线
 

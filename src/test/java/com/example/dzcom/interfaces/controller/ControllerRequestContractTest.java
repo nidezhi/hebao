@@ -17,7 +17,9 @@ import com.example.dzcom.interfaces.dto.response.ai.InvestmentAnalysisReportResp
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.market.MarketQuoteResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductAttributeResponse;
+import com.example.dzcom.interfaces.dto.response.product.ProductInvestmentProfileResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductResponse;
+import com.example.dzcom.interfaces.dto.response.product.ProductThemeRelationResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskTriggerResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeSnapshotResponse;
@@ -70,6 +72,8 @@ class ControllerRequestContractTest {
         PreferenceResponse.class,
         ProductResponse.class,
         ProductAttributeResponse.class,
+        ProductInvestmentProfileResponse.class,
+        ProductThemeRelationResponse.class,
         MarketQuoteResponse.class,
         InvestmentTaskDefinitionResponse.class,
         InvestmentTaskTriggerResponse.class,

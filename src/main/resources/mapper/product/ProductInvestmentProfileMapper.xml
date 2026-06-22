@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.product.ProductInvestmentProfileMapper">
+    <insert id="save">
+        insert into aiw_product_investment_profile
+        (biz_id, product_biz_id, asset_class, risk_summary, volatility_level, liquidity_level,
+         max_drawdown, suitable_risk_level, mock_tradable, min_holding_days, trading_notes,
+         data_quality_score, created_at, updated_at)
+        values
+        (#{bizId}, #{productBizId}, #{assetClass}, #{riskSummary}, #{volatilityLevel},
+         #{liquidityLevel}, #{maxDrawdown}, #{suitableRiskLevel}, #{mockTradable},
+         #{minHoldingDays}, #{tradingNotes}, #{dataQualityScore}, #{createdAt}, #{updatedAt})
+        on duplicate key update
+        asset_class = values(asset_class),
+        risk_summary = values(risk_summary),
+        volatility_level = values(volatility_level),
+        liquidity_level = values(liquidity_level),
+        max_drawdown = values(max_drawdown),
+        suitable_risk_level = values(suitable_risk_level),
+        mock_tradable = values(mock_tradable),
+        min_holding_days = values(min_holding_days),
+        trading_notes = values(trading_notes),
+        data_quality_score = values(data_quality_score),
+        updated_at = values(updated_at)
+    </insert>
+
+    <select id="selectByProductBizId"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductInvestmentProfileEntity">
+        select * from aiw_product_investment_profile
+        where product_biz_id = #{productBizId}
+    </select>
+</mapper>
