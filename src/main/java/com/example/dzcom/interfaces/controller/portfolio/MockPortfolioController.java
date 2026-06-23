@@ -1,20 +1,30 @@
 package com.example.dzcom.interfaces.controller.portfolio;
 
 import com.example.dzcom.application.command.portfolio.CreateMockPortfolioCommand;
+import com.example.dzcom.application.command.portfolio.CancelMockOrderCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockBuyCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockRebalanceCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockSellCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.application.service.portfolio.MockPortfolioApplicationService;
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.MockOrderExecutionResponse;
+import com.example.dzcom.interfaces.dto.response.portfolio.MockOrderResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.MockPortfolioPerformanceResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.MockPortfolioResponse;
+import com.example.dzcom.interfaces.dto.response.portfolio.MockRebalanceExecutionResponse;
+import com.example.dzcom.interfaces.dto.response.portfolio.OrderEventResponse;
+import com.example.dzcom.interfaces.request.portfolio.CancelMockOrderRequest;
 import com.example.dzcom.interfaces.request.portfolio.CreateMockPortfolioRequest;
 import com.example.dzcom.interfaces.request.portfolio.ExecuteMockBuyRequest;
 import com.example.dzcom.interfaces.request.portfolio.ExecuteMockPlanFromReportRequest;
+import com.example.dzcom.interfaces.request.portfolio.ExecuteMockRebalanceRequest;
+import com.example.dzcom.interfaces.request.portfolio.ExecuteMockSellRequest;
 import com.example.dzcom.interfaces.request.portfolio.MockPortfolioDetailRequest;
+import com.example.dzcom.interfaces.request.portfolio.MockOrderEventsRequest;
 import com.example.dzcom.interfaces.request.portfolio.MockPortfolioListRequest;
 import com.example.dzcom.interfaces.request.portfolio.MockPortfolioPerformanceRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -158,6 +168,101 @@ public class MockPortfolioController {
     }
 
     /**
+     * 执行模拟数量卖出。
+     *
+     * @param request 模拟卖出请求
+     * @return 模拟订单、成交和成交后的组合详情
+     * @throws BusinessException 当组合、产品、持仓或行情不满足要求时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    @PostMapping("/orders/sell")
+    @Operation(
+        summary = "执行模拟卖出",
+        description = "按产品最新1D收盘价模拟数量卖出，写入SELL订单、成交、持仓和新估值快照，不触发真实交易。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "卖出成功，返回模拟订单执行结果", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "参数不合法、产品不可Mock交易、行情缺失或持仓不足"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无权操作该模拟组合"),
+        @ApiResponse(responseCode = "404", description = "模拟组合、产品或持仓不存在"),
+        @ApiResponse(responseCode = "409", description = "幂等订单状态异常"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<MockOrderExecutionResponse> sell(@Valid @RequestBody ExecuteMockSellRequest request) {
+        return Result.success(MockOrderExecutionResponse.from(portfolios.sell(
+            ExecuteMockSellCommand.builder()
+                .portfolioBizId(request.portfolioBizId())
+                .productBizId(request.productBizId())
+                .quantity(request.quantity())
+                .idempotencyKey(request.idempotencyKey())
+                .build()
+        )));
+    }
+
+    /**
+     * 撤销未成交模拟订单。
+     *
+     * @param request 撤销模拟订单请求
+     * @return 撤销后的模拟订单
+     * @throws BusinessException 当订单不存在、越权或已处于终态时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    @PostMapping("/orders/cancel")
+    @Operation(
+        summary = "撤销模拟订单",
+        description = "撤销当前用户自己的非终态模拟订单。当前即时成交订单已是FILLED终态，会返回明确拒绝原因。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "撤单成功，返回撤销后的模拟订单", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "参数不合法或订单已处于终态"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无权操作该模拟订单"),
+        @ApiResponse(responseCode = "404", description = "模拟订单不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<MockOrderResponse> cancelOrder(@Valid @RequestBody CancelMockOrderRequest request) {
+        return Result.success(MockOrderResponse.from(portfolios.cancelOrder(
+            CancelMockOrderCommand.builder()
+                .orderBizId(request.orderBizId())
+                .cancelReason(request.cancelReason())
+                .build()
+        )));
+    }
+
+    /**
+     * 查询模拟订单事件。
+     *
+     * @param request 查询模拟订单事件请求
+     * @return 订单生命周期事件集合
+     * @throws BusinessException 当订单不存在或不属于当前用户时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    @PostMapping("/orders/events")
+    @Operation(
+        summary = "查询模拟订单事件",
+        description = "查询当前用户自己的模拟订单生命周期事件，用于前端展示订单状态追踪和交易审计。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查询成功，返回订单事件集合", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "参数不合法"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无权查看该模拟订单事件"),
+        @ApiResponse(responseCode = "404", description = "模拟订单不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<java.util.List<OrderEventResponse>> orderEvents(
+        @Valid @RequestBody MockOrderEventsRequest request
+    ) {
+        return Result.success(portfolios.orderEvents(request.orderBizId()).stream()
+            .map(OrderEventResponse::from)
+            .toList());
+    }
+
+    /**
      * 根据投资分析报告执行模拟买入。
      *
      * @param request 从报告执行模拟买入请求
@@ -188,6 +293,47 @@ public class MockPortfolioController {
                 .portfolioBizId(request.portfolioBizId())
                 .reportBizId(request.reportBizId())
                 .productBizId(request.productBizId())
+                .idempotencyKey(request.idempotencyKey())
+                .build()
+        )));
+    }
+
+    /**
+     * 执行模拟组合再平衡。
+     *
+     * @param request 模拟再平衡请求
+     * @return 调仓订单集合和调仓后的组合详情
+     * @throws BusinessException 当目标权重、行情、现金或持仓不满足要求时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    @PostMapping("/rebalance/execute")
+    @Operation(
+        summary = "执行模拟再平衡",
+        description = "按目标产品权重计算当前组合差额，先模拟卖出超配产品，再模拟买入低配产品，返回每条调仓订单和最终组合。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "再平衡成功，返回调仓执行结果", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "目标权重不合法、产品不可Mock交易、行情缺失、现金或持仓不足"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无权操作该模拟组合"),
+        @ApiResponse(responseCode = "404", description = "模拟组合、产品或持仓不存在"),
+        @ApiResponse(responseCode = "409", description = "幂等订单状态异常"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<MockRebalanceExecutionResponse> rebalance(
+        @Valid @RequestBody ExecuteMockRebalanceRequest request
+    ) {
+        return Result.success(MockRebalanceExecutionResponse.from(portfolios.rebalance(
+            ExecuteMockRebalanceCommand.builder()
+                .portfolioBizId(request.portfolioBizId())
+                .targets(request.targets().stream()
+                    .map(target -> ExecuteMockRebalanceCommand.TargetWeight.builder()
+                        .productBizId(target.productBizId())
+                        .targetWeight(target.targetWeight())
+                        .build())
+                    .toList())
+                .minTradeAmount(request.minTradeAmount())
                 .idempotencyKey(request.idempotencyKey())
                 .build()
         )));

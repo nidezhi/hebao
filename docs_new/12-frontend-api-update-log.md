@@ -27,9 +27,249 @@
 | `POST /api/mock/portfolios/mine` | 新增 | 查询我的模拟组合列表，展示总资产、现金、收益等摘要 |
 | `POST /api/mock/portfolios/detail` | 新增 | 查询模拟组合详情，展示估值和当前持仓 |
 | `POST /api/mock/portfolios/orders/buy` | 新增 | 按产品最新行情模拟买入，生成订单、成交、持仓和新估值 |
+| `POST /api/mock/portfolios/orders/sell` | 新增 | 按产品最新行情模拟卖出，生成订单、成交、持仓扣减和新估值 |
+| `POST /api/mock/portfolios/orders/cancel` | 新增 | 撤销当前用户的非终态模拟订单，即时成交终态订单会返回拒绝 |
+| `POST /api/mock/portfolios/orders/events` | 新增 | 查询当前用户模拟订单生命周期事件和交易审计 |
 | `POST /api/mock/portfolios/orders/buy-from-report` | 新增 | 根据投资分析报告自动生成模拟买入 |
+| `POST /api/mock/portfolios/rebalance/execute` | 新增 | 按目标权重执行模拟再平衡，返回调仓订单集合和最终组合 |
 | `POST /api/mock/portfolios/valuations/refresh` | 新增 | 按持仓和最新行情刷新组合估值 |
 | `POST /api/mock/portfolios/performance/curve` | 新增 | 查询组合收益曲线、累计收益率和最大回撤 |
+| `POST /api/admin/data-sources/save` | 新增 | 保存数据源注册信息 |
+| `POST /api/admin/data-sources/health/save` | 新增 | 保存数据源健康状态 |
+| `POST /api/admin/data-sources/quality/save` | 新增 | 保存数据质量快照 |
+| `POST /api/admin/data-sources/list` | 新增 | 查询数据源看板列表 |
+| `POST /api/admin/data-sources/quality/list` | 新增 | 查询数据质量快照历史 |
+| `POST /api/ai/prompts/save` | 新增 | 保存 Prompt 模板版本、变量定义和输出 Schema |
+| `POST /api/ai/prompts/list` | 新增 | 查询 Prompt 版本列表 |
+| `POST /api/ai/prompts/detail` | 新增 | 查询 Prompt 模板详情 |
+| `POST /api/ai/prompts/status` | 新增 | 变更 Prompt 生命周期状态 |
+| `POST /api/ai/prompts/preview` | 新增 | 本地预览 Prompt 渲染结果 |
+| `POST /api/risk/checks/list` | 新增 | 查询风控检查和 Mock 交易拦截原因 |
+
+### 3.1.0 Prompt 治理接口
+
+`POST /api/ai/prompts/save`
+
+请求：
+
+```json
+{
+  "promptCode": "INVESTMENT_PLAN",
+  "promptVersion": "v1",
+  "scenario": "INVESTMENT_PLAN",
+  "templateName": "投资方案生成 Prompt",
+  "templateContent": "请基于报告摘要 ${reportSummary} 和质量门禁 ${dataQualityGate} 输出投资方案。",
+  "status": "DRAFT",
+  "description": "用于投资报告通过质量门禁后的方案生成",
+  "variables": [
+    {
+      "variableName": "reportSummary",
+      "sourcePath": "report.summary",
+      "required": true,
+      "description": "投资报告摘要"
+    },
+    {
+      "variableName": "dataQualityGate",
+      "sourcePath": "report.dataQualityGate",
+      "required": true,
+      "description": "数据质量门禁 JSON"
+    }
+  ],
+  "outputSchemas": [
+    {
+      "schemaVersion": "v1",
+      "schemaJson": "{\"type\":\"object\",\"required\":[\"planType\",\"riskLevel\"],\"properties\":{\"planType\":{\"type\":\"string\"},\"riskLevel\":{\"type\":\"string\"}}}"
+    }
+  ]
+}
+```
+
+响应核心字段：
+
+```json
+{
+  "bizId": "prompt-biz-id",
+  "promptCode": "INVESTMENT_PLAN",
+  "promptVersion": "v1",
+  "scenario": "INVESTMENT_PLAN",
+  "templateName": "投资方案生成 Prompt",
+  "status": "DRAFT",
+  "variables": [
+    {
+      "variableName": "reportSummary",
+      "sourcePath": "report.summary",
+      "required": true
+    }
+  ],
+  "outputSchemas": [
+    {
+      "schemaVersion": "v1",
+      "schemaJson": "{\"type\":\"object\"}"
+    }
+  ]
+}
+```
+
+`POST /api/ai/prompts/list`
+
+请求：
+
+```json
+{
+  "promptCode": "INVESTMENT_PLAN",
+  "scenario": "INVESTMENT_PLAN",
+  "status": "ACTIVE",
+  "page": 1,
+  "size": 20,
+  "sort": "updatedAt",
+  "direction": "desc"
+}
+```
+
+`POST /api/ai/prompts/preview`
+
+请求：
+
+```json
+{
+  "promptBizId": "prompt-biz-id",
+  "variables": {
+    "reportSummary": "AI主题热度上升，但数据质量中等。",
+    "dataQualityGate": "{\"passed\":true,\"dataQualityScore\":0.72}"
+  }
+}
+```
+
+响应核心字段：
+
+```json
+{
+  "promptBizId": "prompt-biz-id",
+  "promptCode": "INVESTMENT_PLAN",
+  "promptVersion": "v1",
+  "scenario": "INVESTMENT_PLAN",
+  "renderedPrompt": "请基于报告摘要 AI主题热度上升，但数据质量中等。 和质量门禁 {\"passed\":true,\"dataQualityScore\":0.72} 输出投资方案。",
+  "missingVariables": [],
+  "readyForModel": false,
+  "displayMessage": "Prompt当前不是ACTIVE状态，仅允许后台预览"
+}
+```
+
+前端注意：
+
+- `readyForModel=false` 不是错误，表示模板未启用或缺少必填变量。
+- `status=ACTIVE` 且 `missingVariables=[]` 时，后续才允许进入模型调用链路。
+- `status=RETIRED` 的版本仍可查看和预览，用于回滚前对比，但不应作为默认生成入口。
+
+### 3.1.0.1 风控审计查询接口
+
+`POST /api/risk/checks/list`
+
+请求：
+
+```json
+{
+  "businessType": "ORDER",
+  "businessBizId": "portfolio-biz-id",
+  "userBizId": "user-biz-id",
+  "checkResult": "REJECT",
+  "riskLevel": "HIGH",
+  "reasonCode": "INSUFFICIENT_CASH",
+  "page": 1,
+  "size": 20,
+  "sort": "checkedAt",
+  "direction": "desc"
+}
+```
+
+响应核心字段：
+
+```json
+{
+  "items": [
+    {
+      "bizId": "risk-check-biz-id",
+      "businessType": "ORDER",
+      "businessBizId": "portfolio-biz-id",
+      "userBizId": "user-biz-id",
+      "ruleCode": "MOCK_CASH_BALANCE",
+      "checkResult": "REJECT",
+      "riskLevel": "HIGH",
+      "reasonCode": "INSUFFICIENT_CASH",
+      "detail": "{\"cashBalance\":1000,\"requiredCash\":5000}",
+      "checkedAt": "2026-06-23T23:30:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "size": 20,
+  "totalPages": 1
+}
+```
+
+前端注意：
+
+- Mock 买入、卖出、报告转交易、再平衡中的关键拒绝会写入风险检查记录。
+- 当前已覆盖报告质量不足、数据门禁未通过、现金不足、持仓不足、产品不可 Mock、调仓目标非法等原因。
+- `detail` 是脱敏 JSON 字符串，详情页可以展开显示；列表页优先展示 `ruleCode`、`riskLevel`、`reasonCode` 和 `checkedAt`。
+
+### 3.1.1 数据源治理接口
+
+`POST /api/admin/data-sources/save`
+
+请求：
+
+```json
+{
+  "sourceCode": "CNINFO",
+  "sourceName": "巨潮资讯",
+  "sourceType": "ANNOUNCEMENT",
+  "trustLevel": "L1",
+  "baseUrl": "https://www.cninfo.com.cn",
+  "enabled": true,
+  "fetchFrequency": "0 */30 * * * ?",
+  "owner": "research-ops",
+  "description": "上市公司公告与披露数据源"
+}
+```
+
+`POST /api/admin/data-sources/list`
+
+响应核心字段：
+
+```json
+{
+  "items": [
+    {
+      "sourceCode": "CNINFO",
+      "sourceName": "巨潮资讯",
+      "sourceType": "ANNOUNCEMENT",
+      "trustLevel": "L1",
+      "enabled": true,
+      "qualityLevel": "HIGH",
+      "displayMessage": "数据源质量较高，可作为投资报告的重要输入。",
+      "health": {
+        "successRate": 0.98,
+        "failureReason": null,
+        "sampleCount": 1200
+      },
+      "latestQuality": {
+        "dataType": "ANNOUNCEMENT",
+        "qualityScore": 0.86,
+        "missingRate": 0.02,
+        "duplicateRate": 0.01,
+        "freshnessScore": 0.90
+      }
+    }
+  ]
+}
+```
+
+前端注意：
+
+- `trustLevel=L5` 的数据源只能展示为演示或兜底，不应进入正式投资方案入口。
+- `qualityLevel=LOW/UNKNOWN/DISABLED/DEMO_ONLY` 时，投资报告和 Mock 交易入口应降级或隐藏。
+- `POST /api/admin/data-sources/quality/list` 可用于绘制质量趋势图。
 
 ### 3.2 `POST /api/mock/portfolios/create`
 
@@ -246,7 +486,185 @@
 - 组合现金必须覆盖 `amount + feeAmount`。
 - `idempotencyKey` 建议由前端生成 UUID；重复提交会返回同一笔订单和成交结果。
 
-### 3.6 `POST /api/mock/portfolios/orders/buy-from-report`
+### 3.6 `POST /api/mock/portfolios/orders/sell`
+
+请求：
+
+```json
+{
+  "portfolioBizId": "portfolio-biz-id",
+  "productBizId": "product-biz-id",
+  "quantity": 4000,
+  "idempotencyKey": "front-uuid-sell-001"
+}
+```
+
+响应核心字段：
+
+```json
+{
+  "order": {
+    "orderSide": "SELL",
+    "orderType": "MARKET",
+    "requestedPrice": 1.35,
+    "requestedQuantity": 4000,
+    "requestedAmount": 5400,
+    "executedQuantity": 4000,
+    "executedAmount": 5400,
+    "feeAmount": 5.4,
+    "status": "FILLED"
+  },
+  "execution": {
+    "executionPrice": 1.35,
+    "executionQuantity": 4000,
+    "executionAmount": 5400
+  },
+  "portfolio": {
+    "latestValuation": {
+      "cashBalance": 95384.6,
+      "positionValue": 5400,
+      "realizedProfit": 394.6,
+      "sourceCode": "MOCK_SELL_FILLED"
+    },
+    "positions": []
+  }
+}
+```
+
+前端注意：
+
+- 卖出按最新 `1D` 收盘价即时成交，不触发真实交易。
+- 需要产品仍满足 `mockTradable=true` 和 `dataQualityScore >= 0.45`。
+- 持仓不足或产品缺少行情时会返回 400。
+- 清仓后该持仓不会出现在 `positions` 当前持仓列表中。
+
+### 3.7 `POST /api/mock/portfolios/orders/cancel`
+
+请求：
+
+```json
+{
+  "orderBizId": "order-biz-id",
+  "cancelReason": "用户撤销模拟调仓"
+}
+```
+
+响应核心字段：
+
+```json
+{
+  "bizId": "order-biz-id",
+  "orderNo": "MOXXXXXXXXXX",
+  "status": "CANCELLED",
+  "completedAt": "2026-06-23T10:10:00"
+}
+```
+
+前端注意：
+
+- 只能撤销当前用户自己的订单。
+- 当前买入、卖出和再平衡腿都是即时成交，`FILLED` 订单已处于终态，会返回 400，前端应展示“订单已成交，不能撤销”。
+- 该接口用于把撤单边界先暴露给前端，后续部分成交或排队订单可以复用同一入口。
+
+### 3.8 `POST /api/mock/portfolios/rebalance/execute`
+
+请求：
+
+```json
+{
+  "portfolioBizId": "portfolio-biz-id",
+  "targets": [
+    {
+      "productBizId": "product-a",
+      "targetWeight": 0.5
+    },
+    {
+      "productBizId": "product-b",
+      "targetWeight": 0.3
+    }
+  ],
+  "minTradeAmount": 100,
+  "idempotencyKey": "front-uuid-rebalance-001"
+}
+```
+
+响应核心字段：
+
+```json
+{
+  "executions": [
+    {
+      "order": {
+        "orderSide": "SELL",
+        "status": "FILLED"
+      },
+      "execution": {
+        "executionAmount": 12000
+      }
+    },
+    {
+      "order": {
+        "orderSide": "BUY",
+        "status": "FILLED"
+      },
+      "execution": {
+        "executionAmount": 8000
+      }
+    }
+  ],
+  "portfolio": {
+    "bizId": "portfolio-biz-id",
+    "latestValuation": {
+      "sourceCode": "MOCK_BUY_FILLED"
+    },
+    "positions": []
+  }
+}
+```
+
+前端注意：
+
+- `targets.targetWeight` 是 0 到 1 的小数，目标权重总和不能超过 1，剩余部分保留现金。
+- 未出现在目标集合中的已有持仓按目标 0 处理，后端会先卖出再买入。
+- `minTradeAmount` 用于过滤过小调仓腿。
+- `idempotencyKey` 建议传稳定 UUID，后端会扩展成每条调仓腿的幂等键。
+
+### 3.9 `POST /api/mock/portfolios/orders/events`
+
+请求：
+
+```json
+{
+  "orderBizId": "order-biz-id"
+}
+```
+
+响应核心字段：
+
+```json
+[
+  {
+    "bizId": "event-biz-id",
+    "orderBizId": "order-biz-id",
+    "eventType": "FILLED",
+    "fromStatus": null,
+    "toStatus": "FILLED",
+    "eventSource": "INTERNAL",
+    "operatorBizId": "user-biz-id",
+    "eventPayload": "{\"orderSide\":\"BUY\",\"executionAmount\":10000}",
+    "occurredAt": "2026-06-23T10:00:00"
+  }
+]
+```
+
+前端注意：
+
+- 只能查询当前用户自己的订单事件，越权返回 403。
+- 买入、卖出和再平衡订单腿成交后会生成 `FILLED` 事件。
+- 非终态订单撤销成功后会生成 `CANCELLED` 事件。
+- `eventPayload` 是脱敏 JSON 字符串，前端可解析后展示成交金额、费用、产品和组合等上下文。
+
+### 3.10 `POST /api/mock/portfolios/orders/buy-from-report`
 
 请求：
 
@@ -290,7 +708,7 @@
 - 报告 `dataQualityGate.passed=false`、`confidenceLevel=UNUSABLE`、`investmentPlan.planType=DATA_GAP_REPORT` 时会拒绝执行。
 - 响应结构与 `/orders/buy` 一致，前端可以复用订单成交结果页。
 
-### 3.7 `POST /api/mock/portfolios/valuations/refresh`
+### 3.11 `POST /api/mock/portfolios/valuations/refresh`
 
 请求：
 
@@ -326,7 +744,7 @@
 - 估值使用每个持仓产品最新 `1D` 收盘价。
 - 任一持仓产品缺少最新行情时，后端拒绝刷新，前端应提示“持仓行情不足”。
 
-### 3.8 `POST /api/mock/portfolios/performance/curve`
+### 3.12 `POST /api/mock/portfolios/performance/curve`
 
 请求：
 

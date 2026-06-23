@@ -48,6 +48,23 @@ public class MockOrderStoreImpl implements MockOrderStore {
             .map(this::toDomain);
     }
 
+    /**
+     * 按订单业务标识查询模拟订单。
+     *
+     * @param orderBizId 订单业务唯一标识
+     * @return 未删除的模拟订单
+     * @author dz
+     * @date 2026-06-23
+     */
+    @Override
+    public Optional<MockOrder> findByBizId(String orderBizId) {
+        if (orderBizId == null || orderBizId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(mapper.selectByBizId(orderBizId))
+            .map(this::toDomain);
+    }
+
     /** 将领域对象转换为持久化实体。 */
     private MockOrderEntity toEntity(MockOrder order) {
         return MockOrderEntity.builder()

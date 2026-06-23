@@ -15,4 +15,7 @@ public interface MockOrderMapper {
         @Param("userBizId") String userBizId,
         @Param("idempotencyKey") String idempotencyKey
     );
+
+    /** 按订单业务标识查询未删除订单。 */
+    MockOrderEntity selectByBizId(@Param("orderBizId") String orderBizId);
 }

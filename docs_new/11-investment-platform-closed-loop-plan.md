@@ -333,6 +333,7 @@ DRAFT
 | 数据质量门禁 `dataQualityGate` | 已落地 | 报告详情页降级原因、允许动作和提示文案 |
 | 低质量数据降级 | 已落地 | `investmentPlan.planType=DATA_GAP_REPORT` |
 | 禁止低质量配置建议 | 已落地 | `referenceAllocationRate=0`、`allowedActions` 不含 `MOCK_TRADE` |
+| 风控拦截审计查询 | 已落地 | `/api/risk/checks/list` |
 
 `dataQualityGate` 结构：
 
@@ -396,15 +397,15 @@ DRAFT
 
 交付：
 
-- 数据源注册表。
-- 数据源健康状态。
-- 数据质量快照。
+- 数据源注册表：已落地，接口为 `/api/admin/data-sources/save`、`/api/admin/data-sources/list`。
+- 数据源健康状态：已落地，接口为 `/api/admin/data-sources/health/save`，列表响应返回 `health`。
+- 数据质量快照：已落地，接口为 `/api/admin/data-sources/quality/save`、`/api/admin/data-sources/quality/list`，列表响应返回 `latestQuality`、`qualityLevel`、`displayMessage`。
 - 采集任务审计。
 - 官方和专业来源接入预留接口。
 
 验收：
 
-- 前端可看到每个数据源质量和失败原因。
+- 前端可看到每个数据源质量和失败原因；当前已通过数据源看板接口落地。
 - 数据源失败不会静默吞掉。
 
 ### 阶段 3：行情和资讯质量提升
@@ -429,16 +430,18 @@ DRAFT
 
 交付：
 
-- Prompt 模板表。
-- Prompt 变量定义。
-- Prompt 输出 Schema。
-- Prompt 版本管理接口。
-- Prompt 预览接口。
+- Prompt 模板表：已落地，表为 `aiw_ai_prompt_template`。
+- Prompt 变量定义：已落地，表为 `aiw_ai_prompt_variable`。
+- Prompt 输出 Schema：已落地，表为 `aiw_ai_prompt_output_schema`。
+- Prompt 版本管理接口：已落地，接口为 `/api/ai/prompts/save`、`/api/ai/prompts/list`、`/api/ai/prompts/detail`、`/api/ai/prompts/status`。
+- Prompt 预览接口：已落地，接口为 `/api/ai/prompts/preview`，仅做本地变量替换和必填校验，不触发真实模型调用。
+- Prompt 评估和回测反哺：未落地，后续由 `AiPromptEvaluation`、回测结果和用户采纳/拒绝反馈补齐。
 
 验收：
 
-- 前端可查看一次报告对应的最终 Prompt。
-- Prompt 可回滚。
+- 前端已可查看 Prompt 模板、变量、输出 Schema 和本地渲染后的最终 Prompt。
+- Prompt 已可通过状态变更完成启用、停用和回滚候选管理。
+- 报告、Prompt、模型、Mock 结果和反馈之间的完整复盘链路仍需在后续阶段补齐。
 
 ### 阶段 5：Mock 交易闭环
 
@@ -448,17 +451,17 @@ DRAFT
 
 - Mock 账户。
 - Mock 组合：基础创建、列表、详情已落地，接口为 `/api/mock/portfolios/create`、`/api/mock/portfolios/mine`、`/api/mock/portfolios/detail`。
-- Mock 订单：金额买入已落地，接口为 `/api/mock/portfolios/orders/buy`；报告转模拟买入已落地，接口为 `/api/mock/portfolios/orders/buy-from-report`。
-- Mock 成交：买入订单按最新行情立即成交。
-- Mock 持仓：买入成交后更新多头持仓。
+- Mock 订单：金额买入已落地，接口为 `/api/mock/portfolios/orders/buy`；数量卖出已落地，接口为 `/api/mock/portfolios/orders/sell`；撤单边界已落地，接口为 `/api/mock/portfolios/orders/cancel`；订单事件审计已落地，接口为 `/api/mock/portfolios/orders/events`；报告转模拟买入已落地，接口为 `/api/mock/portfolios/orders/buy-from-report`；目标权重再平衡已落地，接口为 `/api/mock/portfolios/rebalance/execute`。
+- Mock 成交：买入和卖出订单按最新行情立即成交。
+- Mock 持仓：买入成交后更新多头持仓，卖出成交后按平均成本法扣减持仓。
 - 估值和收益快照：买入成交后生成新估值快照；估值刷新和收益曲线已落地，接口为 `/api/mock/portfolios/valuations/refresh`、`/api/mock/portfolios/performance/curve`。
 - 回测结果。
 
 验收：
 
-- 当前已完成模拟组合容器、初始现金估值、手动模拟买入、报告转模拟买入、估值刷新和收益曲线，前端可以展示“我的模拟组合”、组合详情、订单成交结果、持仓变化、累计收益率和最大回撤。
-- 一个投资方案能生成订单、成交、持仓和收益曲线。
-- 风控拦截有审计记录。
+- 当前已完成模拟组合容器、初始现金估值、手动模拟买入、手动模拟卖出、撤单边界、订单事件审计、目标权重再平衡、报告转模拟买入、估值刷新和收益曲线，前端可以展示“我的模拟组合”、组合详情、订单成交结果、订单状态追踪、持仓变化、调仓结果、累计收益率和最大回撤。
+- 一个投资方案或调仓目标能生成订单、成交、持仓和收益曲线。
+- 关键风控拦截已有审计记录和查询接口，覆盖报告质量不足、数据门禁未通过、现金不足、持仓不足、产品不可 Mock、调仓目标非法等原因。
 
 ### 阶段 6：AI 方案和自动优化
 
@@ -496,7 +499,8 @@ DRAFT
 4. 补数据源注册、质量快照和采集审计。
 5. 补 Mock 账户、组合、订单、持仓、成交和估值。
 6. 建 Prompt 模板、变量、输出 Schema 和版本管理。
-7. 最后再接真实 OpenAI 兼容 Provider。
+7. 补回测、风控审计、Prompt 评估和用户采纳/拒绝反馈。
+8. 最后再接真实 OpenAI 兼容 Provider。
 
 ## 15. 开发铁律补充
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.portfolio.OrderEventMapper">
+    <insert id="insert">
+        insert into aiw_order_event
+        (biz_id, order_biz_id, event_type, from_status, to_status,
+         event_source, operator_biz_id, event_payload, occurred_at, created_at)
+        values
+        (#{bizId}, #{orderBizId}, #{eventType}, #{fromStatus}, #{toStatus},
+         #{eventSource}, #{operatorBizId}, #{eventPayload}, #{occurredAt}, #{createdAt})
+    </insert>
+
+    <select id="selectByOrderBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.OrderEventEntity">
+        select * from aiw_order_event
+        where order_biz_id = #{orderBizId}
+        order by occurred_at asc, created_at asc
+    </select>
+</mapper>

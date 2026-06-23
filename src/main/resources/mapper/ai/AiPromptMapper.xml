@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.ai.AiPromptMapper">
+    <sql id="searchCondition">
+        from aiw_ai_prompt_template p
+        where 1 = 1
+        <if test="criteria.promptCode != null and criteria.promptCode != ''">
+            and p.prompt_code = #{criteria.promptCode}
+        </if>
+        <if test="criteria.scenario != null and criteria.scenario != ''">
+            and p.scenario = #{criteria.scenario}
+        </if>
+        <if test="criteria.status != null and criteria.status != ''">
+            and p.status = #{criteria.status}
+        </if>
+    </sql>
+
+    <insert id="saveTemplate">
+        insert into aiw_ai_prompt_template
+        (biz_id, prompt_code, prompt_version, scenario, template_name, template_content,
+         status, description, created_at, updated_at, created_by, updated_by)
+        values
+        (#{bizId}, #{promptCode}, #{promptVersion}, #{scenario}, #{templateName}, #{templateContent},
+         #{status}, #{description}, #{createdAt}, #{updatedAt}, #{createdBy}, #{updatedBy})
+        on duplicate key update
+        scenario = values(scenario),
+        template_name = values(template_name),
+        template_content = values(template_content),
+        status = values(status),
+        description = values(description),
+        updated_at = values(updated_at),
+        updated_by = values(updated_by)
+    </insert>
+
+    <delete id="deleteVariables">
+        delete from aiw_ai_prompt_variable where prompt_biz_id = #{promptBizId}
+    </delete>
+
+    <insert id="insertVariable">
+        insert into aiw_ai_prompt_variable
+        (biz_id, prompt_biz_id, variable_name, source_path, required, description, created_at)
+        values
+        (#{bizId}, #{promptBizId}, #{variableName}, #{sourcePath}, #{required}, #{description}, #{createdAt})
+    </insert>
+
+    <delete id="deleteOutputSchemas">
+        delete from aiw_ai_prompt_output_schema where prompt_biz_id = #{promptBizId}
+    </delete>
+
+    <insert id="insertOutputSchema">
+        insert into aiw_ai_prompt_output_schema
+        (biz_id, prompt_biz_id, schema_version, schema_json, created_at)
+        values
+        (#{bizId}, #{promptBizId}, #{schemaVersion}, #{schemaJson}, #{createdAt})
+    </insert>
+
+    <select id="selectTemplateByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiPromptTemplateEntity">
+        select * from aiw_ai_prompt_template where biz_id = #{bizId}
+    </select>
+
+    <select id="selectTemplateByCodeAndVersion" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiPromptTemplateEntity">
+        select * from aiw_ai_prompt_template
+        where prompt_code = #{promptCode}
+          and prompt_version = #{promptVersion}
+    </select>
+
+    <select id="selectVariables" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiPromptVariableEntity">
+        select * from aiw_ai_prompt_variable
+        where prompt_biz_id = #{promptBizId}
+        order by variable_name asc
+    </select>
+
+    <select id="selectOutputSchemas" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiPromptOutputSchemaEntity">
+        select * from aiw_ai_prompt_output_schema
+        where prompt_biz_id = #{promptBizId}
+        order by schema_version desc
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiPromptTemplateEntity">
+        select p.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

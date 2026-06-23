@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.risk.RiskCheckMapper">
+    <sql id="searchCondition">
+        from aiw_risk_check r
+        where 1 = 1
+        <if test="criteria.businessType != null and criteria.businessType != ''">
+            and r.business_type = #{criteria.businessType}
+        </if>
+        <if test="criteria.businessBizId != null and criteria.businessBizId != ''">
+            and r.business_biz_id = #{criteria.businessBizId}
+        </if>
+        <if test="criteria.userBizId != null and criteria.userBizId != ''">
+            and r.user_biz_id = #{criteria.userBizId}
+        </if>
+        <if test="criteria.checkResult != null and criteria.checkResult != ''">
+            and r.check_result = #{criteria.checkResult}
+        </if>
+        <if test="criteria.riskLevel != null and criteria.riskLevel != ''">
+            and r.risk_level = #{criteria.riskLevel}
+        </if>
+        <if test="criteria.reasonCode != null and criteria.reasonCode != ''">
+            and r.reason_code = #{criteria.reasonCode}
+        </if>
+    </sql>
+
+    <insert id="insert">
+        insert into aiw_risk_check
+        (biz_id, trace_id, business_type, business_biz_id, user_biz_id,
+         rule_code, rule_version, check_result, risk_level, score, reason_code,
+         detail, checked_at, created_at)
+        values
+        (#{bizId}, #{traceId}, #{businessType}, #{businessBizId}, #{userBizId},
+         #{ruleCode}, #{ruleVersion}, #{checkResult}, #{riskLevel}, #{score}, #{reasonCode},
+         #{detail}, #{checkedAt}, #{createdAt})
+    </insert>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.risk.RiskCheckEntity">
+        select r.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

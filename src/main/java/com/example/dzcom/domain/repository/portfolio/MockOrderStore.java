@@ -26,4 +26,14 @@ public interface MockOrderStore {
      * @date 2026-06-23
      */
     Optional<MockOrder> findByUserAndIdempotencyKey(String userBizId, String idempotencyKey);
+
+    /**
+     * 按订单业务标识查询模拟订单。
+     *
+     * @param orderBizId 订单业务唯一标识
+     * @return 未删除的模拟订单
+     * @author dz
+     * @date 2026-06-23
+     */
+    Optional<MockOrder> findByBizId(String orderBizId);
 }

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.market.DataSourceMapper">
+    <sql id="searchCondition">
+        from aiw_data_source s
+        where 1 = 1
+        <if test="criteria.keyword != null and criteria.keyword != ''">
+            and (
+                s.source_code like concat('%', #{criteria.keyword}, '%')
+                or s.source_name like concat('%', #{criteria.keyword}, '%')
+            )
+        </if>
+        <if test="criteria.sourceType != null and criteria.sourceType != ''">
+            and s.source_type = #{criteria.sourceType}
+        </if>
+        <if test="criteria.trustLevel != null and criteria.trustLevel != ''">
+            and s.trust_level = #{criteria.trustLevel}
+        </if>
+        <if test="criteria.enabled != null">
+            and s.enabled = #{criteria.enabled}
+        </if>
+    </sql>
+
+    <insert id="save">
+        insert into aiw_data_source
+        (biz_id, source_code, source_name, source_type, trust_level, base_url,
+         enabled, fetch_frequency, owner, description, created_at, updated_at,
+         created_by, updated_by)
+        values
+        (#{bizId}, #{sourceCode}, #{sourceName}, #{sourceType}, #{trustLevel}, #{baseUrl},
+         #{enabled}, #{fetchFrequency}, #{owner}, #{description}, #{createdAt}, #{updatedAt},
+         #{createdBy}, #{updatedBy})
+        on duplicate key update
+        source_name = values(source_name),
+        source_type = values(source_type),
+        trust_level = values(trust_level),
+        base_url = values(base_url),
+        enabled = values(enabled),
+        fetch_frequency = values(fetch_frequency),
+        owner = values(owner),
+        description = values(description),
+        updated_at = values(updated_at),
+        updated_by = values(updated_by)
+    </insert>
+
+    <insert id="saveHealth">
+        insert into aiw_data_source_health
+        (biz_id, source_code, last_success_at, last_failure_at, success_rate,
+         avg_latency_ms, failure_reason, sample_count, updated_at)
+        values
+        (#{bizId}, #{sourceCode}, #{lastSuccessAt}, #{lastFailureAt}, #{successRate},
+         #{avgLatencyMs}, #{failureReason}, #{sampleCount}, #{updatedAt})
+        on duplicate key update
+        last_success_at = values(last_success_at),
+        last_failure_at = values(last_failure_at),
+        success_rate = values(success_rate),
+        avg_latency_ms = values(avg_latency_ms),
+        failure_reason = values(failure_reason),
+        sample_count = values(sample_count),
+        updated_at = values(updated_at)
+    </insert>
+
+    <insert id="insertQualitySnapshot">
+        insert into aiw_data_quality_snapshot
+        (biz_id, source_code, data_type, quality_score, missing_rate,
+         duplicate_rate, freshness_score, sample_count, snapshot_time, detail, created_at)
+        values
+        (#{bizId}, #{sourceCode}, #{dataType}, #{qualityScore}, #{missingRate},
+         #{duplicateRate}, #{freshnessScore}, #{sampleCount}, #{snapshotTime}, #{detail}, #{createdAt})
+    </insert>
+
+    <select id="selectBySourceCode" resultType="com.example.dzcom.infrastructure.persistence.entity.market.DataSourceEntity">
+        select * from aiw_data_source
+        where source_code = #{sourceCode}
+        limit 1
+    </select>
+
+    <select id="selectHealthBySourceCode" resultType="com.example.dzcom.infrastructure.persistence.entity.market.DataSourceHealthEntity">
+        select * from aiw_data_source_health
+        where source_code = #{sourceCode}
+        limit 1
+    </select>
+
+    <select id="selectQualitySnapshots" resultType="com.example.dzcom.infrastructure.persistence.entity.market.DataQualitySnapshotEntity">
+        select * from aiw_data_quality_snapshot
+        where source_code = #{sourceCode}
+        <if test="dataType != null and dataType != ''">
+            and data_type = #{dataType}
+        </if>
+        order by snapshot_time desc
+        limit #{limit}
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.market.DataSourceEntity">
+        select s.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

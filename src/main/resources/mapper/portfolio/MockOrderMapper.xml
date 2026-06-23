@@ -35,4 +35,11 @@
           and is_deleted = 0
         limit 1
     </select>
+
+    <select id="selectByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.MockOrderEntity">
+        select * from aiw_order
+        where biz_id = #{orderBizId}
+          and is_deleted = 0
+        limit 1
+    </select>
 </mapper>

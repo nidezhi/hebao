@@ -23,9 +23,10 @@
 5. 配置驱动投资定时任务。
 6. 投资资讯、主题收益、动量和资讯热度汇总。
 7. AI 模型注册和配置管理。
-8. 可插拔投资分析报告。
+8. AI Prompt 模板版本、变量、输出 Schema 和本地预览管理。
+9. 可插拔投资分析报告。
 
-投资组合已经具备模拟组合创建、列表和详情查询能力；订单、风控、通知、审计、AI 信号、AI 推荐和回测目前主要处于数据库结构或规划阶段。
+投资组合已经具备模拟组合创建、列表、详情、买入、卖出、撤单边界、订单事件、报告转买入、目标权重再平衡、估值刷新和收益曲线能力；风控审计已具备关键 Mock 拦截记录和查询接口；回测结果、AI 方案反馈和 Prompt 评估仍处于待补齐阶段。
 
 ## 2. 总体架构串联
 
@@ -259,7 +260,7 @@ POST /api/auth/login
 
 ### 6.1 业务状态
 
-已实现第二阶段：当前用户可以创建模拟组合、查询我的模拟组合列表、查询模拟组合详情，并可以按最新行情执行模拟金额买入。买入会生成模拟订单、模拟成交、当前持仓和新估值快照。
+已实现第三阶段：当前用户可以创建模拟组合、查询我的模拟组合列表、查询模拟组合详情，并可以按最新行情执行模拟金额买入、数量卖出、撤单边界校验和目标权重再平衡。买入、卖出和再平衡会生成模拟订单、模拟成交、当前持仓、新估值快照和前端可查订单事件。
 
 ### 6.2 核心实体
 
@@ -267,9 +268,10 @@ POST /api/auth/login
 | --- | --- | --- |
 | `Portfolio` | `aiw_portfolio` | 模拟组合主数据，当前使用 `portfolioType=SIMULATION` |
 | `PortfolioValuation` | `aiw_portfolio_valuation` | 组合估值快照，创建组合时写入初始现金快照 |
-| `Position` | `aiw_position` | 当前持仓聚合数据，模拟买入成交后写入或更新 |
-| `MockOrder` | `aiw_order` | 模拟订单，当前支持 `BUY` + `AMOUNT` |
-| `TradeExecution` | `aiw_trade_execution` | 模拟成交，当前买入订单立即按最新收盘价成交 |
+| `Position` | `aiw_position` | 当前持仓聚合数据，模拟买入和卖出成交后写入或更新 |
+| `MockOrder` | `aiw_order` | 模拟订单，当前支持 `BUY`、`SELL` 和 `CANCELLED` 边界 |
+| `TradeExecution` | `aiw_trade_execution` | 模拟成交，当前买入和卖出订单立即按最新收盘价成交 |
+| `OrderEvent` | `aiw_order_event` | 订单追加式状态事件，用于前端查询订单状态追踪和交易审计 |
 
 ### 6.3 数据流
 
@@ -302,9 +304,37 @@ POST /api/auth/login
   -> 校验组合属于当前用户、产品可交易、产品画像允许 Mock、最新行情存在、现金足够
   -> 保存 MockOrder(FILLED)
   -> 保存 TradeExecution
+  -> 保存 OrderEvent(FILLED)
   -> 更新 Position
   -> 保存 PortfolioValuation(MOCK_BUY_FILLED)
   -> 返回 MockOrderExecutionResponse
+
+前端执行模拟卖出
+  -> ExecuteMockSellRequest
+  -> MockPortfolioApplicationService.sell
+  -> 校验组合属于当前用户、产品可交易、产品画像允许 Mock、最新行情存在、可用持仓足够
+  -> 保存 MockOrder(SELL/FILLED)
+  -> 保存 TradeExecution
+  -> 保存 OrderEvent(FILLED)
+  -> 按平均成本法扣减 Position
+  -> 保存 PortfolioValuation(MOCK_SELL_FILLED)
+  -> 返回 MockOrderExecutionResponse
+
+前端撤销模拟订单
+  -> CancelMockOrderRequest
+  -> MockPortfolioApplicationService.cancelOrder
+  -> 校验订单属于当前用户
+  -> 如果订单为 FILLED、CANCELLED、REJECTED、FAILED 终态则拒绝
+  -> 非终态订单保存为 CANCELLED
+  -> 保存 OrderEvent(CANCELLED)
+  -> 返回 MockOrderResponse
+
+前端查询模拟订单事件
+  -> MockOrderEventsRequest
+  -> MockPortfolioApplicationService.orderEvents
+  -> 校验订单属于当前用户
+  -> 查询 aiw_order_event
+  -> 返回 List<OrderEventResponse>
 
 前端根据投资分析报告执行模拟买入
   -> ExecuteMockPlanFromReportRequest
@@ -329,6 +359,14 @@ POST /api/auth/login
   -> 查询 PortfolioValuation 历史
   -> 计算 latestReturnRate 和 maxDrawdown
   -> 返回 MockPortfolioPerformanceResponse
+
+前端执行模拟再平衡
+  -> ExecuteMockRebalanceRequest
+  -> MockPortfolioApplicationService.rebalance
+  -> 校验目标权重不重复、每项在 0 到 1 之间、总和不超过 1
+  -> 当前持仓未出现在目标集合时按目标权重 0 处理
+  -> 先卖出超配持仓，再买入低配产品
+  -> 返回 MockRebalanceExecutionResponse
 ```
 
 ### 6.4 前端接口
@@ -339,17 +377,21 @@ POST /api/auth/login
 | `POST /api/mock/portfolios/mine` | 分页查询当前用户模拟组合列表 |
 | `POST /api/mock/portfolios/detail` | 查询模拟组合详情、最新估值和当前持仓 |
 | `POST /api/mock/portfolios/orders/buy` | 执行模拟金额买入，返回订单、成交和更新后的组合 |
+| `POST /api/mock/portfolios/orders/sell` | 执行模拟数量卖出，返回订单、成交和更新后的组合 |
+| `POST /api/mock/portfolios/orders/cancel` | 撤销非终态模拟订单；即时成交订单会明确拒绝 |
+| `POST /api/mock/portfolios/orders/events` | 查询当前用户订单生命周期事件和交易审计 |
 | `POST /api/mock/portfolios/orders/buy-from-report` | 根据投资分析报告自动生成模拟买入 |
+| `POST /api/mock/portfolios/rebalance/execute` | 按目标权重执行模拟再平衡，返回调仓订单和最终组合 |
 | `POST /api/mock/portfolios/valuations/refresh` | 按最新行情刷新模拟组合估值 |
 | `POST /api/mock/portfolios/performance/curve` | 查询模拟组合收益曲线和最大回撤 |
 
 ### 6.5 当前边界
 
 - 不触发真实交易。
-- 当前只支持买入，不支持卖出、撤单、部分成交和调仓。
+- 当前支持即时成交买入、即时成交卖出、非终态撤单边界和目标权重再平衡；不支持部分成交、排队成交和真实渠道撤单。
 - 当前成交价取产品最新 `1D` 行情收盘价。
 - 当前必须依赖产品投资画像 `mockTradable=true` 和 `dataQualityScore >= 0.45`。
-- 当前能力已覆盖“手动 Mock 买入 -> 订单 -> 成交 -> 持仓 -> 估值”、“投资分析报告 -> 自动 Mock 买入”和“估值历史 -> 收益曲线/最大回撤”，下一步需要接卖出、风控审计和回测。
+- 当前能力已覆盖“手动 Mock 买入/卖出 -> 订单 -> 成交 -> 持仓 -> 估值 -> 订单事件审计”、“投资分析报告 -> 自动 Mock 买入”、“目标权重 -> 再平衡订单”和“估值历史 -> 收益曲线/最大回撤”，下一步需要接风控规则命中审计和回测。
 
 ## 7. 市场行情业务线
 
@@ -460,9 +502,19 @@ Cron 到点或手动触发
 
 ### 9.1 业务状态
 
-已实现 RSS/Atom 采集、数据源独立容错、幂等保存和兜底资讯。
+已实现 RSS/Atom 采集、数据源独立容错、幂等保存和兜底资讯；本轮新增数据源治理后台接口，前端可展示数据源注册、健康状态、质量快照、质量等级和失败原因。
 
 当前资讯采集仍是轻量级接入，目标不是直接替代专业金融数据供应商，而是先建立稳定的数据入库、质量评分和主题关联链路。后续接入财联社、Wind、同花顺 iFinD、东方财富、巨潮资讯、交易所公告或供应商 API 时，只需要扩展数据源客户端，后续热度统计、投资分析和图表接口可以复用。
+
+数据源治理接口：
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /api/admin/data-sources/save` | 保存数据源注册信息、来源等级、启用状态和负责人 |
+| `POST /api/admin/data-sources/health/save` | 保存最近成功、失败、成功率、延迟和失败原因 |
+| `POST /api/admin/data-sources/quality/save` | 保存数据质量快照 |
+| `POST /api/admin/data-sources/list` | 查询数据源看板，返回健康状态、最新质量和前端提示文案 |
+| `POST /api/admin/data-sources/quality/list` | 查询质量快照历史，用于趋势图 |
 
 ### 9.2 核心实体
 
@@ -976,7 +1028,7 @@ GenerateInvestmentAnalysisRequest
 
 ### 14.1 完整组合交易闭环
 
-状态：模拟组合创建、列表、详情、买入订单、成交、持仓变化、估值刷新和收益曲线已经在第 6 章落地；卖出、调仓、风控审计和回测仍未形成完整 Java 闭环。
+状态：模拟组合创建、列表、详情、买入订单、卖出订单、撤单边界、订单事件审计、再平衡、成交、持仓变化、估值刷新和收益曲线已经在第 6 章落地；风控规则命中审计和回测仍未形成完整 Java 闭环。
 
 目标实体：
 

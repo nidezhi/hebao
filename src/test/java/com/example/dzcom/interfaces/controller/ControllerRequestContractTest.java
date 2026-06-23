@@ -5,18 +5,28 @@ import com.example.dzcom.interfaces.controller.account.AdminRoleController;
 import com.example.dzcom.interfaces.controller.account.AuthenticationController;
 import com.example.dzcom.interfaces.controller.account.CurrentUserController;
 import com.example.dzcom.interfaces.controller.ai.AiModelController;
+import com.example.dzcom.interfaces.controller.ai.AiPromptController;
 import com.example.dzcom.interfaces.controller.ai.InvestmentAnalysisController;
+import com.example.dzcom.interfaces.controller.market.DataSourceGovernanceController;
 import com.example.dzcom.interfaces.controller.product.AdminProductController;
 import com.example.dzcom.interfaces.controller.product.ProductController;
 import com.example.dzcom.interfaces.controller.portfolio.MockPortfolioController;
+import com.example.dzcom.interfaces.controller.risk.RiskAuditController;
 import com.example.dzcom.interfaces.controller.task.InvestmentTaskController;
 import com.example.dzcom.interfaces.dto.response.account.PreferenceResponse;
 import com.example.dzcom.interfaces.dto.response.account.RoleResponse;
 import com.example.dzcom.interfaces.dto.response.account.UserResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiModelResponse;
+import com.example.dzcom.interfaces.dto.response.ai.AiPromptOutputSchemaResponse;
+import com.example.dzcom.interfaces.dto.response.ai.AiPromptPreviewResponse;
+import com.example.dzcom.interfaces.dto.response.ai.AiPromptTemplateResponse;
+import com.example.dzcom.interfaces.dto.response.ai.AiPromptVariableResponse;
 import com.example.dzcom.interfaces.dto.response.ai.InvestmentAnalysisReportResponse;
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.market.MarketQuoteResponse;
+import com.example.dzcom.interfaces.dto.response.market.DataQualitySnapshotResponse;
+import com.example.dzcom.interfaces.dto.response.market.DataSourceHealthResponse;
+import com.example.dzcom.interfaces.dto.response.market.DataSourceResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductAttributeResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductInvestmentProfileResponse;
 import com.example.dzcom.interfaces.dto.response.product.ProductResponse;
@@ -25,9 +35,12 @@ import com.example.dzcom.interfaces.dto.response.portfolio.MockPortfolioResponse
 import com.example.dzcom.interfaces.dto.response.portfolio.MockOrderExecutionResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.MockOrderResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.MockPortfolioPerformanceResponse;
+import com.example.dzcom.interfaces.dto.response.portfolio.MockRebalanceExecutionResponse;
+import com.example.dzcom.interfaces.dto.response.portfolio.OrderEventResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.PortfolioValuationResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.PositionResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.TradeExecutionResponse;
+import com.example.dzcom.interfaces.dto.response.risk.RiskCheckResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskTriggerResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeSnapshotResponse;
@@ -69,9 +82,12 @@ class ControllerRequestContractTest {
         CurrentUserController.class,
         AdminProductController.class,
         ProductController.class,
+        DataSourceGovernanceController.class,
         MockPortfolioController.class,
+        RiskAuditController.class,
         InvestmentTaskController.class,
         AiModelController.class,
+        AiPromptController.class,
         InvestmentAnalysisController.class
     );
 
@@ -87,10 +103,16 @@ class ControllerRequestContractTest {
         MockOrderExecutionResponse.class,
         MockOrderResponse.class,
         MockPortfolioPerformanceResponse.class,
+        MockRebalanceExecutionResponse.class,
+        OrderEventResponse.class,
         PortfolioValuationResponse.class,
         PositionResponse.class,
         TradeExecutionResponse.class,
+        RiskCheckResponse.class,
         MarketQuoteResponse.class,
+        DataQualitySnapshotResponse.class,
+        DataSourceHealthResponse.class,
+        DataSourceResponse.class,
         InvestmentTaskDefinitionResponse.class,
         InvestmentTaskTriggerResponse.class,
         ScheduledTaskExecutionResponse.class,
@@ -98,6 +120,10 @@ class ControllerRequestContractTest {
         NewsArticleRelationResponse.class,
         InvestmentThemeSnapshotResponse.class,
         AiModelResponse.class,
+        AiPromptTemplateResponse.class,
+        AiPromptVariableResponse.class,
+        AiPromptOutputSchemaResponse.class,
+        AiPromptPreviewResponse.class,
         InvestmentAnalysisReportResponse.class,
         PageResponse.class
     );

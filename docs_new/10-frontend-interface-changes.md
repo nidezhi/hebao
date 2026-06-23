@@ -26,13 +26,28 @@
 | `POST /api/investment/analysis/reports/list` | 响应增强 | 分页查询报告时返回同样增强后的 JSON 字段 |
 | `POST /api/admin/products/investment-profile/save` | 新增 | 后台维护产品投资画像和主题关系 |
 | `POST /api/products/detail` | 响应增强 | 返回产品投资画像 `investmentProfile` 和主题关系 `themeRelations` |
+| `POST /api/admin/data-sources/save` | 新增 | 后台维护数据源注册信息、来源等级和启用状态 |
+| `POST /api/admin/data-sources/health/save` | 新增 | 后台或采集任务写入数据源健康状态 |
+| `POST /api/admin/data-sources/quality/save` | 新增 | 后台或采集任务写入数据质量快照 |
+| `POST /api/admin/data-sources/list` | 新增 | 数据源看板列表，展示健康状态和最新质量快照 |
+| `POST /api/admin/data-sources/quality/list` | 新增 | 数据源质量趋势图和质量历史 |
+| `POST /api/ai/prompts/save` | 新增 | 保存 Prompt 模板版本、变量定义和输出 Schema |
+| `POST /api/ai/prompts/list` | 新增 | 分页查询 Prompt 版本，用于后台 Prompt 管理 |
+| `POST /api/ai/prompts/detail` | 新增 | 查询 Prompt 模板、变量和输出 Schema 详情 |
+| `POST /api/ai/prompts/status` | 新增 | 变更 Prompt 生命周期状态，支持启用、停用和回滚 |
+| `POST /api/ai/prompts/preview` | 新增 | 本地渲染 Prompt 预览，校验必填变量但不调用真实模型 |
 | `POST /api/mock/portfolios/create` | 新增 | 创建当前用户模拟组合并生成初始现金估值 |
 | `POST /api/mock/portfolios/mine` | 新增 | 查询当前用户模拟组合列表 |
 | `POST /api/mock/portfolios/detail` | 新增 | 查询模拟组合详情、最新估值和持仓 |
 | `POST /api/mock/portfolios/orders/buy` | 新增 | 按最新行情模拟买入，返回订单、成交和更新后的组合 |
+| `POST /api/mock/portfolios/orders/sell` | 新增 | 按最新行情模拟卖出，返回订单、成交和更新后的组合 |
+| `POST /api/mock/portfolios/orders/cancel` | 新增 | 撤销非终态模拟订单，即时成交订单会明确拒绝 |
+| `POST /api/mock/portfolios/orders/events` | 新增 | 查询模拟订单生命周期事件和交易审计 |
 | `POST /api/mock/portfolios/orders/buy-from-report` | 新增 | 根据投资分析报告自动生成模拟买入 |
+| `POST /api/mock/portfolios/rebalance/execute` | 新增 | 按目标权重执行模拟再平衡 |
 | `POST /api/mock/portfolios/valuations/refresh` | 新增 | 按最新行情刷新模拟组合估值 |
 | `POST /api/mock/portfolios/performance/curve` | 新增 | 查询模拟组合收益曲线和最大回撤 |
+| `POST /api/risk/checks/list` | 新增 | 查询风控检查和 Mock 交易拦截原因 |
 
 本轮阶段 0 止损字段：
 

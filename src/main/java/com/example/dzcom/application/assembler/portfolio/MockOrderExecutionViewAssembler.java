@@ -35,6 +35,18 @@ public class MockOrderExecutionViewAssembler {
 
     /** 转换订单视图。 */
     private MockOrderView toOrderView(MockOrder order) {
+        return assembleOrder(order);
+    }
+
+    /**
+     * 单独组装模拟订单视图，用于撤单等没有成交明细的订单状态响应。
+     *
+     * @param order 模拟订单
+     * @return 模拟订单视图
+     * @author dz
+     * @date 2026-06-23
+     */
+    public MockOrderView assembleOrder(MockOrder order) {
         return MockOrderView.builder()
             .bizId(order.bizId())
             .orderNo(order.orderNo())
@@ -44,6 +56,7 @@ public class MockOrderExecutionViewAssembler {
             .orderType(order.orderType())
             .currency(order.currency())
             .requestedPrice(order.requestedPrice())
+            .requestedQuantity(order.requestedQuantity())
             .requestedAmount(order.requestedAmount())
             .executedQuantity(order.executedQuantity())
             .executedAmount(order.executedAmount())

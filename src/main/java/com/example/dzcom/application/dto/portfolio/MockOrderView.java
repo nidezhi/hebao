@@ -26,6 +26,8 @@ public record MockOrderView(
     String currency,
     @Schema(description = "委托价格")
     BigDecimal requestedPrice,
+    @Schema(description = "委托数量")
+    BigDecimal requestedQuantity,
     @Schema(description = "委托金额")
     BigDecimal requestedAmount,
     @Schema(description = "成交数量")
