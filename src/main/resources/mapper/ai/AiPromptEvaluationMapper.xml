@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.ai.AiPromptEvaluationMapper">
+    <sql id="searchCondition">
+        from aiw_ai_prompt_evaluation e
+        where 1 = 1
+        <if test="criteria.promptCode != null and criteria.promptCode != ''">
+            and e.prompt_code = #{criteria.promptCode}
+        </if>
+        <if test="criteria.promptVersion != null and criteria.promptVersion != ''">
+            and e.prompt_version = #{criteria.promptVersion}
+        </if>
+        <if test="criteria.scenario != null and criteria.scenario != ''">
+            and e.scenario = #{criteria.scenario}
+        </if>
+        <if test="criteria.backtestBizId != null and criteria.backtestBizId != ''">
+            and e.backtest_biz_id = #{criteria.backtestBizId}
+        </if>
+        <if test="criteria.feedbackBizId != null and criteria.feedbackBizId != ''">
+            and e.feedback_biz_id = #{criteria.feedbackBizId}
+        </if>
+        <if test="criteria.reviewStatus != null and criteria.reviewStatus != ''">
+            and e.review_status = #{criteria.reviewStatus}
+        </if>
+    </sql>
+
+    <insert id="insert">
+        insert into aiw_ai_prompt_evaluation
+        (biz_id, prompt_biz_id, prompt_code, prompt_version, scenario,
+         backtest_biz_id, feedback_biz_id, score, score_detail, review_status,
+         evaluator_type, evaluator_biz_id, evaluated_at, created_at)
+        values
+        (#{bizId}, #{promptBizId}, #{promptCode}, #{promptVersion}, #{scenario},
+         #{backtestBizId}, #{feedbackBizId}, #{score}, #{scoreDetail}, #{reviewStatus},
+         #{evaluatorType}, #{evaluatorBizId}, #{evaluatedAt}, #{createdAt})
+    </insert>
+
+    <select id="selectByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiPromptEvaluationEntity">
+        select * from aiw_ai_prompt_evaluation where biz_id = #{bizId}
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiPromptEvaluationEntity">
+        select e.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

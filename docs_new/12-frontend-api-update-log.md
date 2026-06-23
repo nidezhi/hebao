@@ -44,6 +44,16 @@
 | `POST /api/ai/prompts/detail` | 新增 | 查询 Prompt 模板详情 |
 | `POST /api/ai/prompts/status` | 新增 | 变更 Prompt 生命周期状态 |
 | `POST /api/ai/prompts/preview` | 新增 | 本地预览 Prompt 渲染结果 |
+| `POST /api/backtests/save` | 新增 | 保存外部或后台计算的回测结果 |
+| `POST /api/backtests/generate-from-portfolio` | 新增 | 从 Mock 组合估值曲线生成回测摘要 |
+| `POST /api/backtests/detail` | 新增 | 查询回测详情 |
+| `POST /api/backtests/list` | 新增 | 查询回测结果列表 |
+| `POST /api/ai/feedback/save` | 新增 | 保存用户采纳、拒绝、观察或忽略反馈 |
+| `POST /api/ai/feedback/detail` | 新增 | 查询反馈详情 |
+| `POST /api/ai/feedback/list` | 新增 | 查询反馈历史 |
+| `POST /api/ai/prompt-evaluations/save` | 新增 | 保存 Prompt 评估 |
+| `POST /api/ai/prompt-evaluations/detail` | 新增 | 查询 Prompt 评估详情 |
+| `POST /api/ai/prompt-evaluations/list` | 新增 | 查询 Prompt 评估列表 |
 | `POST /api/risk/checks/list` | 新增 | 查询风控检查和 Mock 交易拦截原因 |
 
 ### 3.1.0 Prompt 治理接口

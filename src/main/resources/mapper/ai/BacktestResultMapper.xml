@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.ai.BacktestResultMapper">
+    <sql id="searchCondition">
+        from aiw_backtest_result b
+        where 1 = 1
+        <if test="criteria.ownerUserBizId != null and criteria.ownerUserBizId != ''">
+            and b.owner_user_biz_id = #{criteria.ownerUserBizId}
+        </if>
+        <if test="criteria.strategyCode != null and criteria.strategyCode != ''">
+            and b.strategy_code = #{criteria.strategyCode}
+        </if>
+        <if test="criteria.strategyVersion != null and criteria.strategyVersion != ''">
+            and b.strategy_version = #{criteria.strategyVersion}
+        </if>
+        <if test="criteria.status != null and criteria.status != ''">
+            and b.status = #{criteria.status}
+        </if>
+    </sql>
+
+    <insert id="save">
+        insert into aiw_backtest_result
+        (biz_id, owner_user_biz_id, strategy_code, strategy_version, start_date, end_date,
+         initial_capital, benchmark_code, parameters, metrics, result_uri, status, failure_reason,
+         started_at, completed_at, created_at, updated_at)
+        values
+        (#{bizId}, #{ownerUserBizId}, #{strategyCode}, #{strategyVersion}, #{startDate}, #{endDate},
+         #{initialCapital}, #{benchmarkCode}, #{parameters}, #{metrics}, #{resultUri}, #{status}, #{failureReason},
+         #{startedAt}, #{completedAt}, #{createdAt}, #{updatedAt})
+        on duplicate key update
+        owner_user_biz_id = values(owner_user_biz_id),
+        strategy_code = values(strategy_code),
+        strategy_version = values(strategy_version),
+        start_date = values(start_date),
+        end_date = values(end_date),
+        initial_capital = values(initial_capital),
+        benchmark_code = values(benchmark_code),
+        parameters = values(parameters),
+        metrics = values(metrics),
+        result_uri = values(result_uri),
+        status = values(status),
+        failure_reason = values(failure_reason),
+        started_at = values(started_at),
+        completed_at = values(completed_at),
+        updated_at = values(updated_at)
+    </insert>
+
+    <select id="selectByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.BacktestResultEntity">
+        select * from aiw_backtest_result where biz_id = #{bizId}
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.BacktestResultEntity">
+        select b.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

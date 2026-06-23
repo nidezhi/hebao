@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.ai.InvestmentFeedbackMapper">
+    <sql id="searchCondition">
+        from aiw_investment_feedback f
+        where 1 = 1
+        <if test="criteria.userBizId != null and criteria.userBizId != ''">
+            and f.user_biz_id = #{criteria.userBizId}
+        </if>
+        <if test="criteria.targetType != null and criteria.targetType != ''">
+            and f.target_type = #{criteria.targetType}
+        </if>
+        <if test="criteria.targetBizId != null and criteria.targetBizId != ''">
+            and f.target_biz_id = #{criteria.targetBizId}
+        </if>
+        <if test="criteria.reportBizId != null and criteria.reportBizId != ''">
+            and f.report_biz_id = #{criteria.reportBizId}
+        </if>
+        <if test="criteria.promptCode != null and criteria.promptCode != ''">
+            and f.prompt_code = #{criteria.promptCode}
+        </if>
+        <if test="criteria.promptVersion != null and criteria.promptVersion != ''">
+            and f.prompt_version = #{criteria.promptVersion}
+        </if>
+        <if test="criteria.backtestBizId != null and criteria.backtestBizId != ''">
+            and f.backtest_biz_id = #{criteria.backtestBizId}
+        </if>
+        <if test="criteria.feedbackAction != null and criteria.feedbackAction != ''">
+            and f.feedback_action = #{criteria.feedbackAction}
+        </if>
+    </sql>
+
+    <insert id="insert">
+        insert into aiw_investment_feedback
+        (biz_id, user_biz_id, target_type, target_biz_id, report_biz_id,
+         prompt_biz_id, prompt_code, prompt_version, backtest_biz_id,
+         feedback_action, reason_code, comment_text, metadata, created_at)
+        values
+        (#{bizId}, #{userBizId}, #{targetType}, #{targetBizId}, #{reportBizId},
+         #{promptBizId}, #{promptCode}, #{promptVersion}, #{backtestBizId},
+         #{feedbackAction}, #{reasonCode}, #{commentText}, #{metadata}, #{createdAt})
+    </insert>
+
+    <select id="selectByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.InvestmentFeedbackEntity">
+        select * from aiw_investment_feedback where biz_id = #{bizId}
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.InvestmentFeedbackEntity">
+        select f.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

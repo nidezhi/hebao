@@ -36,6 +36,16 @@
 | `POST /api/ai/prompts/detail` | 新增 | 查询 Prompt 模板、变量和输出 Schema 详情 |
 | `POST /api/ai/prompts/status` | 新增 | 变更 Prompt 生命周期状态，支持启用、停用和回滚 |
 | `POST /api/ai/prompts/preview` | 新增 | 本地渲染 Prompt 预览，校验必填变量但不调用真实模型 |
+| `POST /api/backtests/save` | 新增 | 保存外部或后台计算的回测结果 |
+| `POST /api/backtests/generate-from-portfolio` | 新增 | 从 Mock 组合估值曲线生成回测摘要 |
+| `POST /api/backtests/detail` | 新增 | 查询回测详情 |
+| `POST /api/backtests/list` | 新增 | 分页查询回测结果 |
+| `POST /api/ai/feedback/save` | 新增 | 保存用户采纳、拒绝、观察或忽略反馈 |
+| `POST /api/ai/feedback/detail` | 新增 | 查询反馈详情 |
+| `POST /api/ai/feedback/list` | 新增 | 分页查询反馈历史 |
+| `POST /api/ai/prompt-evaluations/save` | 新增 | 保存 Prompt 评估 |
+| `POST /api/ai/prompt-evaluations/detail` | 新增 | 查询 Prompt 评估详情 |
+| `POST /api/ai/prompt-evaluations/list` | 新增 | 分页查询 Prompt 评估 |
 | `POST /api/mock/portfolios/create` | 新增 | 创建当前用户模拟组合并生成初始现金估值 |
 | `POST /api/mock/portfolios/mine` | 新增 | 查询当前用户模拟组合列表 |
 | `POST /api/mock/portfolios/detail` | 新增 | 查询模拟组合详情、最新估值和持仓 |

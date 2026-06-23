@@ -435,13 +435,13 @@ DRAFT
 - Prompt 输出 Schema：已落地，表为 `aiw_ai_prompt_output_schema`。
 - Prompt 版本管理接口：已落地，接口为 `/api/ai/prompts/save`、`/api/ai/prompts/list`、`/api/ai/prompts/detail`、`/api/ai/prompts/status`。
 - Prompt 预览接口：已落地，接口为 `/api/ai/prompts/preview`，仅做本地变量替换和必填校验，不触发真实模型调用。
-- Prompt 评估和回测反哺：未落地，后续由 `AiPromptEvaluation`、回测结果和用户采纳/拒绝反馈补齐。
+- Prompt 评估和回测反哺：已落地，接口为 `/api/ai/prompt-evaluations/save`、`/api/ai/prompt-evaluations/list`、`/api/ai/feedback/save`、`/api/backtests/generate-from-portfolio`。
 
 验收：
 
 - 前端已可查看 Prompt 模板、变量、输出 Schema 和本地渲染后的最终 Prompt。
 - Prompt 已可通过状态变更完成启用、停用和回滚候选管理。
-- 报告、Prompt、模型、Mock 结果和反馈之间的完整复盘链路仍需在后续阶段补齐。
+- 报告、Prompt、Mock 结果、回测结果和用户反馈之间已具备可保存、可查询、可评分的复盘链路；真实模型调用结果表仍待接入真实 Provider 后细化。
 
 ### 阶段 5：Mock 交易闭环
 
@@ -474,6 +474,8 @@ DRAFT
 - AI 投资方案表。
 - 推荐采纳、拒绝和反馈。
 - 回测结果反哺 Prompt 评分。
+- 回测结果：已落地，支持外部结果保存、Mock 组合估值生成摘要、详情和列表。
+- 推荐采纳、拒绝和反馈：已落地，支持反馈保存、详情、列表，并自动生成 Prompt 评估记录。
 
 验收：
 

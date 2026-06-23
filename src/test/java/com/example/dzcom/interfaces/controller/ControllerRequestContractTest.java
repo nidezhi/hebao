@@ -6,6 +6,9 @@ import com.example.dzcom.interfaces.controller.account.AuthenticationController;
 import com.example.dzcom.interfaces.controller.account.CurrentUserController;
 import com.example.dzcom.interfaces.controller.ai.AiModelController;
 import com.example.dzcom.interfaces.controller.ai.AiPromptController;
+import com.example.dzcom.interfaces.controller.ai.AiPromptEvaluationController;
+import com.example.dzcom.interfaces.controller.ai.BacktestController;
+import com.example.dzcom.interfaces.controller.ai.InvestmentFeedbackController;
 import com.example.dzcom.interfaces.controller.ai.InvestmentAnalysisController;
 import com.example.dzcom.interfaces.controller.market.DataSourceGovernanceController;
 import com.example.dzcom.interfaces.controller.product.AdminProductController;
@@ -18,9 +21,12 @@ import com.example.dzcom.interfaces.dto.response.account.RoleResponse;
 import com.example.dzcom.interfaces.dto.response.account.UserResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiModelResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiPromptOutputSchemaResponse;
+import com.example.dzcom.interfaces.dto.response.ai.AiPromptEvaluationResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiPromptPreviewResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiPromptTemplateResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiPromptVariableResponse;
+import com.example.dzcom.interfaces.dto.response.ai.BacktestResultResponse;
+import com.example.dzcom.interfaces.dto.response.ai.InvestmentFeedbackResponse;
 import com.example.dzcom.interfaces.dto.response.ai.InvestmentAnalysisReportResponse;
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.market.MarketQuoteResponse;
@@ -88,6 +94,9 @@ class ControllerRequestContractTest {
         InvestmentTaskController.class,
         AiModelController.class,
         AiPromptController.class,
+        BacktestController.class,
+        InvestmentFeedbackController.class,
+        AiPromptEvaluationController.class,
         InvestmentAnalysisController.class
     );
 
@@ -124,6 +133,9 @@ class ControllerRequestContractTest {
         AiPromptVariableResponse.class,
         AiPromptOutputSchemaResponse.class,
         AiPromptPreviewResponse.class,
+        BacktestResultResponse.class,
+        InvestmentFeedbackResponse.class,
+        AiPromptEvaluationResponse.class,
         InvestmentAnalysisReportResponse.class,
         PageResponse.class
     );
