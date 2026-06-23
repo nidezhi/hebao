@@ -34,6 +34,7 @@ public class AiPromptEvaluationController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "保存成功，返回 Prompt 评估", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数或JSON格式不合法"),
+        @ApiResponse(responseCode = "403", description = "关联回测或反馈不属于当前用户"),
         @ApiResponse(responseCode = "500", description = "系统错误")
     })
     public Result<AiPromptEvaluationResponse> save(@Valid @RequestBody SaveAiPromptEvaluationRequest request) {
@@ -56,6 +57,7 @@ public class AiPromptEvaluationController {
     @Operation(summary = "查询AI Prompt评估详情", description = "根据评估业务 ID 查询 Prompt 评分、回测、反馈和复核状态。")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "查询成功，返回 Prompt 评估详情", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "403", description = "Prompt评估对当前用户不可见"),
         @ApiResponse(responseCode = "404", description = "Prompt评估不存在"),
         @ApiResponse(responseCode = "500", description = "系统错误")
     })

@@ -19,6 +19,7 @@ import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.domain.model.ai.AiPromptEvaluation;
 import com.example.dzcom.domain.model.ai.BacktestResult;
 import com.example.dzcom.domain.model.ai.InvestmentFeedback;
+import com.example.dzcom.domain.model.portfolio.Portfolio;
 import com.example.dzcom.domain.model.portfolio.PortfolioValuation;
 import com.example.dzcom.domain.repository.ai.AiPromptEvaluationSearchCriteria;
 import com.example.dzcom.domain.repository.ai.AiPromptEvaluationStore;
@@ -26,6 +27,7 @@ import com.example.dzcom.domain.repository.ai.BacktestResultSearchCriteria;
 import com.example.dzcom.domain.repository.ai.BacktestResultStore;
 import com.example.dzcom.domain.repository.ai.InvestmentFeedbackSearchCriteria;
 import com.example.dzcom.domain.repository.ai.InvestmentFeedbackStore;
+import com.example.dzcom.domain.repository.portfolio.PortfolioStore;
 import com.example.dzcom.domain.repository.portfolio.PortfolioValuationStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,6 +38,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,6 +64,7 @@ public class InvestmentClosedLoopApplicationService {
     private final BacktestResultStore backtests;
     private final InvestmentFeedbackStore feedbacks;
     private final AiPromptEvaluationStore promptEvaluations;
+    private final PortfolioStore portfolios;
     private final PortfolioValuationStore valuations;
     private final CurrentOperatorProvider currentOperator;
     private final IdGenerator ids;
@@ -82,10 +86,10 @@ public class InvestmentClosedLoopApplicationService {
         LocalDateTime now = clock.now();
         BacktestResult existing = command.bizId() == null || command.bizId().isBlank()
             ? null
-            : backtests.findByBizId(command.bizId()).orElse(null);
+            : requiredOwnedBacktest(command.bizId(), operator.userBizId());
         BacktestResult result = BacktestResult.builder()
             .bizId(existing == null ? ids.newBizId() : existing.bizId())
-            .ownerUserBizId(operator.userBizId())
+            .ownerUserBizId(existing == null ? operator.userBizId() : existing.ownerUserBizId())
             .strategyCode(normalizeCode(command.strategyCode(), "策略编码不能为空"))
             .strategyVersion(normalizeText(command.strategyVersion(), "策略版本不能为空"))
             .startDate(requireDate(command.startDate(), "回测开始日期不能为空"))
@@ -95,7 +99,7 @@ public class InvestmentClosedLoopApplicationService {
             .parameters(command.parameters().trim())
             .metrics(trimToNull(command.metrics()))
             .resultUri(trimToNull(command.resultUri()))
-            .status(normalizeAllowed(command.status(), BACKTEST_STATUSES, "回测状态不合法"))
+            .status(normalizeAllowed(defaultIfBlank(command.status(), "PENDING"), BACKTEST_STATUSES, "回测状态不合法"))
             .failureReason(trimToNull(command.failureReason()))
             .startedAt(command.startedAt())
             .completedAt(command.completedAt())
@@ -119,7 +123,9 @@ public class InvestmentClosedLoopApplicationService {
     public BacktestResultView generateBacktestFromPortfolio(GenerateBacktestFromPortfolioCommand command) {
         CurrentOperator operator = currentOperator.required();
         String portfolioBizId = normalizeText(command.portfolioBizId(), "模拟组合不能为空");
+        Portfolio portfolio = requiredOwnedPortfolio(portfolioBizId, operator.userBizId());
         int limit = normalizeLimit(command.limit());
+        validateOptionalJson(command.parameters(), "回测参数JSON格式不合法");
         List<PortfolioValuation> history = valuations.findHistoryByPortfolioBizId(portfolioBizId, limit);
         if (history.size() < 2) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "估值点不足，不能生成回测摘要");
@@ -129,11 +135,15 @@ public class InvestmentClosedLoopApplicationService {
         BigDecimal totalReturn = returnRate(last.totalAsset(), first.totalAsset());
         BigDecimal maxDrawdown = maxDrawdown(history);
         BigDecimal volatility = simpleVolatility(history);
-        String parameters = JSON.toJSONString(Map.of(
-            "source", "MOCK_PORTFOLIO_VALUATION",
-            "portfolioBizId", portfolioBizId,
-            "pointCount", history.size()
-        ));
+        Map<String, Object> parameterMap = new LinkedHashMap<>();
+        parameterMap.put("source", "MOCK_PORTFOLIO_VALUATION");
+        parameterMap.put("portfolioBizId", portfolio.bizId());
+        parameterMap.put("portfolioName", portfolio.portfolioName());
+        parameterMap.put("pointCount", history.size());
+        if (command.parameters() != null && !command.parameters().isBlank()) {
+            parameterMap.put("clientParameters", JSON.parse(command.parameters()));
+        }
+        String parameters = JSON.toJSONString(parameterMap);
         String metrics = JSON.toJSONString(Map.of(
             "totalReturnRate", totalReturn,
             "maxDrawdown", maxDrawdown,
@@ -168,8 +178,8 @@ public class InvestmentClosedLoopApplicationService {
     /** 查询回测详情。 */
     @Transactional(readOnly = true)
     public BacktestResultView backtestDetail(String bizId) {
-        return toBacktestView(backtests.findByBizId(normalizeText(bizId, "回测业务ID不能为空"))
-            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "回测结果不存在")));
+        CurrentOperator operator = currentOperator.required();
+        return toBacktestView(requiredOwnedBacktest(bizId, operator.userBizId()));
     }
 
     /** 分页查询回测结果。 */
@@ -202,6 +212,7 @@ public class InvestmentClosedLoopApplicationService {
     public InvestmentFeedbackView saveFeedback(SaveInvestmentFeedbackCommand command) {
         CurrentOperator operator = currentOperator.required();
         validateOptionalJson(command.metadata(), "反馈上下文JSON格式不合法");
+        requireOwnedBacktestIfPresent(command.backtestBizId(), operator.userBizId());
         LocalDateTime now = clock.now();
         InvestmentFeedback feedback = InvestmentFeedback.builder()
             .bizId(ids.newBizId())
@@ -227,8 +238,8 @@ public class InvestmentClosedLoopApplicationService {
     /** 查询反馈详情。 */
     @Transactional(readOnly = true)
     public InvestmentFeedbackView feedbackDetail(String bizId) {
-        return toFeedbackView(feedbacks.findByBizId(normalizeText(bizId, "反馈业务ID不能为空"))
-            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "反馈不存在")));
+        CurrentOperator operator = currentOperator.required();
+        return toFeedbackView(requiredOwnedFeedback(bizId, operator.userBizId()));
     }
 
     /** 分页查询反馈。 */
@@ -266,6 +277,8 @@ public class InvestmentClosedLoopApplicationService {
     public AiPromptEvaluationView savePromptEvaluation(SaveAiPromptEvaluationCommand command) {
         CurrentOperator operator = currentOperator.required();
         validateOptionalJson(command.scoreDetail(), "评分详情JSON格式不合法");
+        requireOwnedBacktestIfPresent(command.backtestBizId(), operator.userBizId());
+        requireOwnedFeedbackIfPresent(command.feedbackBizId(), operator.userBizId());
         LocalDateTime now = clock.now();
         AiPromptEvaluation evaluation = AiPromptEvaluation.builder()
             .bizId(ids.newBizId())
@@ -289,8 +302,11 @@ public class InvestmentClosedLoopApplicationService {
     /** 查询 Prompt 评估详情。 */
     @Transactional(readOnly = true)
     public AiPromptEvaluationView promptEvaluationDetail(String bizId) {
-        return toEvaluationView(promptEvaluations.findByBizId(normalizeText(bizId, "Prompt评估业务ID不能为空"))
-            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Prompt评估不存在")));
+        CurrentOperator operator = currentOperator.required();
+        AiPromptEvaluation evaluation = promptEvaluations.findByBizId(normalizeText(bizId, "Prompt评估业务ID不能为空"))
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Prompt评估不存在"));
+        requireEvaluationVisible(evaluation, operator.userBizId());
+        return toEvaluationView(evaluation);
     }
 
     /** 分页查询 Prompt 评估。 */
@@ -299,7 +315,9 @@ public class InvestmentClosedLoopApplicationService {
                                                                     String scenario, String backtestBizId,
                                                                     String feedbackBizId, String reviewStatus,
                                                                     PageQuery query) {
+        CurrentOperator operator = currentOperator.required();
         PageResult<AiPromptEvaluation> page = promptEvaluations.search(new AiPromptEvaluationSearchCriteria(
+            operator.userBizId(),
             trimToNull(promptCode),
             trimToNull(promptVersion),
             trimToNull(scenario),
@@ -358,6 +376,115 @@ public class InvestmentClosedLoopApplicationService {
             .evaluatedAt(now)
             .createdAt(now)
             .build());
+    }
+
+    /**
+     * 查询并校验回测结果归属当前用户。
+     *
+     * @param bizId 回测业务唯一标识
+     * @param userBizId 当前用户业务标识
+     * @return 归属于当前用户的回测结果
+     * @throws BusinessException 当回测不存在或不属于当前用户时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    private BacktestResult requiredOwnedBacktest(String bizId, String userBizId) {
+        BacktestResult result = backtests.findByBizId(normalizeText(bizId, "回测业务ID不能为空"))
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "回测结果不存在"));
+        if (!userBizId.equals(result.ownerUserBizId())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "无权访问该回测结果");
+        }
+        return result;
+    }
+
+    /**
+     * 查询并校验模拟组合归属当前用户。
+     *
+     * @param portfolioBizId 组合业务唯一标识
+     * @param userBizId 当前用户业务标识
+     * @return 归属于当前用户的模拟组合
+     * @throws BusinessException 当组合不存在或不属于当前用户时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    private Portfolio requiredOwnedPortfolio(String portfolioBizId, String userBizId) {
+        Portfolio portfolio = portfolios.findByBizId(portfolioBizId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "模拟组合不存在"));
+        if (!userBizId.equals(portfolio.ownerUserBizId())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "无权访问该模拟组合");
+        }
+        return portfolio;
+    }
+
+    /**
+     * 查询并校验反馈记录归属当前用户。
+     *
+     * @param bizId 反馈业务唯一标识
+     * @param userBizId 当前用户业务标识
+     * @return 归属于当前用户的反馈记录
+     * @throws BusinessException 当反馈不存在或不属于当前用户时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    private InvestmentFeedback requiredOwnedFeedback(String bizId, String userBizId) {
+        InvestmentFeedback feedback = feedbacks.findByBizId(normalizeText(bizId, "反馈业务ID不能为空"))
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "反馈不存在"));
+        if (!userBizId.equals(feedback.userBizId())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "无权访问该反馈");
+        }
+        return feedback;
+    }
+
+    /**
+     * 当请求携带回测业务标识时校验归属。
+     *
+     * @param backtestBizId 回测业务唯一标识
+     * @param userBizId 当前用户业务标识
+     * @author dz
+     * @date 2026-06-23
+     */
+    private void requireOwnedBacktestIfPresent(String backtestBizId, String userBizId) {
+        if (backtestBizId != null && !backtestBizId.isBlank()) {
+            requiredOwnedBacktest(backtestBizId, userBizId);
+        }
+    }
+
+    /**
+     * 当请求携带反馈业务标识时校验归属。
+     *
+     * @param feedbackBizId 反馈业务唯一标识
+     * @param userBizId 当前用户业务标识
+     * @author dz
+     * @date 2026-06-23
+     */
+    private void requireOwnedFeedbackIfPresent(String feedbackBizId, String userBizId) {
+        if (feedbackBizId != null && !feedbackBizId.isBlank()) {
+            requiredOwnedFeedback(feedbackBizId, userBizId);
+        }
+    }
+
+    /**
+     * 校验 Prompt 评估记录对当前用户可见。
+     *
+     * @param evaluation Prompt 评估记录
+     * @param userBizId 当前用户业务标识
+     * @throws BusinessException 当评估记录关联了当前用户不可见的数据时抛出
+     * @author dz
+     * @date 2026-06-23
+     */
+    private void requireEvaluationVisible(AiPromptEvaluation evaluation, String userBizId) {
+        if (userBizId.equals(evaluation.evaluatorBizId())) {
+            return;
+        }
+        if (evaluation.feedbackBizId() != null) {
+            requiredOwnedFeedback(evaluation.feedbackBizId(), userBizId);
+            return;
+        }
+        if (evaluation.backtestBizId() != null) {
+            requiredOwnedBacktest(evaluation.backtestBizId(), userBizId);
+            return;
+        }
+        throw new BusinessException(HttpStatus.FORBIDDEN, "无权访问该Prompt评估");
     }
 
     /** 根据回测指标计算简化评分。 */

@@ -4,6 +4,23 @@
     <sql id="searchCondition">
         from aiw_ai_prompt_evaluation e
         where 1 = 1
+        <if test="criteria.visibleUserBizId != null and criteria.visibleUserBizId != ''">
+            and (
+                e.evaluator_biz_id = #{criteria.visibleUserBizId}
+                or exists (
+                    select 1
+                    from aiw_investment_feedback f
+                    where f.biz_id = e.feedback_biz_id
+                      and f.user_biz_id = #{criteria.visibleUserBizId}
+                )
+                or exists (
+                    select 1
+                    from aiw_backtest_result b
+                    where b.biz_id = e.backtest_biz_id
+                      and b.owner_user_biz_id = #{criteria.visibleUserBizId}
+                )
+            )
+        </if>
         <if test="criteria.promptCode != null and criteria.promptCode != ''">
             and e.prompt_code = #{criteria.promptCode}
         </if>

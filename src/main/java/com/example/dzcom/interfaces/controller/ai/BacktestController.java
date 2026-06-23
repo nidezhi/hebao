@@ -36,6 +36,7 @@ public class BacktestController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "保存成功，返回回测结果", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数或JSON格式不合法"),
+        @ApiResponse(responseCode = "403", description = "更新的回测结果不属于当前用户"),
         @ApiResponse(responseCode = "500", description = "系统错误")
     })
     public Result<BacktestResultResponse> save(@Valid @RequestBody SaveBacktestResultRequest request) {
@@ -63,6 +64,7 @@ public class BacktestController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "生成成功，返回回测结果", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "估值点不足或参数不合法"),
+        @ApiResponse(responseCode = "403", description = "模拟组合不属于当前用户"),
         @ApiResponse(responseCode = "500", description = "系统错误")
     })
     public Result<BacktestResultResponse> generateFromPortfolio(
@@ -84,6 +86,7 @@ public class BacktestController {
     @Operation(summary = "查询回测详情", description = "根据回测业务 ID 查询回测参数、指标和状态。")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "查询成功，返回回测详情", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "403", description = "回测结果不属于当前用户"),
         @ApiResponse(responseCode = "404", description = "回测结果不存在"),
         @ApiResponse(responseCode = "500", description = "系统错误")
     })

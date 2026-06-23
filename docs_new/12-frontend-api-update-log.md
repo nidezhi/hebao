@@ -800,3 +800,60 @@
 - `valuations.totalReturnRate` 用于收益率曲线。
 - `maxDrawdown` 用于风险卡片。
 - `limit` 最大 500，默认 120。
+
+## 4. 回测、反馈和 Prompt 评估闭环接口补充
+
+### 4.1 回测结果接口
+
+接口：
+
+```text
+POST /api/backtests/save
+POST /api/backtests/generate-from-portfolio
+POST /api/backtests/detail
+POST /api/backtests/list
+```
+
+前端注意：
+
+- `/api/backtests/save` 的 `status` 可省略，后端默认 `PENDING`。
+- `/api/backtests/save` 传入已有 `bizId` 时，后端会校验该记录归属当前用户，禁止接管其他用户回测。
+- `/api/backtests/generate-from-portfolio` 只允许使用当前用户自己的 Mock 组合。
+- `/api/backtests/generate-from-portfolio` 的 `parameters` 可传 JSON，后端会写入响应 `parameters.clientParameters`。
+- `/api/backtests/detail` 只允许查看当前用户可见记录；越权返回 `403`。
+
+### 4.2 投资反馈接口
+
+接口：
+
+```text
+POST /api/ai/feedback/save
+POST /api/ai/feedback/detail
+POST /api/ai/feedback/list
+```
+
+前端注意：
+
+- `feedbackAction` 下拉项：`ADOPT`、`REJECT`、`WATCH`、`IGNORE`。
+- `targetType` 下拉项：`REPORT`、`RECOMMENDATION`、`MOCK_ORDER`、`MOCK_PORTFOLIO`、`BACKTEST`、`PROMPT`。
+- 保存反馈时携带 `backtestBizId` 会触发回测归属校验；越权返回 `403`。
+- 携带 `promptCode` 和 `promptVersion` 时，后端自动生成 `FEEDBACK_LOOP` 场景 Prompt 评估。
+- `/api/ai/feedback/detail` 只允许查看当前用户自己的反馈。
+
+### 4.3 Prompt 评估接口
+
+接口：
+
+```text
+POST /api/ai/prompt-evaluations/save
+POST /api/ai/prompt-evaluations/detail
+POST /api/ai/prompt-evaluations/list
+```
+
+前端注意：
+
+- `reviewStatus` 可省略，后端默认 `PENDING`。
+- `reviewStatus` 下拉项：`PENDING`、`APPROVED`、`REJECTED`、`ARCHIVED`。
+- `score` 范围为 0 到 1。
+- 保存评估时携带 `backtestBizId` 或 `feedbackBizId` 会触发可见性校验。
+- `/api/ai/prompt-evaluations/detail` 只允许评估人本人、关联反馈所有者或关联回测所有者查看；越权返回 `403`。

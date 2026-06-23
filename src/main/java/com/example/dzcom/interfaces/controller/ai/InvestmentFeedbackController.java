@@ -34,6 +34,7 @@ public class InvestmentFeedbackController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "保存成功，返回反馈记录", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数或JSON格式不合法"),
+        @ApiResponse(responseCode = "403", description = "关联回测结果不属于当前用户"),
         @ApiResponse(responseCode = "500", description = "系统错误")
     })
     public Result<InvestmentFeedbackResponse> save(@Valid @RequestBody SaveInvestmentFeedbackRequest request) {
@@ -58,6 +59,7 @@ public class InvestmentFeedbackController {
     @Operation(summary = "查询投资反馈详情", description = "根据反馈业务 ID 查询用户动作、关联报告、Prompt、回测和备注。")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "查询成功，返回反馈详情", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "403", description = "反馈记录不属于当前用户"),
         @ApiResponse(responseCode = "404", description = "反馈不存在"),
         @ApiResponse(responseCode = "500", description = "系统错误")
     })

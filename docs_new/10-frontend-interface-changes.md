@@ -724,3 +724,59 @@ POST /api/investment/analysis/reports/list
 - 投资模拟方案通过 `investmentPlan` 和 `simulatedReturn` 暴露。
 - 图表数据通过 `chartPayload` 暴露。
 - 数据质量和风险提示在投资分析报告中可直接展示。
+
+## 12. 回测、反馈和 Prompt 评估闭环接入说明
+
+### 12.1 回测结果
+
+接口：
+
+```text
+POST /api/backtests/save
+POST /api/backtests/generate-from-portfolio
+POST /api/backtests/detail
+POST /api/backtests/list
+```
+
+前端注意：
+
+- `/api/backtests/save` 的 `status` 可不传，后端默认保存为 `PENDING`。
+- 传入 `bizId` 更新回测时，后端会校验该回测必须属于当前用户；否则返回 `403`。
+- `/api/backtests/generate-from-portfolio` 会校验 Mock 组合归属当前用户；`parameters` 可为空，也可传 JSON。
+- 生成回测摘要时，前端传入的 `parameters` 会写入响应 `parameters.clientParameters`，用于复盘当时的筛选、调仓或展示参数。
+- `/detail` 只允许查看当前用户可见的回测结果；列表天然按当前用户过滤。
+
+### 12.2 投资反馈
+
+接口：
+
+```text
+POST /api/ai/feedback/save
+POST /api/ai/feedback/detail
+POST /api/ai/feedback/list
+```
+
+前端注意：
+
+- `feedbackAction` 取值为 `ADOPT`、`REJECT`、`WATCH`、`IGNORE`。
+- `targetType` 取值为 `REPORT`、`RECOMMENDATION`、`MOCK_ORDER`、`MOCK_PORTFOLIO`、`BACKTEST`、`PROMPT`。
+- 保存反馈时如果携带 `backtestBizId`，后端会校验该回测属于当前用户。
+- 携带 `promptCode` 和 `promptVersion` 时，后端会自动生成一条 `FEEDBACK_LOOP` 场景的 Prompt 评估记录。
+- `/detail` 只允许查看当前用户自己的反馈记录；越权返回 `403`。
+
+### 12.3 Prompt 评估
+
+接口：
+
+```text
+POST /api/ai/prompt-evaluations/save
+POST /api/ai/prompt-evaluations/detail
+POST /api/ai/prompt-evaluations/list
+```
+
+前端注意：
+
+- `reviewStatus` 可不传，后端默认 `PENDING`；允许值为 `PENDING`、`APPROVED`、`REJECTED`、`ARCHIVED`。
+- `score` 为 0 到 1 的小数。
+- 保存评估时，如果携带 `backtestBizId` 或 `feedbackBizId`，后端会校验关联数据对当前用户可见。
+- `/detail` 只允许评估人本人、关联反馈所有者或关联回测所有者查看；越权返回 `403`。
