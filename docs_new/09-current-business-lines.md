@@ -25,7 +25,7 @@
 7. AI 模型注册和配置管理。
 8. 可插拔投资分析报告。
 
-投资组合、订单、风控、通知、审计、AI 信号、AI 推荐和回测目前主要处于数据库结构或规划阶段。
+投资组合已经具备模拟组合创建、列表和详情查询能力；订单、风控、通知、审计、AI 信号、AI 推荐和回测目前主要处于数据库结构或规划阶段。
 
 ## 2. 总体架构串联
 
@@ -255,22 +255,118 @@ POST /api/auth/login
 
 产品池和风险架构是投资分析、Prompt 版本、Mock 交易和风控审计的前置条件。任何投资方案如果无法说明使用了哪些产品、产品风险是什么、是否允许 Mock 交易、和哪些主题或指数有关，都不能进入正式投资建议展示。
 
-## 6. 市场行情业务线
+## 6. 模拟组合业务线
 
 ### 6.1 业务状态
+
+已实现第二阶段：当前用户可以创建模拟组合、查询我的模拟组合列表、查询模拟组合详情，并可以按最新行情执行模拟金额买入。买入会生成模拟订单、模拟成交、当前持仓和新估值快照。
+
+### 6.2 核心实体
+
+| 领域对象 | 对应表 | 业务职责 |
+| --- | --- | --- |
+| `Portfolio` | `aiw_portfolio` | 模拟组合主数据，当前使用 `portfolioType=SIMULATION` |
+| `PortfolioValuation` | `aiw_portfolio_valuation` | 组合估值快照，创建组合时写入初始现金快照 |
+| `Position` | `aiw_position` | 当前持仓聚合数据，模拟买入成交后写入或更新 |
+| `MockOrder` | `aiw_order` | 模拟订单，当前支持 `BUY` + `AMOUNT` |
+| `TradeExecution` | `aiw_trade_execution` | 模拟成交，当前买入订单立即按最新收盘价成交 |
+
+### 6.3 数据流
+
+```text
+前端创建模拟组合
+  -> CreateMockPortfolioRequest
+  -> MockPortfolioApplicationService.create
+  -> 校验当前用户、组合名称、币种、初始现金
+  -> 保存 Portfolio(SIMULATION)
+  -> 保存 PortfolioValuation(MOCK_INITIAL_CASH)
+  -> 返回 MockPortfolioResponse
+
+前端查询我的模拟组合
+  -> MockPortfolioListRequest
+  -> MockPortfolioApplicationService.listMine
+  -> 按当前用户和 SIMULATION 类型分页查询 Portfolio
+  -> 查询每个组合最新 PortfolioValuation
+  -> 返回 PageResponse<MockPortfolioResponse>
+
+前端查询模拟组合详情
+  -> MockPortfolioDetailRequest
+  -> MockPortfolioApplicationService.detail
+  -> 校验组合属于当前用户
+  -> 查询最新估值和当前持仓
+  -> 返回 MockPortfolioResponse
+
+前端执行模拟买入
+  -> ExecuteMockBuyRequest
+  -> MockPortfolioApplicationService.buy
+  -> 校验组合属于当前用户、产品可交易、产品画像允许 Mock、最新行情存在、现金足够
+  -> 保存 MockOrder(FILLED)
+  -> 保存 TradeExecution
+  -> 更新 Position
+  -> 保存 PortfolioValuation(MOCK_BUY_FILLED)
+  -> 返回 MockOrderExecutionResponse
+
+前端根据投资分析报告执行模拟买入
+  -> ExecuteMockPlanFromReportRequest
+  -> MockPortfolioApplicationService.buyFromReport
+  -> 查询 InvestmentAnalysisReport
+  -> 校验报告成功、可信等级、数据质量门禁和投资方案类型
+  -> 读取 investmentPlan.referenceAllocationAmount
+  -> 使用请求 productBizId 或按 report.themeCode 反查 ProductThemeRelation
+  -> 复用模拟买入链路生成订单、成交、持仓和估值
+
+前端刷新模拟组合估值
+  -> MockPortfolioDetailRequest
+  -> MockPortfolioApplicationService.refreshValuation
+  -> 查询当前持仓
+  -> 按每个持仓产品最新 1D 行情计算持仓市值
+  -> 保存 PortfolioValuation(MOCK_MARK_TO_MARKET)
+  -> 返回刷新后的 MockPortfolioResponse
+
+前端查询收益曲线
+  -> MockPortfolioPerformanceRequest
+  -> MockPortfolioApplicationService.performance
+  -> 查询 PortfolioValuation 历史
+  -> 计算 latestReturnRate 和 maxDrawdown
+  -> 返回 MockPortfolioPerformanceResponse
+```
+
+### 6.4 前端接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /api/mock/portfolios/create` | 创建当前用户模拟组合，并写入初始现金估值 |
+| `POST /api/mock/portfolios/mine` | 分页查询当前用户模拟组合列表 |
+| `POST /api/mock/portfolios/detail` | 查询模拟组合详情、最新估值和当前持仓 |
+| `POST /api/mock/portfolios/orders/buy` | 执行模拟金额买入，返回订单、成交和更新后的组合 |
+| `POST /api/mock/portfolios/orders/buy-from-report` | 根据投资分析报告自动生成模拟买入 |
+| `POST /api/mock/portfolios/valuations/refresh` | 按最新行情刷新模拟组合估值 |
+| `POST /api/mock/portfolios/performance/curve` | 查询模拟组合收益曲线和最大回撤 |
+
+### 6.5 当前边界
+
+- 不触发真实交易。
+- 当前只支持买入，不支持卖出、撤单、部分成交和调仓。
+- 当前成交价取产品最新 `1D` 行情收盘价。
+- 当前必须依赖产品投资画像 `mockTradable=true` 和 `dataQualityScore >= 0.45`。
+- 当前能力已覆盖“手动 Mock 买入 -> 订单 -> 成交 -> 持仓 -> 估值”、“投资分析报告 -> 自动 Mock 买入”和“估值历史 -> 收益曲线/最大回撤”，下一步需要接卖出、风控审计和回测。
+
+## 7. 市场行情业务线
+
+### 7.1 业务状态
 
 部分实现。基础行情保存、最新行情、历史行情和主题收益查询已经具备
 Application Service、Domain、Repository 和 Mapper XML，但当前没有独立市场行情
 Controller，因此尚未形成可直接供前端调用的完整接口闭环。
 
-### 6.2 核心实体
+### 7.2 核心实体
 
 | 领域对象 | 对应表 | 业务职责 |
 | --- | --- | --- |
 | `MarketQuote` | `aiw_market_quote` | 保存产品价格、成交量、行情周期、来源和行情时间 |
 | `ThemeProductPerformance` | 查询结果 | 表示产品在指定窗口内的起止价格和收益率 |
 
-### 6.3 行情写入流
+### 7.3 行情写入流
 
 ```text
 内部调用或后续市场行情 Controller
@@ -282,7 +378,7 @@ Controller，因此尚未形成可直接供前端调用的完整接口闭环。
   -> 返回 MarketQuoteView
 ```
 
-### 6.4 行情查询流
+### 7.4 行情查询流
 
 ```text
 产品业务 ID + 行情周期 + 来源
@@ -291,7 +387,7 @@ Controller，因此尚未形成可直接供前端调用的完整接口闭环。
   -> 返回行情点集合
 ```
 
-### 6.5 主题收益计算
+### 7.5 主题收益计算
 
 ```text
 任务配置中的产品代码集合
@@ -308,13 +404,13 @@ Controller，因此尚未形成可直接供前端调用的完整接口闭环。
 - 产品窗口收益率。
 - 主题平均收益和动量快照。
 
-## 7. 配置驱动定时任务业务线
+## 8. 配置驱动定时任务业务线
 
-### 7.1 业务状态
+### 8.1 业务状态
 
 已实现。
 
-### 7.2 核心实体
+### 8.2 核心实体
 
 | 领域对象 | 对应表 | 业务职责 |
 | --- | --- | --- |
@@ -322,7 +418,7 @@ Controller，因此尚未形成可直接供前端调用的完整接口闭环。
 | `ScheduledTaskExecution` | `aiw_scheduled_task_execution` | 保存事件幂等键、执行状态、结果和失败原因 |
 | `InvestmentTaskEvent` | Kafka 消息 | 在调度端和执行端之间传递任务信息 |
 
-### 7.3 启动和调度流
+### 8.3 启动和调度流
 
 ```text
 application-local/dev.yaml
@@ -336,7 +432,7 @@ application-local/dev.yaml
 
 数据库是运行时配置来源。接口保存任务后，当前节点立即取消旧调度并重新注册。
 
-### 7.4 触发和执行流
+### 8.4 触发和执行流
 
 ```text
 Cron 到点或手动触发
@@ -353,29 +449,29 @@ Cron 到点或手动触发
   -> 失败保存 FAILED 和失败摘要，并记录完整堆栈
 ```
 
-### 7.5 预期输出
+### 8.5 预期输出
 
 - 可查询和可修改的任务配置。
 - 手动触发事件 ID。
 - 任务执行状态和失败原因。
 - 任务产生的资讯和主题快照。
 
-## 8. 投资资讯采集业务线
+## 9. 投资资讯采集业务线
 
-### 8.1 业务状态
+### 9.1 业务状态
 
 已实现 RSS/Atom 采集、数据源独立容错、幂等保存和兜底资讯。
 
 当前资讯采集仍是轻量级接入，目标不是直接替代专业金融数据供应商，而是先建立稳定的数据入库、质量评分和主题关联链路。后续接入财联社、Wind、同花顺 iFinD、东方财富、巨潮资讯、交易所公告或供应商 API 时，只需要扩展数据源客户端，后续热度统计、投资分析和图表接口可以复用。
 
-### 8.2 核心实体
+### 9.2 核心实体
 
 | 领域对象 | 对应表 | 业务职责 |
 | --- | --- | --- |
 | `NewsArticle` | `aiw_news_article` | 保存新闻、公告或研报文本和来源信息 |
 | `NewsArticleRelation` | `aiw_news_article_relation` | 保存新闻与主题、产品代码、命中关键词和关联分 |
 
-### 8.3 数据来源分层
+### 9.3 数据来源分层
 
 优质数据来源按可信度和投资可用性分层：
 
@@ -396,7 +492,7 @@ Cron 到点或手动触发
 
 这意味着兜底资讯可以保证流程可跑通，但不会在热度评分中与真实可靠来源等权。
 
-### 8.4 采集流
+### 9.4 采集流
 
 ```text
 INVESTMENT_NEWS_COLLECTION
@@ -408,7 +504,7 @@ INVESTMENT_NEWS_COLLECTION
   -> sourceCode + externalId 幂等保存
 ```
 
-### 8.5 兜底流
+### 9.5 兜底流
 
 ```text
 全部外部 feed 无有效数据
@@ -424,7 +520,7 @@ INVESTMENT_NEWS_COLLECTION
 - 资讯热度任务有关键词样本。
 - 投资分析报告有近期新闻上下文。
 
-### 8.6 新闻与主题、产品显式关联
+### 9.6 新闻与主题、产品显式关联
 
 资讯热度汇总任务会根据主题关键词将新闻与主题、产品代码建立显式关联：
 
@@ -458,7 +554,7 @@ POST /api/investment/tasks/article-relations/list
 
 该接口按资讯业务 ID、主题编码、产品代码和关联类型分页查询关联记录。前端可展示命中关键词、来源质量分、综合关联分和证据摘要，用于解释资讯热度来源。
 
-### 8.7 预期输出
+### 9.7 预期输出
 
 - 新闻标题、摘要、正文、来源和原文地址。
 - 发布时间和采集时间。
@@ -466,19 +562,19 @@ POST /api/investment/tasks/article-relations/list
 - 新闻、主题和产品代码的显式关联数据。
 - 来源质量和关联分，供热度统计和 AI 分析解释使用。
 
-## 9. 投资主题汇总业务线
+## 10. 投资主题汇总业务线
 
-### 9.1 业务状态
+### 10.1 业务状态
 
 已实现，默认只处理中国大陆市场 `CN_MAINLAND`。
 
-### 9.2 核心实体
+### 10.2 核心实体
 
 | 领域对象 | 对应表 | 业务职责 |
 | --- | --- | --- |
 | `InvestmentThemeSnapshot` | `aiw_investment_theme_snapshot` | 保存主题收益、动量、热度和解释指标 |
 
-### 9.3 热门主题收益
+### 10.3 热门主题收益
 
 处理器：
 
@@ -511,7 +607,7 @@ themes 中的产品代码
 | `qualityScore` | 覆盖率、样本数和波动稳定性综合评分 |
 | `qualityLevel` | `HIGH` / `MEDIUM` / `LOW` |
 
-### 9.4 市场动量
+### 10.4 市场动量
 
 处理器：
 
@@ -540,7 +636,7 @@ MarketMomentumTaskHandler
 - `metrics.qualityLevel`
 - 产品收益样本明细
 
-### 9.5 资讯热度
+### 10.5 资讯热度
 
 处理器：
 
@@ -573,7 +669,7 @@ NewsHeatAggregationTaskHandler
 | `qualityLevel` | `HIGH` / `MEDIUM` / `LOW` |
 | `sampleArticles` | 最多十条样本新闻，便于前端解释热度来源 |
 
-### 9.6 预期输出
+### 10.6 预期输出
 
 - 主题收益榜。
 - 主题动量榜。
@@ -582,19 +678,19 @@ NewsHeatAggregationTaskHandler
 - 可供投资分析 Provider 使用的结构化样本。
 - 可解释的统计质量分，避免把低质量样本误判为投资机会。
 
-## 10. AI 模型管理业务线
+## 11. AI 模型管理业务线
 
-### 10.1 业务状态
+### 11.1 业务状态
 
 已实现模型注册、更新、查询、状态变更和归档。
 
-### 10.2 核心实体
+### 11.2 核心实体
 
 | 领域对象 | 对应表 | 业务职责 |
 | --- | --- | --- |
 | `AiModel` | `aiw_ai_model` | 保存模型编码、版本、提供方、配置、指标和生命周期 |
 
-### 10.3 模型生命周期
+### 11.3 模型生命周期
 
 ```text
 DRAFT
@@ -614,7 +710,7 @@ DRAFT
 | `INACTIVE` | 暂停使用但保留配置 |
 | `ARCHIVED` | 逻辑删除，不再参与新业务 |
 
-### 10.4 ACTIVE 模型与 Provider 强关联
+### 11.4 ACTIVE 模型与 Provider 强关联
 
 投资分析生成时，实际 Provider 不以接口传参为准，而是以 `aiw_ai_model` 中最近启用的 `ACTIVE` 模型为准：
 
@@ -633,7 +729,7 @@ GenerateInvestmentAnalysisRequest.modelCode
 - 业务侧只能选择已经激活的模型配置，不能绕过模型生命周期直接选择 Provider。
 - `providerCode` 只做一致性校验，防止前端传错 Provider 后调用到错误的大模型实现。
 
-### 10.5 数据流
+### 11.5 数据流
 
 ```text
 POST /api/ai/models/save
@@ -661,7 +757,7 @@ application-local/dev.yaml 或部署平台 Secret
 当前初始化了本地规则、OpenAI、DeepSeek 和通义千问兼容配置。后三者使用
 UUID 格式模拟 API Key，并开启 `mockEnabled=true`，用于验证配置注入链路。
 
-### 10.6 预期输出
+### 11.6 预期输出
 
 - 模型版本清单。
 - 提供方和制品地址。
@@ -669,19 +765,19 @@ UUID 格式模拟 API Key，并开启 `mockEnabled=true`，用于验证配置注
 - 离线评估指标。
 - 模型当前生命周期状态。
 
-## 11. 投资分析报告业务线
+## 12. 投资分析报告业务线
 
-### 11.1 业务状态
+### 12.1 业务状态
 
 已实现可插拔 Provider 架构和默认 `LOCAL_RULE` 实现。
 
-### 11.2 核心实体
+### 12.2 核心实体
 
 | 领域对象 | 对应表 | 业务职责 |
 | --- | --- | --- |
 | `InvestmentAnalysisReport` | `aiw_investment_analysis_report` | 保存完整分析输入、输出、模型和时间快照 |
 
-### 11.3 Provider 串联
+### 12.3 Provider 串联
 
 ```text
 GenerateInvestmentAnalysisRequest
@@ -696,7 +792,7 @@ GenerateInvestmentAnalysisRequest
 
 新增真实大模型时只需要实现新的 `InvestmentAnalysisProvider`，Controller 和报告表结构保持稳定。
 
-### 11.4 默认本地规则分析
+### 12.4 默认本地规则分析
 
 `LocalRuleInvestmentAnalysisProvider` 的数据输入：
 
@@ -715,7 +811,7 @@ GenerateInvestmentAnalysisRequest
 - 参考配置比例。
 - 模拟收益、压力情景和乐观情景。
 
-### 11.5 报告输出
+### 12.5 报告输出
 
 #### 报告质量门禁
 
@@ -783,11 +879,11 @@ GenerateInvestmentAnalysisRequest
 - 新闻事件时间点。
 - 主题和来源信息。
 
-## 12. 投资决策质量设计
+## 13. 投资决策质量设计
 
 这一节是后续优化投资分析输出时必须优先关注的三类输入。
 
-### 12.1 数据来源
+### 13.1 数据来源
 
 当前系统将数据源拆成三类输入：
 
@@ -805,7 +901,7 @@ GenerateInvestmentAnalysisRequest
 - 可解释：新闻必须能追溯到主题、产品代码、命中关键词和证据摘要。
 - 可降级：外部源失败时允许兜底，但兜底来源质量分低于真实来源。
 
-### 12.2 输出质量评估
+### 13.2 输出质量评估
 
 投资任务输出不再只看“有没有数据”，而是同时输出质量字段：
 
@@ -824,7 +920,7 @@ GenerateInvestmentAnalysisRequest
 | `MEDIUM` | 数据可用但存在覆盖或来源不足 | 轻仓跟踪，等待趋势确认 |
 | `LOW` | 数据不足或主要依赖兜底资讯 | 仅观察，不应生成激进配置建议 |
 
-### 12.3 投资模拟方案
+### 13.3 投资模拟方案
 
 当前投资模拟方案是“主题级辅助决策”，不是自动交易策略。
 
@@ -860,7 +956,7 @@ GenerateInvestmentAnalysisRequest
 | `optimisticProfit` | 乐观情景，按平均收益率上调 3% 模拟 |
 | `assumption` | 模拟假设，明确不代表未来收益 |
 
-### 12.4 后续闭环目标
+### 13.4 后续闭环目标
 
 后续要把这条链路从“主题辅助分析”升级为“用户组合级投资建议”：
 
@@ -876,11 +972,11 @@ GenerateInvestmentAnalysisRequest
   -> 用户确认或拒绝
 ```
 
-## 13. 当前仅有表结构或尚未闭环的业务线
+## 14. 当前仅有表结构或尚未闭环的业务线
 
-### 13.1 投资组合与持仓
+### 14.1 完整组合交易闭环
 
-状态：仅有数据库结构或未形成完整 Java 闭环。
+状态：模拟组合创建、列表、详情、买入订单、成交、持仓变化、估值刷新和收益曲线已经在第 6 章落地；卖出、调仓、风控审计和回测仍未形成完整 Java 闭环。
 
 目标实体：
 
@@ -900,7 +996,7 @@ GenerateInvestmentAnalysisRequest
   -> AI 分析和再平衡建议
 ```
 
-### 13.2 订单与交易
+### 14.2 订单与交易
 
 状态：仅有数据库结构或未形成完整 Java 闭环。
 
@@ -917,7 +1013,7 @@ GenerateInvestmentAnalysisRequest
 - 失败原因。
 - 持仓变化。
 
-### 13.3 AI 信号与推荐
+### 14.3 AI 信号与推荐
 
 状态：`aiw_ai_signal`、`aiw_ai_recommendation` 表已存在，完整应用服务和接口尚未闭环。
 
@@ -931,7 +1027,7 @@ GenerateInvestmentAnalysisRequest
   -> 用户查看、接受或拒绝
 ```
 
-### 13.4 策略回测
+### 14.4 策略回测
 
 状态：`aiw_backtest_result` 表已存在，执行引擎和接口尚未闭环。
 
@@ -943,7 +1039,7 @@ GenerateInvestmentAnalysisRequest
 - 基准比较。
 - 回测明细。
 
-### 13.5 风控、通知和审计
+### 14.5 风控、通知和审计
 
 状态：数据库结构已规划或部分存在，完整业务接口尚未全部闭环。
 
@@ -957,7 +1053,7 @@ GenerateInvestmentAnalysisRequest
   -> 审计日志
 ```
 
-## 14. 当前业务线依赖关系
+## 15. 当前业务线依赖关系
 
 ```text
 账户与权限
@@ -984,7 +1080,7 @@ AI 模型管理
   -> 投资分析报告
 ```
 
-## 15. 当前主要接口分组
+## 16. 当前主要接口分组
 
 | 接口分组 | Controller | 主要输出 |
 | --- | --- | --- |
@@ -993,6 +1089,7 @@ AI 模型管理
 | 用户管理 | `AdminUserController` | 用户列表、详情和状态 |
 | 角色权限 | `AdminRoleController` | 角色、权限和用户角色 |
 | 产品目录 | `ProductController`、`AdminProductController` | 产品列表、详情和管理结果 |
+| 模拟组合 | `MockPortfolioController` | 当前用户模拟组合、最新估值和持仓 |
 | 市场行情 | 当前无独立 Controller | 已有应用服务和仓储，尚未对前端形成完整接口 |
 | 投资任务 | `InvestmentTaskController` | 配置、触发、执行记录、新闻和快照 |
 | AI 模型 | `AiModelController` | 模型版本、配置和状态 |
@@ -1015,9 +1112,17 @@ AI 模型管理
 | `/api/investment/analysis/generate` | 生成含数据质量、参考仓位、情景收益和图表数据的分析报告 |
 | `/api/investment/analysis/reports/list` | 查询历史分析报告，响应结构与生成接口一致 |
 
-完整 JSON 展开说明见 `docs_new/10-frontend-interface-changes.md`。
+模拟组合接口中，本轮新增的前端可见能力：
 
-## 16. 阅读代码建议
+| 接口 | 用途 |
+| --- | --- |
+| `/api/mock/portfolios/create` | 创建当前用户模拟组合，并生成初始现金估值 |
+| `/api/mock/portfolios/mine` | 查询我的模拟组合列表，展示最新估值摘要 |
+| `/api/mock/portfolios/detail` | 查询模拟组合详情、最新估值和当前持仓 |
+
+完整 JSON 展开说明见 `docs_new/10-frontend-interface-changes.md` 和 `docs_new/12-frontend-api-update-log.md`。
+
+## 17. 阅读代码建议
 
 理解一条业务线时按以下顺序阅读：
 
@@ -1031,7 +1136,7 @@ AI 模型管理
 8. 看 Flyway migration，确认表结构、索引和唯一约束。
 9. 看测试，确认核心规则和接口契约。
 
-## 17. 后续建设优先级建议
+## 18. 后续建设优先级建议
 
 1. 接入稳定的中国大陆新闻数据源，逐步减少兜底资讯依赖。
 2. 完善行情数据接入，补齐真实分钟线、日线和复权收益。

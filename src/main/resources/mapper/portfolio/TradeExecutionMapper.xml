@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.portfolio.TradeExecutionMapper">
+    <insert id="insert">
+        insert into aiw_trade_execution
+        (biz_id, execution_no, order_biz_id, user_biz_id, portfolio_biz_id,
+         product_biz_id, channel_code, external_execution_id, execution_price,
+         execution_quantity, execution_amount, fee_amount, executed_at, created_at)
+        values
+        (#{bizId}, #{executionNo}, #{orderBizId}, #{userBizId}, #{portfolioBizId},
+         #{productBizId}, #{channelCode}, #{externalExecutionId}, #{executionPrice},
+         #{executionQuantity}, #{executionAmount}, #{feeAmount}, #{executedAt}, #{createdAt})
+    </insert>
+
+    <select id="selectFirstByOrderBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.TradeExecutionEntity">
+        select * from aiw_trade_execution
+        where order_biz_id = #{orderBizId}
+        order by executed_at asc
+        limit 1
+    </select>
+</mapper>

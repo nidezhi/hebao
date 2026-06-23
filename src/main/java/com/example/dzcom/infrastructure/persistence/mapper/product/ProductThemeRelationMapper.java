@@ -39,4 +39,10 @@ public interface ProductThemeRelationMapper {
      * @date 2026-06-22
      */
     List<ProductThemeRelationEntity> selectByProductBizId(@Param("productBizId") String productBizId);
+
+    /** 根据关系类型和关系编码反查产品关系。 */
+    List<ProductThemeRelationEntity> selectByRelation(
+        @Param("relationType") String relationType,
+        @Param("relationCode") String relationCode
+    );
 }

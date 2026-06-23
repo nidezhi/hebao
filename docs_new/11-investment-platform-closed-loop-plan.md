@@ -447,15 +447,16 @@ DRAFT
 交付：
 
 - Mock 账户。
-- Mock 组合。
-- Mock 订单。
-- Mock 成交。
-- Mock 持仓。
-- 估值和收益快照。
+- Mock 组合：基础创建、列表、详情已落地，接口为 `/api/mock/portfolios/create`、`/api/mock/portfolios/mine`、`/api/mock/portfolios/detail`。
+- Mock 订单：金额买入已落地，接口为 `/api/mock/portfolios/orders/buy`；报告转模拟买入已落地，接口为 `/api/mock/portfolios/orders/buy-from-report`。
+- Mock 成交：买入订单按最新行情立即成交。
+- Mock 持仓：买入成交后更新多头持仓。
+- 估值和收益快照：买入成交后生成新估值快照；估值刷新和收益曲线已落地，接口为 `/api/mock/portfolios/valuations/refresh`、`/api/mock/portfolios/performance/curve`。
 - 回测结果。
 
 验收：
 
+- 当前已完成模拟组合容器、初始现金估值、手动模拟买入、报告转模拟买入、估值刷新和收益曲线，前端可以展示“我的模拟组合”、组合详情、订单成交结果、持仓变化、累计收益率和最大回撤。
 - 一个投资方案能生成订单、成交、持仓和收益曲线。
 - 风控拦截有审计记录。
 

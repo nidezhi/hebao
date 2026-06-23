@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.portfolio.PortfolioValuationMapper">
+    <insert id="insert">
+        insert into aiw_portfolio_valuation
+        (biz_id, portfolio_biz_id, valuation_time, base_currency, total_asset,
+         cash_balance, position_value, total_cost, unrealized_profit, realized_profit,
+         total_return_rate, source_code, created_at)
+        values
+        (#{bizId}, #{portfolioBizId}, #{valuationTime}, #{baseCurrency}, #{totalAsset},
+         #{cashBalance}, #{positionValue}, #{totalCost}, #{unrealizedProfit}, #{realizedProfit},
+         #{totalReturnRate}, #{sourceCode}, #{createdAt})
+    </insert>
+
+    <select id="selectLatestByPortfolioBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.PortfolioValuationEntity">
+        select * from aiw_portfolio_valuation
+        where portfolio_biz_id = #{portfolioBizId}
+        order by valuation_time desc
+        limit 1
+    </select>
+
+    <select id="selectFirstByPortfolioBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.PortfolioValuationEntity">
+        select * from aiw_portfolio_valuation
+        where portfolio_biz_id = #{portfolioBizId}
+        order by valuation_time asc
+        limit 1
+    </select>
+
+    <select id="selectHistoryByPortfolioBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.PortfolioValuationEntity">
+        select * from (
+            select * from aiw_portfolio_valuation
+            where portfolio_biz_id = #{portfolioBizId}
+            order by valuation_time desc
+            limit #{limit}
+        ) latest_snapshots
+        order by valuation_time asc
+    </select>
+</mapper>

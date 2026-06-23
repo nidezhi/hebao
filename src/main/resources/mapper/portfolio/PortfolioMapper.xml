@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.portfolio.PortfolioMapper">
+    <sql id="searchCondition">
+        from aiw_portfolio p
+        where p.is_deleted = 0
+          and p.owner_user_biz_id = #{criteria.ownerUserBizId}
+        <if test="criteria.portfolioType != null and criteria.portfolioType != ''">
+            and p.portfolio_type = #{criteria.portfolioType}
+        </if>
+        <if test="criteria.status != null">
+            and p.status = #{criteria.status}
+        </if>
+    </sql>
+
+    <insert id="save">
+        insert into aiw_portfolio
+        (biz_id, portfolio_no, owner_user_biz_id, portfolio_name, portfolio_type,
+         base_currency, status, version, created_at, updated_at, created_by,
+         updated_by, is_deleted, deleted_at)
+        values
+        (#{bizId}, #{portfolioNo}, #{ownerUserBizId}, #{portfolioName}, #{portfolioType},
+         #{baseCurrency}, #{status}, #{version}, #{createdAt}, #{updatedAt}, #{createdBy},
+         #{updatedBy}, #{deleted}, #{deletedAt})
+        on duplicate key update
+        portfolio_name = values(portfolio_name),
+        base_currency = values(base_currency),
+        status = values(status),
+        version = values(version),
+        updated_at = values(updated_at),
+        updated_by = values(updated_by),
+        is_deleted = values(is_deleted),
+        deleted_at = values(deleted_at)
+    </insert>
+
+    <select id="selectActiveByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.PortfolioEntity">
+        select * from aiw_portfolio
+        where biz_id = #{bizId} and is_deleted = 0
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.PortfolioEntity">
+        select p.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

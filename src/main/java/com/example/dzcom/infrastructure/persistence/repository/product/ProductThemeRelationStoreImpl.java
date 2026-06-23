@@ -50,6 +50,22 @@ public class ProductThemeRelationStoreImpl implements ProductThemeRelationStore 
     }
 
     /**
+     * 根据关系类型和关系编码反查产品关系。
+     *
+     * @param relationType 关系类型
+     * @param relationCode 关系编码
+     * @return 产品主题关系集合
+     * @author dz
+     * @date 2026-06-23
+     */
+    @Override
+    public List<ProductThemeRelation> findByRelation(String relationType, String relationCode) {
+        return mapper.selectByRelation(relationType, relationCode).stream()
+            .map(this::toDomain)
+            .toList();
+    }
+
+    /**
      * 将领域对象转换为持久化实体。
      *
      * @param relation 产品主题关系领域对象

@@ -26,6 +26,13 @@
 | `POST /api/investment/analysis/reports/list` | 响应增强 | 分页查询报告时返回同样增强后的 JSON 字段 |
 | `POST /api/admin/products/investment-profile/save` | 新增 | 后台维护产品投资画像和主题关系 |
 | `POST /api/products/detail` | 响应增强 | 返回产品投资画像 `investmentProfile` 和主题关系 `themeRelations` |
+| `POST /api/mock/portfolios/create` | 新增 | 创建当前用户模拟组合并生成初始现金估值 |
+| `POST /api/mock/portfolios/mine` | 新增 | 查询当前用户模拟组合列表 |
+| `POST /api/mock/portfolios/detail` | 新增 | 查询模拟组合详情、最新估值和持仓 |
+| `POST /api/mock/portfolios/orders/buy` | 新增 | 按最新行情模拟买入，返回订单、成交和更新后的组合 |
+| `POST /api/mock/portfolios/orders/buy-from-report` | 新增 | 根据投资分析报告自动生成模拟买入 |
+| `POST /api/mock/portfolios/valuations/refresh` | 新增 | 按最新行情刷新模拟组合估值 |
+| `POST /api/mock/portfolios/performance/curve` | 新增 | 查询模拟组合收益曲线和最大回撤 |
 
 本轮阶段 0 止损字段：
 

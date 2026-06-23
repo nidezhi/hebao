@@ -24,4 +24,11 @@
         where product_biz_id = #{productBizId}
         order by relation_type asc, relation_weight desc, relation_code asc
     </select>
+    <select id="selectByRelation"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductThemeRelationEntity">
+        select * from aiw_product_theme_relation
+        where relation_type = #{relationType}
+          and relation_code = #{relationCode}
+        order by relation_weight desc, product_biz_id asc
+    </select>
 </mapper>

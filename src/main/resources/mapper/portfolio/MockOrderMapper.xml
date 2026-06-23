@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.portfolio.MockOrderMapper">
+    <insert id="save">
+        insert into aiw_order
+        (biz_id, order_no, idempotency_key, user_biz_id, portfolio_biz_id, product_biz_id,
+         channel_code, order_side, order_type, currency, requested_price, requested_quantity,
+         requested_amount, executed_quantity, executed_amount, fee_amount, status,
+         external_order_id, reject_code, reject_message, submitted_at, completed_at,
+         version, created_at, updated_at, created_by, is_deleted)
+        values
+        (#{bizId}, #{orderNo}, #{idempotencyKey}, #{userBizId}, #{portfolioBizId}, #{productBizId},
+         #{channelCode}, #{orderSide}, #{orderType}, #{currency}, #{requestedPrice}, #{requestedQuantity},
+         #{requestedAmount}, #{executedQuantity}, #{executedAmount}, #{feeAmount}, #{status},
+         #{externalOrderId}, #{rejectCode}, #{rejectMessage}, #{submittedAt}, #{completedAt},
+         #{version}, #{createdAt}, #{updatedAt}, #{createdBy}, #{deleted})
+        on duplicate key update
+        executed_quantity = values(executed_quantity),
+        executed_amount = values(executed_amount),
+        fee_amount = values(fee_amount),
+        status = values(status),
+        external_order_id = values(external_order_id),
+        reject_code = values(reject_code),
+        reject_message = values(reject_message),
+        submitted_at = values(submitted_at),
+        completed_at = values(completed_at),
+        version = values(version),
+        updated_at = values(updated_at)
+    </insert>
+
+    <select id="selectByUserAndIdempotencyKey" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.MockOrderEntity">
+        select * from aiw_order
+        where user_biz_id = #{userBizId}
+          and idempotency_key = #{idempotencyKey}
+          and is_deleted = 0
+        limit 1
+    </select>
+</mapper>

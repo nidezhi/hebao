@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /** 投资分析报告仓储实现。 */
 @Repository
@@ -22,6 +23,13 @@ public class InvestmentAnalysisReportStoreImpl implements InvestmentAnalysisRepo
     public InvestmentAnalysisReport save(InvestmentAnalysisReport report) {
         mapper.insert(toEntity(report));
         return report;
+    }
+
+    /** 根据报告业务标识查询投资分析报告。 */
+    @Override
+    public Optional<InvestmentAnalysisReport> findByBizId(String bizId) {
+        return Optional.ofNullable(mapper.selectByBizId(bizId))
+            .map(this::toDomain);
     }
 
     /** 分页查询投资分析报告。 */

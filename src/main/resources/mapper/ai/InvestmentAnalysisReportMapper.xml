@@ -29,6 +29,11 @@
          #{trend}, #{investmentPlan}, #{simulatedReturn}, #{chartPayload}, #{promptSnapshot},
          #{failureReason}, #{generatedAt}, #{createdAt})
     </insert>
+    <select id="selectByBizId"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.ai.InvestmentAnalysisReportEntity">
+        select * from aiw_investment_analysis_report
+        where biz_id = #{bizId}
+    </select>
     <select id="search"
             resultType="com.example.dzcom.infrastructure.persistence.entity.ai.InvestmentAnalysisReportEntity">
         select r.* <include refid="searchCondition"/>

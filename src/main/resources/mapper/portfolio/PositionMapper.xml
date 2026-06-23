@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.portfolio.PositionMapper">
+    <insert id="save">
+        insert into aiw_position
+        (biz_id, portfolio_biz_id, product_biz_id, position_side, quantity,
+         available_quantity, average_cost, cost_amount, realized_profit,
+         last_trade_at, version, created_at, updated_at, is_deleted)
+        values
+        (#{bizId}, #{portfolioBizId}, #{productBizId}, #{positionSide}, #{quantity},
+         #{availableQuantity}, #{averageCost}, #{costAmount}, #{realizedProfit},
+         #{lastTradeAt}, #{version}, #{createdAt}, #{updatedAt}, #{deleted})
+        on duplicate key update
+        quantity = values(quantity),
+        available_quantity = values(available_quantity),
+        average_cost = values(average_cost),
+        cost_amount = values(cost_amount),
+        realized_profit = values(realized_profit),
+        last_trade_at = values(last_trade_at),
+        version = values(version),
+        updated_at = values(updated_at),
+        is_deleted = values(is_deleted)
+    </insert>
+
+    <select id="selectByDimension" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.PositionEntity">
+        select * from aiw_position
+        where portfolio_biz_id = #{portfolioBizId}
+          and product_biz_id = #{productBizId}
+          and position_side = #{positionSide}
+          and is_deleted = 0
+        limit 1
+    </select>
+
+    <select id="selectByPortfolioBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.PositionEntity">
+        select * from aiw_position
+        where portfolio_biz_id = #{portfolioBizId}
+          and is_deleted = 0
+          and quantity &gt; 0
+        order by updated_at desc
+    </select>
+</mapper>

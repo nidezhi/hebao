@@ -26,4 +26,15 @@ public interface ProductThemeRelationStore {
      * @date 2026-06-22
      */
     List<ProductThemeRelation> findByProductBizId(String productBizId);
+
+    /**
+     * 根据关系类型和关系编码反查产品关系。
+     *
+     * @param relationType 关系类型
+     * @param relationCode 关系编码
+     * @return 产品主题关系集合
+     * @author dz
+     * @date 2026-06-23
+     */
+    List<ProductThemeRelation> findByRelation(String relationType, String relationCode);
 }
