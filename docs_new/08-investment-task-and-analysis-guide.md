@@ -265,6 +265,7 @@ application/service/task/InvestmentNewsCollectionTaskHandler.java
 | `languageCode` | 语言编码 | `zh-CN` |
 | `maxItems` | 单次最多采集条数 | `50` |
 | `fallbackArticles` | 外部 feed 无数据或不可用时入库的兜底资讯，格式为 `主题|标题|摘要;主题2|标题2|摘要2` | `AI人工智能|人工智能主题关注度提升|算力方向持续受到关注` |
+| `fallbackEnabled` | 是否允许写入兜底资讯；正式 L1/L2 任务必须为 `false` | `false` |
 
 输出：
 
@@ -275,9 +276,61 @@ application/service/task/InvestmentNewsCollectionTaskHandler.java
 
 - 每个 feed 独立采集，一个 feed 失败不会中断其它 feed。
 - 如果本次没有采集到任何外部资讯，并且配置了 `fallbackArticles`，会将兜底资讯保存为 `sourceCode` 对应来源下的资讯。
-- 默认本地和开发配置会写入中国大陆主题资讯线索，保证热度任务和投资分析报告有新闻上下文。
+- 当 `fallbackEnabled=false` 时，即使配置了 `fallbackArticles` 也不会写入兜底资讯。
+- L1/L2 正式数据补全任务应使用下面的专用采集类型，不再依赖 RSS 兜底。
 
-### 5.2 `HOT_THEME_RETURN`
+### 5.2 官方披露专用采集任务
+
+处理器：
+
+```text
+application/service/task/OfficialDisclosureCollectionTaskHandler.java
+```
+
+支持任务类型：
+
+| 任务类型 | 默认来源 | 入库类型 | 质量类型 |
+| --- | --- | --- | --- |
+| `REGULATORY_DISCLOSURE_COLLECTION` | `CSRC` | `REGULATORY` | `REGULATORY` |
+| `EXCHANGE_ANNOUNCEMENT_COLLECTION` | `CNINFO` | `ANNOUNCEMENT` | `ANNOUNCEMENT` |
+| `WEALTH_PRODUCT_NAV_REFRESH` | `CHINA_WEALTH` | `WEALTH_NAV` | `MARKET_QUOTE` |
+
+主要参数：
+
+| 参数 | 说明 | 示例 |
+| --- | --- | --- |
+| `endpoints` | 专用端点配置，格式 `名称=url|JSON;名称2=url|HTML` | `cninfo=https://example.com/api|JSON` |
+| `responseFormat` | 默认响应格式，`JSON` 或 `HTML` | `JSON` |
+| `itemsPath` | JSON 列表路径；空值表示根节点 | `data.items` |
+| `externalIdPath` | 外部 ID 字段路径 | `announcementId` |
+| `titlePath` | 标题字段路径 | `announcementTitle` |
+| `summaryPath` | 摘要字段路径 | `summary` |
+| `contentPath` | 正文字段路径 | `content` |
+| `urlPath` | 原文链接字段路径 | `url` |
+| `publishTimePath` | 发布时间字段路径 | `publishTime` |
+| `extraFieldPaths` | 额外字段映射，格式 `业务字段=JSON路径;业务字段2=JSON路径2` | `productCode=code;nav=unitNav` |
+| `includeKeywords` | 可选关键词过滤，逗号分隔 | `监管,处罚,风险` |
+| `sourceCode` | 数据源编码 | `CNINFO` |
+| `articleType` | 入库内容类型 | `ANNOUNCEMENT` |
+| `maxItems` | 单次最多保存条数 | `100` |
+| `timeoutSeconds` | 单端点超时时间 | `20` |
+| `freshnessHours` | 新鲜度评估窗口 | `72` |
+
+输出：
+
+- 写入 `aiw_news_article`，不写兜底数据。
+- 写入 `aiw_data_source_health`，前端数据源看板可见。
+- 写入 `aiw_data_quality_snapshot`，用于质量趋势和报告门禁。
+
+说明：
+
+- JSON 端点通过字段路径解析，适合接证监会、交易所、巨潮或供应商授权接口。
+- HTML 端点只做保守链接抽取，适合临时过渡；正式结构化数据优先使用 JSON 或供应商接口。
+- `WEALTH_PRODUCT_NAV_REFRESH` 会基于 `extraFieldPaths` 同步银行理财产品主档，并在存在 `nav` 时写入 `aiw_market_quote` 的 `1D` 净值行情。
+- 理财任务额外支持 `productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel`，默认分别为 `BANK_WMP`、`CNY`、`1D`、`2`。
+- 理财 `extraFieldPaths` 推荐字段：`productCode`、`productName`、`nav`、`previousNav`、`assetSize`、`riskLevel`。
+
+### 5.3 `HOT_THEME_RETURN`
 
 计算热门投资方向在窗口内的平均收益。
 
@@ -302,7 +355,7 @@ application/service/task/HotThemeReturnTaskHandler.java
 - `snapshot_type = RETURN`。
 - 默认只处理 `CN_MAINLAND`。
 
-### 5.3 `MARKET_MOMENTUM_SCAN`
+### 5.4 `MARKET_MOMENTUM_SCAN`
 
 计算主题动量。当前动量公式基于窗口平均收益和上涨广度。
 
@@ -320,7 +373,7 @@ application/service/task/MarketMomentumTaskHandler.java
 - `snapshot_type = MOMENTUM`。
 - `metrics` 保存上涨广度和样本明细。
 
-### 5.4 `NEWS_HEAT_AGGREGATION`
+### 5.5 `NEWS_HEAT_AGGREGATION`
 
 按关键词统计主题资讯热度。
 

@@ -433,6 +433,11 @@ class MockPortfolioApplicationServiceTest {
         }
 
         @Override
+        public Optional<Product> findByMarketAndCode(String marketCode, String productCode) {
+            return Optional.empty();
+        }
+
+        @Override
         public PageResult<Product> search(ProductSearchCriteria criteria) {
             throw new UnsupportedOperationException();
         }

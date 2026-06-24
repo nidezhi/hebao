@@ -87,6 +87,13 @@ public class ProductStoreImpl implements ProductStore {
         return mapper.countByMarketAndCode(marketCode, productCode) > 0;
     }
 
+    /** 按市场和产品代码查询未删除产品。 */
+    @Override
+    public Optional<Product> findByMarketAndCode(String marketCode, String productCode) {
+        return Optional.ofNullable(mapper.selectActiveByMarketAndCode(marketCode, productCode))
+            .map(this::toDomain);
+    }
+
     /**
      * 根据筛选条件分页查询产品。
      *

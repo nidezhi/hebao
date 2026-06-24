@@ -787,6 +787,10 @@ POST /api/ai/prompt-evaluations/list
 
 - 历史旧任务会被停用，新任务以 `l1-`、`l2-`、`cn-mainland-` 和 `auto-openai-` 开头。
 - `INVESTMENT_NEWS_COLLECTION` 支持 `fallbackEnabled=false`，表示外部源无数据时不写入兜底资讯。
+- 新增专用任务类型 `REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`。
+- 专用任务配置页需要支持 `endpoints`、`responseFormat`、`itemsPath`、`externalIdPath`、`titlePath`、`summaryPath`、`contentPath`、`urlPath`、`publishTimePath`、`extraFieldPaths`、`includeKeywords`、`timeoutSeconds`、`freshnessHours`。
+- `WEALTH_PRODUCT_NAV_REFRESH` 还需要支持 `productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel`，并提示 `extraFieldPaths` 中 `productCode/productName/nav` 是关键字段。
+- 专用任务执行后会更新 `/api/admin/data-sources/list` 中的健康状态和最新质量快照。
 - 新任务类型 `AUTO_INVESTMENT_REPORT_GENERATION` 用于自动生成投资报告。
 - 自动报告任务默认参数：
   - `providerCode=OPENAI_COMPATIBLE`

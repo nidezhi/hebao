@@ -25,6 +25,11 @@
         select count(*) from aiw_product
         where market_code = #{marketCode} and product_code = #{productCode} and is_deleted = 0
     </select>
+    <select id="selectActiveByMarketAndCode" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductEntity">
+        select * from aiw_product
+        where market_code = #{marketCode} and product_code = #{productCode} and is_deleted = 0
+        limit 1
+    </select>
     <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.product.ProductEntity">
         select p.* <include refid="searchCondition"/>
         order by ${sortColumn}

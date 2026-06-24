@@ -866,6 +866,9 @@ POST /api/ai/prompt-evaluations/list
 | --- | --- | --- |
 | `AUTO_INVESTMENT_REPORT_GENERATION` | 新增任务类型 | 定时批量生成投资分析报告 |
 | `fallbackEnabled` | 新增任务参数 | 禁止无外部数据时写入兜底资讯 |
+| `REGULATORY_DISCLOSURE_COLLECTION` | 新增任务类型 | 监管披露专用采集 |
+| `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 新增任务类型 | 交易所/巨潮公告专用采集 |
+| `WEALTH_PRODUCT_NAV_REFRESH` | 新增任务类型 | 理财产品和净值披露专用采集 |
 | `openai-compatible-analysis` | 默认模型变更 | 生成报告默认使用 OpenAI 兼容模型 |
 | V17 任务基线 | 数据迁移 | 停用历史任务并初始化高质量任务 |
 
@@ -873,5 +876,8 @@ POST /api/ai/prompt-evaluations/list
 
 - 任务配置接口不变：`/api/investment/tasks/definitions`、`/definitions/save`、`/trigger`。
 - 新任务默认可配置，运营可以改 Cron、主题、模型、回看窗口和初始资金。
+- 专用采集任务参数需要表单化展示：端点 `endpoints`、格式 `responseFormat`、字段路径 `itemsPath/titlePath/...`、额外字段映射 `extraFieldPaths`、关键词 `includeKeywords`、超时和新鲜度窗口。
+- 理财任务 `WEALTH_PRODUCT_NAV_REFRESH` 会同步产品池和净值行情，前端需展示 `productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel` 配置项。
+- 专用采集任务不写兜底数据；端点未配置或无有效数据时，数据源看板会显示健康/质量缺口。
 - OpenAI 模型配置接口不变：`/api/ai/models/save`、`/list`、`/status`。
 - `mockEnabled=true` 不触发真实 OpenAI 调用；`mockEnabled=false` 需要后端配置 `OPENAI_API_KEY`。

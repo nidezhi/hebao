@@ -10,5 +10,6 @@ public enum ProductType {
     STOCK,
     FUND,
     BOND,
-    ETF
+    ETF,
+    BANK_WMP
 }

@@ -4,7 +4,7 @@
 
 本文档用于指导 DZCOM 投资平台前端重构。
 
-当前后端已经具备产品画像、数据源治理、投资分析报告、Prompt 版本、Mock 交易、风控审计、回测、反馈和 Prompt 评估等前端可见接口。前端重构目标不是继续堆叠菜单管理页，而是将这些后台能力组织成一个可操作、可解释、可复盘的投资工作台。
+当前后端已经具备产品画像、数据源治理、专用采集任务、理财产品入产品池、净值行情、投资分析报告、Prompt 版本、Mock 交易、风控审计、回测、反馈和 Prompt 评估等前端可见接口。前端重构目标不是继续堆叠菜单管理页，而是将这些后台能力组织成一个可操作、可解释、可复盘的投资工作台。
 
 重构必须服务于项目核心目标：
 
@@ -57,6 +57,7 @@
 | --- | --- | --- |
 | Overview 投资驾驶舱 | 查看全局健康、机会、风险和待处理事项 | 数据源、报告、Mock 组合、风控审计、回测摘要 |
 | Data Quality 数据质量 | 查看数据源健康、质量分和缺口 | `/api/admin/data-sources/list`、`/api/admin/data-sources/quality/list` |
+| Data Ingestion 采集编排 | 配置 L1/L2 专用采集、自动报告和任务执行 | `/api/investment/tasks/definitions`、`/api/investment/tasks/definitions/save`、`/api/investment/tasks/trigger`、`/api/investment/tasks/executions/list` |
 | Product & Risk 产品风险 | 管理产品画像、风险等级、主题关系和 Mock 门禁 | `/api/products/detail`、`/api/admin/products/investment-profile/save` |
 | Report Studio 投资报告 | 生成、查看和解释投资报告 | `/api/investment/analysis/generate`、`/api/investment/analysis/reports/list` |
 | Prompt Lab Prompt 实验室 | 管理 Prompt 版本、变量、Schema 和预览 | `/api/ai/prompts/*` |
@@ -97,12 +98,45 @@
 - 质量趋势图：按 `qualityScore`、`sampleCount`、`missingRatio` 展示历史。
 - 缺口列表：数据类型、来源、失败原因、最近成功时间。
 - 数据源详情：基础信息、健康状态、质量快照历史。
+- 采集影响提示：展示最近一次专用采集写入样本数、同步产品数、净值行情数。
 
 核心状态：
 
 - `L1/L2` 数据源异常应高亮。
 - `L5` 兜底数据只能标记为演示或链路验证。
 - `qualityLevel=LOW/DEMO_ONLY` 时，相关报告页面必须展示降级状态。
+
+### 4.2.1 Data Ingestion 采集编排
+
+页面组成：
+
+- 任务总览：任务编码、任务类型、Cron、启用状态、最近执行结果。
+- 专用采集配置：监管披露、交易所/巨潮公告、理财产品净值三类任务表单。
+- 字段映射面板：配置 `itemsPath`、`externalIdPath`、`titlePath`、`publishTimePath`、`extraFieldPaths`。
+- 手动触发面板：允许临时覆盖 `endpoints`、字段映射、关键词和 `maxItems`。
+- 执行记录：成功、失败、触发来源、失败原因和结果摘要。
+
+重点任务类型：
+
+| 任务类型 | 前端用途 | 必须展示的关键参数 |
+| --- | --- | --- |
+| `REGULATORY_DISCLOSURE_COLLECTION` | 采集证监会等监管披露 | `endpoints`、`responseFormat`、字段路径、`includeKeywords` |
+| `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 采集交易所/巨潮公告 | `endpoints`、`itemsPath`、`externalIdPath`、`titlePath`、`publishTimePath` |
+| `WEALTH_PRODUCT_NAV_REFRESH` | 采集理财产品和净值 | `extraFieldPaths`、`productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel` |
+| `AUTO_INVESTMENT_REPORT_GENERATION` | 自动生成投资报告 | `providerCode`、`modelCode`、`marketScope`、`lookbackDays`、`initialCapital`、`themes` |
+
+理财任务字段映射建议：
+
+```text
+productCode=productCode;productName=productName;nav=nav;previousNav=previousNav;assetSize=assetSize;riskLevel=riskLevel
+```
+
+交互要求：
+
+- 端点为空时展示“未配置端点，不写兜底数据”。
+- `WEALTH_PRODUCT_NAV_REFRESH` 执行后，在结果摘要和数据质量详情里展示同步产品数、净值行情数和缺失净值数。
+- 字段映射表单必须支持“路径预设 + 手工编辑”，不能只给一个大文本框。
+- 任务保存后提示调度会刷新，手动触发后跳转执行记录。
 
 ### 4.3 Product & Risk 产品风险
 
@@ -112,6 +146,7 @@
 - 产品画像详情：风险摘要、波动等级、流动性、最大回撤、适配风险等级。
 - 主题关系图：主题、行业、指数、资产类别与产品关系权重。
 - Mock 门禁面板：是否允许 Mock、不可 Mock 原因、最小持有天数、交易备注。
+- 理财产品净值：对 `BANK_WMP` 展示最新 `1D` 净值、来源 `CHINA_WEALTH`、更新时间和历史净值曲线。
 
 交互要求：
 
@@ -225,7 +260,9 @@ src/
     utils/
   entities/
     data-source/
+    task/
     product/
+    market-quote/
     report/
     prompt/
     portfolio/
@@ -241,6 +278,7 @@ src/
   pages/
     overview/
     data-quality/
+    data-ingestion/
     product-risk/
     report-studio/
     prompt-lab/
@@ -283,11 +321,36 @@ API client 分层：
 | `dataType` | `MARKET_QUOTE`、`NEWS`、`ANNOUNCEMENT`、`RESEARCH`、`REGULATORY` |
 | `qualityLevel` | `HIGH`、`MEDIUM`、`LOW`、`UNKNOWN`、`DISABLED`、`DEMO_ONLY` |
 
+### 6.1.1 采集任务字典
+
+| 字典 | 值 |
+| --- | --- |
+| `taskType` | `INVESTMENT_NEWS_COLLECTION`、`REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`、`MARKET_MOMENTUM_SCAN`、`HOT_THEME_RETURN`、`NEWS_HEAT_AGGREGATION`、`AUTO_INVESTMENT_REPORT_GENERATION` |
+| `responseFormat` | `JSON`、`HTML` |
+| `taskStatus` | `RUNNING`、`SUCCEEDED`、`FAILED` |
+| `triggerSource` | `SCHEDULE`、`MANUAL`、`RETRY` |
+| `articleType` | `NEWS`、`REGULATORY`、`ANNOUNCEMENT`、`WEALTH_NAV`、`RESEARCH` |
+| `collectorFieldPreset` | `CNINFO_ANNOUNCEMENT`、`CSRC_DISCLOSURE`、`CHINA_WEALTH_NAV`、`CUSTOM_JSON`、`CUSTOM_HTML` |
+
+采集字段下拉：
+
+| 字段 | 用途 |
+| --- | --- |
+| `itemsPath` | JSON 列表路径 |
+| `externalIdPath` | 外部唯一 ID 路径 |
+| `titlePath` | 标题或产品名称路径 |
+| `summaryPath` | 摘要路径 |
+| `contentPath` | 正文路径 |
+| `urlPath` | 原文链接路径 |
+| `publishTimePath` | 发布时间路径 |
+| `extraFieldPaths` | 额外业务字段映射 |
+
 ### 6.2 产品和风险字典
 
 | 字典 | 值 |
 | --- | --- |
 | `assetClass` | `STOCK`、`ETF`、`FUND`、`BOND`、`BANK_WMP`、`GOLD`、`REIT`、`CASH`、`OTHER` |
+| `productType` | `STOCK`、`FUND`、`BOND`、`ETF`、`BANK_WMP` |
 | `volatilityLevel` | `LOW`、`MEDIUM`、`HIGH` |
 | `liquidityLevel` | `LOW`、`MEDIUM`、`HIGH` |
 | `riskLevel` | `1` 保守、`2` 稳健、`3` 平衡、`4` 成长、`5` 进取 |
@@ -365,17 +428,20 @@ API client 分层：
 - 数据源健康矩阵。
 - 数据质量趋势和缺口列表。
 - 首页风险审计流。
+- 采集任务总览和专用采集配置入口。
 
 验收：
 
 - 用户进入系统即可看到数据是否可信。
 - 低质量状态能影响报告和 Mock 入口展示。
+- L1/L2 任务端点缺失时能看到明确缺口，而不是空白失败。
 
 ### 阶段 3：产品风险和报告工作台
 
 交付：
 
 - 产品画像列表和详情。
+- `BANK_WMP` 理财产品列表、详情和净值曲线。
 - 投资报告列表、生成和详情。
 - 报告质量门禁和降级展示。
 - 报告图表证据。
@@ -384,6 +450,7 @@ API client 分层：
 
 - 数据质量不足时不能进入投资动作。
 - 报告详情能解释趋势、质量和风险。
+- 理财产品能展示来自 `CHINA_WEALTH` 的最新净值行情。
 
 ### 阶段 4：Prompt Lab
 
@@ -435,6 +502,7 @@ API client 分层：
 | --- | --- |
 | Overview | 数据源列表、报告列表、Mock 组合列表、收益曲线、风控审计列表、回测列表 |
 | Data Quality | `/api/admin/data-sources/list`、`/api/admin/data-sources/quality/list` |
+| Data Ingestion | `/api/investment/tasks/definitions`、`/api/investment/tasks/definitions/save`、`/api/investment/tasks/trigger`、`/api/investment/tasks/executions/list` |
 | Product & Risk | `/api/products/detail`、`/api/admin/products/investment-profile/save` |
 | Report Studio | `/api/investment/analysis/generate`、`/api/investment/analysis/reports/list` |
 | Prompt Lab | `/api/ai/prompts/save`、`/api/ai/prompts/list`、`/api/ai/prompts/detail`、`/api/ai/prompts/status`、`/api/ai/prompts/preview` |
@@ -477,6 +545,8 @@ API client 分层：
 当前后端已经支撑本前端重构方案的主要链路：
 
 - 数据源治理：已支持注册、健康、质量快照和列表。
+- 采集编排：已支持 L1/L2 专用采集任务、字段映射、手动触发和执行记录。
+- 理财数据：已支持 `WEALTH_PRODUCT_NAV_REFRESH` 同步 `BANK_WMP` 产品池并写入 `1D` 净值行情。
 - 产品风险：已支持产品画像、主题关系和 Mock 门禁。
 - 投资报告：已支持质量门禁、降级报告、趋势、模拟收益和图表数据。
 - Prompt 治理：已支持版本、变量、Schema、状态和预览。
@@ -486,7 +556,7 @@ API client 分层：
 
 仍需后续阶段继续推进：
 
-- 真实高质量外部数据源接入。
-- 真实 OpenAI 兼容 Provider 调用。
+- 官方接口内置模板、分页游标和供应商授权行情。
+- 生产环境真实 OpenAI 兼容调用配置和密钥管理。
 - AI 投资方案结构化输出表。
 - 更完整的角色权限和后台运营权限分级。

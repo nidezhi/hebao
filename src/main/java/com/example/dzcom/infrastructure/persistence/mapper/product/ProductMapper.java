@@ -20,6 +20,10 @@ public interface ProductMapper {
     long countByMarketAndCode(@Param("marketCode") String marketCode,
                               @Param("productCode") String productCode);
 
+    /** 根据市场和产品代码查询未删除产品。 */
+    ProductEntity selectActiveByMarketAndCode(@Param("marketCode") String marketCode,
+                                              @Param("productCode") String productCode);
+
     /** 根据筛选条件分页查询产品。 */
     List<ProductEntity> search(@Param("criteria") ProductSearchCriteria criteria,
                                @Param("offset") int offset,

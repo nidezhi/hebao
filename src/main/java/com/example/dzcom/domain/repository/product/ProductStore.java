@@ -44,6 +44,17 @@ public interface ProductStore {
     boolean existsByMarketAndCode(String marketCode, String productCode);
 
     /**
+     * 按市场和产品代码查询未删除产品。
+     *
+     * @param marketCode 市场或渠道编码
+     * @param productCode 产品代码
+     * @return 产品领域对象
+     * @author dz
+     * @date 2026-06-24
+     */
+    Optional<Product> findByMarketAndCode(String marketCode, String productCode);
+
+    /**
      * 根据查询条件获取业务数据列表。
      *
      * @param criteria 查询筛选条件

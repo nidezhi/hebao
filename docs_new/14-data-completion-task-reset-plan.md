@@ -51,9 +51,9 @@ src/main/resources/db/migration/V17__reset_quality_tasks_and_openai_default.sql
 
 | taskCode | taskType | 默认启用 | 说明 |
 | --- | --- | --- | --- |
-| `l1-regulatory-news-collection` | `INVESTMENT_NEWS_COLLECTION` | 是 | L1 监管资讯采集，占位等待配置 feed 或专用采集器 |
-| `l1-exchange-announcement-collection` | `INVESTMENT_NEWS_COLLECTION` | 是 | L1 交易所/巨潮公告采集，占位等待配置 feed 或专用解析器 |
-| `l2-wealth-product-refresh` | `INVESTMENT_NEWS_COLLECTION` | 是 | L2 理财产品和净值补全，占位等待产品专用处理器 |
+| `l1-regulatory-disclosure-collection` | `REGULATORY_DISCLOSURE_COLLECTION` | 是 | L1 监管披露专用采集，端点和字段路径前端可配置 |
+| `l1-exchange-announcement-collection` | `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 是 | L1 交易所/巨潮公告专用采集，端点和字段路径前端可配置 |
+| `l2-wealth-product-nav-refresh` | `WEALTH_PRODUCT_NAV_REFRESH` | 是 | L2 理财产品和净值披露专用采集，同步产品池并写入净值行情 |
 | `cn-mainland-market-momentum-scan` | `MARKET_MOMENTUM_SCAN` | 是 | 中国大陆核心主题动量扫描 |
 | `cn-mainland-hot-theme-return` | `HOT_THEME_RETURN` | 是 | 中国大陆核心主题收益快照 |
 | `cn-mainland-news-heat-aggregation` | `NEWS_HEAT_AGGREGATION` | 是 | 资讯热度和资讯-主题-产品证据链 |
@@ -82,7 +82,46 @@ POST /api/investment/tasks/executions/list
 
 当外部源无数据且 `fallbackEnabled=false` 时，任务不会写入兜底资讯，只返回“外部资讯源无有效数据”的执行摘要。
 
-### 5.2 自动报告生成
+### 5.2 官方专用采集参数
+
+`REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`
+共享以下参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `endpoints` | 空 | 专用端点，格式 `名称=url|JSON;名称2=url|HTML` |
+| `responseFormat` | `JSON` | 默认响应格式 |
+| `itemsPath` | 空 | JSON 列表路径，空表示根节点 |
+| `externalIdPath` | `id` | 外部 ID 字段路径 |
+| `titlePath` | `title` / `productName` | 标题或产品名称字段路径 |
+| `summaryPath` | `summary` | 摘要字段路径 |
+| `contentPath` | `content` | 正文字段路径 |
+| `urlPath` | `url` | 原文链接字段路径 |
+| `publishTimePath` | `publishTime` | 发布时间字段路径 |
+| `extraFieldPaths` | 空 / 理财默认映射 | 额外字段映射，理财任务用于产品池和净值行情 |
+| `includeKeywords` | 空 | 关键词过滤，逗号分隔 |
+| `maxItems` | `80` / `100` | 单次最多保存条数 |
+| `timeoutSeconds` | `20` | 单端点超时 |
+| `freshnessHours` | `72` / `168` | 新鲜度评分窗口 |
+
+采集成功后会写入资讯/公告表、数据源健康和质量快照；端点未配置或无有效数据时不写入兜底数据。
+
+`WEALTH_PRODUCT_NAV_REFRESH` 额外参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `productMarketCode` | `BANK_WMP` | 银行理财产品市场/渠道编码 |
+| `productCurrency` | `CNY` | 产品币种 |
+| `quoteInterval` | `1D` | 净值行情周期 |
+| `defaultRiskLevel` | `2` | 数据源未给风险等级时的默认产品风险 |
+
+理财任务默认额外字段映射：
+
+```text
+productCode=productCode;productName=productName;nav=nav;previousNav=previousNav;assetSize=assetSize;riskLevel=riskLevel
+```
+
+### 5.3 自动报告生成
 
 任务类型：
 
@@ -145,13 +184,13 @@ secretRef = OPENAI_API_KEY
 
 ## 8. 仍需补齐的高质量数据处理器
 
-本次完成的是任务重置和默认链路升级，不代表所有高质量源已经有专用采集器。
+本次已补齐第一版可配置专用采集器，不再只是 RSS 占位。
 
 后续建议补齐：
 
-- `REGULATORY_DISCLOSURE_COLLECTION`：证监会/交易所监管数据专用解析。
-- `EXCHANGE_ANNOUNCEMENT_COLLECTION`：上交所、深交所、巨潮公告专用解析。
-- `WEALTH_PRODUCT_NAV_REFRESH`：中国理财网产品和净值专用解析。
+- `REGULATORY_DISCLOSURE_COLLECTION`：补官方接口字段模板和分页游标。
+- `EXCHANGE_ANNOUNCEMENT_COLLECTION`：补上交所、深交所、巨潮的内置端点模板和公告分类映射。
+- `WEALTH_PRODUCT_NAV_REFRESH`：已支持产品池 upsert 和净值入行情表；后续补中国理财网官方字段模板、分页游标和产品属性明细。
 - `VENDOR_MARKET_QUOTE_SYNC`：Wind/Choice 等授权供应商行情同步。
 - `DATA_SOURCE_QUALITY_AUDIT`：周期性读取采集结果并写质量快照。
 

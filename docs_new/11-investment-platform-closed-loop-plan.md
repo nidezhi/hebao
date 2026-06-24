@@ -525,5 +525,8 @@ DRAFT
 - 默认分析模型切换为 `openai-compatible-analysis`。
 - OpenAI 兼容 Provider 支持 `mockEnabled=false` 时调用真实 OpenAI 兼容接口。
 - L1/L2 采集任务默认 `fallbackEnabled=false`，禁止将兜底样本写作正式数据。
+- 新增第一版官方专用采集器，支持 `REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`。
+- 专用采集器支持前端配置端点、JSON/HTML 格式、字段路径、关键词过滤、超时和新鲜度窗口，并自动写入数据源健康和质量快照。
+- `WEALTH_PRODUCT_NAV_REFRESH` 已支持基于结构化字段同步银行理财产品主档，并将 `nav` 写入 `aiw_market_quote` 形成净值行情。
 
-仍需继续补齐专用采集器：监管披露、交易所公告、中国理财网产品净值、Wind/Choice 授权行情和周期性数据质量审计。
+仍需继续补齐：官方接口内置模板、理财产品属性明细、Wind/Choice 授权行情和周期性数据质量审计。
