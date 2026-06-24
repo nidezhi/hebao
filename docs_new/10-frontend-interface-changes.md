@@ -780,3 +780,19 @@ POST /api/ai/prompt-evaluations/list
 - `score` 为 0 到 1 的小数。
 - 保存评估时，如果携带 `backtestBizId` 或 `feedbackBizId`，后端会校验关联数据对当前用户可见。
 - `/detail` 只允许评估人本人、关联反馈所有者或关联回测所有者查看；越权返回 `403`。
+
+## 13. 高质量数据任务和自动报告接入说明
+
+本轮新增 V17 任务基线，前端任务配置页需要关注：
+
+- 历史旧任务会被停用，新任务以 `l1-`、`l2-`、`cn-mainland-` 和 `auto-openai-` 开头。
+- `INVESTMENT_NEWS_COLLECTION` 支持 `fallbackEnabled=false`，表示外部源无数据时不写入兜底资讯。
+- 新任务类型 `AUTO_INVESTMENT_REPORT_GENERATION` 用于自动生成投资报告。
+- 自动报告任务默认参数：
+  - `providerCode=OPENAI_COMPATIBLE`
+  - `modelCode=openai-compatible-analysis`
+  - `marketScope=CN_MAINLAND`
+  - `lookbackDays=30`
+  - `initialCapital=100000`
+- OpenAI 模型仍通过 `/api/ai/models/save`、`/api/ai/models/list`、`/api/ai/models/status` 前端可配置。
+- `openai-compatible-analysis` 默认 `mockEnabled=true`，不会调用外部网络；前端或运营配置为 `mockEnabled=false` 并配置 `OPENAI_API_KEY` 后才会真实调用。

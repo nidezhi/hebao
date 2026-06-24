@@ -24,7 +24,7 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class InvestmentAnalysisApplicationService {
-    private static final String DEFAULT_MODEL_CODE = "local-rule-analysis";
+    private static final String DEFAULT_MODEL_CODE = "openai-compatible-analysis";
     private static final Set<String> SORTS =
         Set.of("generatedAt", "createdAt", "providerCode", "modelCode", "themeCode",
             "status", "confidenceLevel", "dataQualityScore");

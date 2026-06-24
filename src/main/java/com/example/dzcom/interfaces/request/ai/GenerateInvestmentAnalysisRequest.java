@@ -11,7 +11,7 @@ public record GenerateInvestmentAnalysisRequest(
     @Schema(description = "可选提供方校验值；实际提供方由 ACTIVE 模型配置决定",
         example = "OPENAI_COMPATIBLE")
     String providerCode,
-    @Schema(description = "模型稳定编码；为空时使用 local-rule-analysis",
+    @Schema(description = "模型稳定编码；为空时使用 openai-compatible-analysis",
         example = "openai-compatible-analysis")
     String modelCode,
     @Schema(description = "市场范围，默认仅中国大陆", example = "CN_MAINLAND")

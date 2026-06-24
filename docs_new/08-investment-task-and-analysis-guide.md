@@ -1095,3 +1095,16 @@ select now(), @@session.time_zone;
 
 - `@@session.time_zone` 为 `+08:00`。
 - 应用写入的业务时间与北京时间一致。
+
+## 15. 2026-06-24 高质量数据任务重置
+
+本轮新增 `V17__reset_quality_tasks_and_openai_default.sql`，用于重置任务基线：
+
+- 历史任务统一停用。
+- 初始化 L1/L2/L3 优先的数据源注册。
+- 初始化 L1 监管、L1 公告、L2 理财产品、主题收益、市场动量、资讯热度和自动报告生成任务。
+- `INVESTMENT_NEWS_COLLECTION` 支持 `fallbackEnabled=false`，避免无外部数据时写入兜底资讯。
+- 新增 `AUTO_INVESTMENT_REPORT_GENERATION` 处理器，默认使用 `openai-compatible-analysis` 生成报告。
+- `openai-compatible-analysis` 成为默认分析模型；`mockEnabled=true` 时不发起外部请求，`mockEnabled=false` 且密钥存在时调用 OpenAI 兼容接口。
+
+详细方案见 `docs_new/14-data-completion-task-reset-plan.md`。

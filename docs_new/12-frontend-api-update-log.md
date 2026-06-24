@@ -857,3 +857,21 @@ POST /api/ai/prompt-evaluations/list
 - `score` 范围为 0 到 1。
 - 保存评估时携带 `backtestBizId` 或 `feedbackBizId` 会触发可见性校验。
 - `/api/ai/prompt-evaluations/detail` 只允许评估人本人、关联反馈所有者或关联回测所有者查看；越权返回 `403`。
+
+## 5. 2026-06-24：高质量数据任务和默认 OpenAI 报告
+
+新增/变更：
+
+| 能力 | 类型 | 前端用途 |
+| --- | --- | --- |
+| `AUTO_INVESTMENT_REPORT_GENERATION` | 新增任务类型 | 定时批量生成投资分析报告 |
+| `fallbackEnabled` | 新增任务参数 | 禁止无外部数据时写入兜底资讯 |
+| `openai-compatible-analysis` | 默认模型变更 | 生成报告默认使用 OpenAI 兼容模型 |
+| V17 任务基线 | 数据迁移 | 停用历史任务并初始化高质量任务 |
+
+前端注意：
+
+- 任务配置接口不变：`/api/investment/tasks/definitions`、`/definitions/save`、`/trigger`。
+- 新任务默认可配置，运营可以改 Cron、主题、模型、回看窗口和初始资金。
+- OpenAI 模型配置接口不变：`/api/ai/models/save`、`/list`、`/status`。
+- `mockEnabled=true` 不触发真实 OpenAI 调用；`mockEnabled=false` 需要后端配置 `OPENAI_API_KEY`。

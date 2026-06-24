@@ -29,4 +29,11 @@ class TaskParameterParserTest {
             () -> TaskParameterParser.positiveInt(Map.of("windowMinutes", "0"),
                 "windowMinutes", 60));
     }
+
+    /** 布尔参数应支持默认值和显式配置。 */
+    @Test
+    void shouldParseBooleanWithDefaultValue() {
+        assertEquals(true, TaskParameterParser.bool(Map.of(), "fallbackEnabled", true));
+        assertEquals(false, TaskParameterParser.bool(Map.of("fallbackEnabled", "false"), "fallbackEnabled", true));
+    }
 }

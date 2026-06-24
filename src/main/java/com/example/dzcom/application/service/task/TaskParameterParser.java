@@ -53,6 +53,24 @@ public final class TaskParameterParser {
     }
 
     /**
+     * 读取布尔参数。
+     *
+     * @param parameters 任务参数集合
+     * @param key 参数键
+     * @param defaultValue 默认值
+     * @return true/false；空值使用默认值
+     * @author dz
+     * @date 2026-06-24
+     */
+    public static boolean bool(Map<String, String> parameters, String key, boolean defaultValue) {
+        if (parameters == null) {
+            return defaultValue;
+        }
+        String value = parameters.get(key);
+        return value == null || value.isBlank() ? defaultValue : Boolean.parseBoolean(value.trim());
+    }
+
+    /**
      * 解析“主题名称=值1,值2;主题名称2=值3”格式。
      *
      * @return 保持配置顺序的主题映射

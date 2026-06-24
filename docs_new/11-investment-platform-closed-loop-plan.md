@@ -514,3 +514,16 @@ DRAFT
 - 没有 Prompt 版本，不允许不可追踪的大模型输出。
 - 没有前端可见出口，后端改进视为未完成。
 - 每个投资方案必须能追溯到数据源、产品、报告、Prompt、模型、风控和 Mock 结果。
+
+## 16. 2026-06-24 数据补全和自动报告更新
+
+本轮已执行高质量数据补全任务重置：
+
+- 通过 `V17__reset_quality_tasks_and_openai_default.sql` 停用历史任务并初始化新任务。
+- 新增 L1/L2/L3 数据源注册和健康占位。
+- 新增自动投资报告生成任务 `AUTO_INVESTMENT_REPORT_GENERATION`。
+- 默认分析模型切换为 `openai-compatible-analysis`。
+- OpenAI 兼容 Provider 支持 `mockEnabled=false` 时调用真实 OpenAI 兼容接口。
+- L1/L2 采集任务默认 `fallbackEnabled=false`，禁止将兜底样本写作正式数据。
+
+仍需继续补齐专用采集器：监管披露、交易所公告、中国理财网产品净值、Wind/Choice 授权行情和周期性数据质量审计。

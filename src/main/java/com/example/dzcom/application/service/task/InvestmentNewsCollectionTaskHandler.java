@@ -56,6 +56,7 @@ public class InvestmentNewsCollectionTaskHandler implements InvestmentTaskHandle
         int maxItems = TaskParameterParser.positiveInt(event.parameters(), "maxItems", 50);
         String sourceCode = TaskParameterParser.string(event.parameters(), "sourceCode", "RSS");
         String languageCode = TaskParameterParser.string(event.parameters(), "languageCode", "zh-CN");
+        boolean fallbackEnabled = TaskParameterParser.bool(event.parameters(), "fallbackEnabled", true);
         LocalDateTime now = clock.now();
 
         List<InvestmentNewsFeedClient.FeedItem> feedItems = feedUrls.stream()
@@ -65,6 +66,9 @@ public class InvestmentNewsCollectionTaskHandler implements InvestmentTaskHandle
             feedItems.forEach(item ->
                 saveFeedItem(item, sourceCode, languageCode, now));
             return "已采集并保存 " + feedItems.size() + " 条投资资讯";
+        }
+        if (!fallbackEnabled) {
+            return "外部资讯源无有效数据，已按配置禁用兜底资讯写入";
         }
 
         List<FallbackArticle> fallbackArticles = parseFallbackArticles(event);
