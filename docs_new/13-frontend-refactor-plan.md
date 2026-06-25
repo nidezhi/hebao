@@ -125,6 +125,7 @@
 | `WEALTH_PRODUCT_NAV_REFRESH` | 采集理财产品和净值 | `extraFieldPaths`、`productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel` |
 | `AUTO_INVESTMENT_REPORT_GENERATION` | 自动生成投资报告 | `providerCode`、`modelCode`、`marketScope`、`lookbackDays`、`initialCapital`、`themes` |
 | `AUTO_PROMPT_GOVERNANCE` | 自动 Prompt 治理 | `promptCode`、`promptVersion`、`scenario`、`reportSampleSize` |
+| `AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION` | 自动闭环总编排 | `dataTaskCodes`、`reportTaskCode`、`promptTaskCode`、`mockUserBizId`、`allowAutoMockTrade`、`allowPromptCandidate`、`allowModelCandidate`、`allowRealTrade` |
 
 理财任务字段映射建议：
 
@@ -138,6 +139,7 @@ productCode=productCode;productName=productName;nav=nav;previousNav=previousNav;
 - `WEALTH_PRODUCT_NAV_REFRESH` 执行后，在结果摘要和数据质量详情里展示同步产品数、净值行情数和缺失净值数。
 - 字段映射表单必须支持“路径预设 + 手工编辑”，不能只给一个大文本框。
 - 任务保存后提示调度会刷新，手动触发后跳转执行记录。
+- 自动闭环总编排任务需要展示安全闸门：Prompt 启用、模型启用、真实交易均默认需要人工确认或灰度开关。
 
 ### 4.3 Product & Risk 产品风险
 
@@ -510,6 +512,7 @@ API client 分层：
 | Simulation | `/api/mock/portfolios/create`、`/api/mock/portfolios/mine`、`/api/mock/portfolios/detail`、`/api/mock/portfolios/orders/buy`、`/api/mock/portfolios/orders/sell`、`/api/mock/portfolios/orders/cancel`、`/api/mock/portfolios/rebalance/execute`、`/api/mock/portfolios/performance/curve` |
 | Review Loop | `/api/backtests/save`、`/api/backtests/generate-from-portfolio`、`/api/backtests/detail`、`/api/backtests/list`、`/api/ai/feedback/save`、`/api/ai/feedback/list`、`/api/ai/prompt-evaluations/list` |
 | Risk Audit | `/api/risk/checks/list` |
+| Closed Loop | `/api/investment/closed-loop/runs/list`、`/api/investment/closed-loop/runs/detail` |
 
 ## 10. 验收清单
 
@@ -554,6 +557,7 @@ API client 分层：
 - Mock 交易：已支持组合、买入、卖出、撤单、订单事件、再平衡、估值和收益曲线。
 - 风控审计：已支持关键拦截查询。
 - 回测反馈：已支持回测保存、Mock 组合生成回测、反馈保存、Prompt 评估和可见性校验。
+- 自动闭环：已支持总编排任务、运行记录、步骤审计、质量阻断、Prompt/模型候选、Mock 交易、回测和反馈自动串联。
 
 仍需后续阶段继续推进：
 

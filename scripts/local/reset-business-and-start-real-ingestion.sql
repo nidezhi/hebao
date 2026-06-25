@@ -48,6 +48,8 @@ DELETE FROM aiw_news_target;
 DELETE FROM aiw_news_article;
 DELETE FROM aiw_investment_theme_snapshot;
 DELETE FROM aiw_scheduled_task_execution;
+DELETE FROM aiw_closed_loop_step;
+DELETE FROM aiw_closed_loop_run;
 DELETE FROM aiw_market_quote;
 DELETE FROM aiw_product_theme_relation;
 DELETE FROM aiw_product_investment_profile;
@@ -172,7 +174,31 @@ VALUES
  '自动投资报告生成任务。默认 OpenAI 兼容模型，低质量输入只能生成缺口/风险报告。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3)),
 ('17000000-0000-0000-0000-000000000208', 'auto-prompt-governance', 'AUTO_PROMPT_GOVERNANCE', '0 20 */2 * * *', 'Asia/Shanghai', 1,
  JSON_OBJECT('promptCode', 'investment-plan-from-report', 'promptVersion', 'auto-v1', 'scenario', 'INVESTMENT_PLAN', 'reportSampleSize', '20'),
- '自动 Prompt 治理任务。维护报告转方案 Prompt 基线，并基于真实报告和反馈形成评估记录。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3));
+ '自动 Prompt 治理任务。维护报告转方案 Prompt 基线，并基于真实报告和反馈形成评估记录。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3)),
+('17000000-0000-0000-0000-000000000209', 'auto-investment-closed-loop-orchestration', 'AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION', '0 40 */2 * * *', 'Asia/Shanghai', 1,
+ JSON_OBJECT(
+   'automationLevel', 'FULL_MOCK',
+   'marketScope', 'CN_MAINLAND',
+   'mockUserBizId', '21000000-0000-0000-0000-000000000002',
+   'mockPortfolioName', '全自动闭环模拟组合',
+   'initialCash', '100000',
+   'minQualityScore', '0.45',
+   'allowAutoMockTrade', 'true',
+   'allowPromptCandidate', 'true',
+   'allowModelCandidate', 'true',
+   'allowAutoPromptActivation', 'false',
+   'allowAutoModelActivation', 'false',
+   'allowRealTrade', 'false',
+   'dataTaskCodes', 'l1-regulatory-disclosure-collection,l1-exchange-announcement-collection,l2-wealth-product-nav-refresh,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation',
+   'reportTaskCode', 'auto-openai-investment-report-generation',
+   'promptTaskCode', 'auto-prompt-governance',
+   'modelCode', 'openai-compatible-analysis',
+   'providerCode', 'OPENAI_COMPATIBLE',
+   'lookbackDays', '30',
+   'themeCodes', '',
+   'maxReportsForMock', '1'
+ ),
+ '自动投资闭环总编排任务。自动采集、报告、Prompt候选、模型候选、Mock交易、回测和反馈；默认不自动启用新Prompt/模型、不触发真实交易。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3));
 
 -- 5. 初始化模型配置。默认 OpenAI 兼容模型仍为 mockEnabled=true，由前端配置真实 Key 后再关闭。
 INSERT INTO aiw_ai_model

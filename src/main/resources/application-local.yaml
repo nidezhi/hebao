@@ -203,3 +203,28 @@ investment:
           promptVersion: auto-v1
           scenario: INVESTMENT_PLAN
           reportSampleSize: "20"
+      - code: auto-investment-closed-loop-orchestration
+        type: AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
+        cron: ${AUTO_INVESTMENT_CLOSED_LOOP_CRON:0 40 */2 * * *}
+        zone: Asia/Shanghai
+        parameters:
+          automationLevel: FULL_MOCK
+          marketScope: CN_MAINLAND
+          mockUserBizId: ${AUTO_INVESTMENT_MOCK_USER_BIZ_ID:21000000-0000-0000-0000-000000000002}
+          mockPortfolioName: 全自动闭环模拟组合
+          initialCash: "100000"
+          minQualityScore: "0.45"
+          allowAutoMockTrade: "true"
+          allowPromptCandidate: "true"
+          allowModelCandidate: "true"
+          allowAutoPromptActivation: "false"
+          allowAutoModelActivation: "false"
+          allowRealTrade: "false"
+          dataTaskCodes: l1-regulatory-disclosure-collection,l1-exchange-announcement-collection,l2-wealth-product-nav-refresh,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation
+          reportTaskCode: auto-openai-investment-report-generation
+          promptTaskCode: auto-prompt-governance
+          modelCode: ${AUTO_INVESTMENT_REPORT_MODEL:openai-compatible-analysis}
+          providerCode: OPENAI_COMPATIBLE
+          lookbackDays: "30"
+          themeCodes: ""
+          maxReportsForMock: "1"

@@ -11,6 +11,7 @@
 - 让核心数据补全优先围绕 L1/L2/L3 数据源。
 - 增加自动投资报告生成任务。
 - 增加自动 Prompt 治理任务，让报告、反馈和评估形成可复盘链路。
+- 增加自动投资闭环总编排任务，让 Mock 投资闭环可以全自动运行。
 - 默认挂 OpenAI 兼容模型，并允许前端通过模型配置接口调整。
 
 ## 2. 迁移入口
@@ -61,6 +62,7 @@ src/main/resources/db/migration/V17__reset_quality_tasks_and_openai_default.sql
 | `cn-mainland-news-heat-aggregation` | `NEWS_HEAT_AGGREGATION` | 是 | 资讯热度和资讯-主题-产品证据链 |
 | `auto-openai-investment-report-generation` | `AUTO_INVESTMENT_REPORT_GENERATION` | 是 | 自动生成投资报告，默认 OpenAI 兼容模型 |
 | `auto-prompt-governance` | `AUTO_PROMPT_GOVERNANCE` | 是 | 自动维护报告转方案 Prompt 基线，并基于真实报告和反馈生成评估记录 |
+| `auto-investment-closed-loop-orchestration` | `AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION` | 是 | 自动采集、报告、Prompt/模型候选、Mock 交易、回测和反馈总编排 |
 
 前端可以继续通过以下接口查看、调整和触发：
 
@@ -168,6 +170,41 @@ AUTO_PROMPT_GOVERNANCE
 - 若已有报告，按报告状态、可信等级和数据质量分写入 `aiw_ai_prompt_evaluation`。
 - 用户采纳/拒绝反馈仍由反馈接口写入，并会触发反馈维度 Prompt 评估。
 
+### 5.5 自动投资闭环总编排
+
+任务类型：
+
+```text
+AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
+```
+
+核心参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `automationLevel` | `FULL_MOCK` | 自动化等级，当前默认跑完整 Mock 闭环 |
+| `dataTaskCodes` | L1/L2/聚合任务列表 | 本轮先同步执行的数据采集和聚合任务 |
+| `reportTaskCode` | `auto-openai-investment-report-generation` | 自动报告任务编码 |
+| `promptTaskCode` | `auto-prompt-governance` | 自动 Prompt 治理任务编码 |
+| `mockUserBizId` | 本地 demo 用户 | 自动 Mock 使用的用户业务标识 |
+| `mockPortfolioName` | `全自动闭环模拟组合` | 自动创建或复用的 Mock 组合名称 |
+| `initialCash` | `100000` | 自动 Mock 组合初始现金 |
+| `minQualityScore` | `0.45` | 报告进入 Mock 前的最低质量分 |
+| `allowAutoMockTrade` | `true` | 是否允许自动 Mock 交易 |
+| `allowPromptCandidate` | `true` | 是否允许自动 Prompt 候选和评分 |
+| `allowModelCandidate` | `true` | 是否允许自动 DRAFT 模型候选 |
+| `allowAutoPromptActivation` | `false` | 正式启用 Prompt 闸门，当前不自动启用 |
+| `allowAutoModelActivation` | `false` | 正式启用模型闸门，当前不自动 ACTIVE |
+| `allowRealTrade` | `false` | 真实交易闸门，当前不触发真实交易 |
+
+任务行为：
+
+- 子任务失败会阻断闭环，并写入闭环步骤记录。
+- 报告必须满足状态成功、可信等级可用、质量分达标、质量门禁通过、不是数据缺口报告。
+- 自动 Mock 会写组合、订单、成交、估值、回测和反馈。
+- Prompt/模型只自动产出候选与评分，不自动正式启用。
+- 真实交易只记录闸门步骤，不调用任何真实交易接口。
+
 ## 6. 默认 OpenAI 模型
 
 默认模型：
@@ -229,6 +266,8 @@ secretRef = OPENAI_API_KEY
 - 无外部源时，L1/L2 任务不会写入 fallback 资讯。
 - 自动报告任务可手动触发并生成报告。
 - 自动 Prompt 治理任务可手动触发；无报告时只返回等待真实报告，不写伪评估。
+- 自动闭环总编排任务可手动触发；质量不足时应写 `BLOCKED` 运行和 `QUALITY_GATE` 阻断步骤。
+- `/api/investment/closed-loop/runs/list` 和 `/runs/detail` 能查询闭环运行与步骤审计。
 - 前端可配置 OpenAI 模型和自动报告任务参数。
 - `mockEnabled=false` 时，如果密钥缺失或模型输出非法，报告不会落库为成功。
 - 清库后产品、行情、资讯、报告、Mock、回测和反馈表应为 0，后续只能由真实采集任务和用户动作增长。

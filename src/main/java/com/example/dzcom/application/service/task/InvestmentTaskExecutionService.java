@@ -23,11 +23,26 @@ public class InvestmentTaskExecutionService {
 
     /** 执行单个 Kafka 投资任务事件。 */
     public void execute(InvestmentTaskEvent event) {
+        executeAndReturn(event);
+    }
+
+    /**
+     * 同步执行单个投资任务事件，并返回本次执行结果。
+     *
+     * <p>Kafka 消费入口仍使用 {@link #execute(InvestmentTaskEvent)}。自动闭环编排需要
+     * 明确知道每个子任务是否成功，因此使用该方法把状态、摘要和失败原因带回运行审计。</p>
+     *
+     * @param event 投资任务事件
+     * @return 执行结果领域对象
+     * @author dz
+     * @date 2026-06-25
+     */
+    public ScheduledTaskExecution executeAndReturn(InvestmentTaskEvent event) {
         if (executions.findByEventId(event.eventId())
             .filter(existing -> "SUCCEEDED".equals(existing.status()))
             .isPresent()) {
             log.info("跳过已成功执行的投资任务事件: eventId={}", event.eventId());
-            return;
+            return executions.findByEventId(event.eventId()).orElseThrow();
         }
         LocalDateTime now = clock.now();
         ScheduledTaskExecution running = ScheduledTaskExecution.builder()
@@ -48,19 +63,21 @@ public class InvestmentTaskExecutionService {
                 .orElseThrow(() -> new IllegalArgumentException(
                     "未找到投资任务处理器: " + event.taskType()));
             String summary = handler.execute(event);
-            executions.save(running.toBuilder()
+            ScheduledTaskExecution succeeded = executions.save(running.toBuilder()
                 .status("SUCCEEDED")
                 .resultSummary(limit(summary, 1024))
                 .completedAt(clock.now())
                 .build());
+            return succeeded;
         } catch (Exception exception) {
-            executions.save(running.toBuilder()
+            ScheduledTaskExecution failed = executions.save(running.toBuilder()
                 .status("FAILED")
                 .failureReason(limit(exception.getMessage(), 2048))
                 .completedAt(clock.now())
                 .build());
             log.error("投资任务执行失败: eventId={}, taskCode={}, taskType={}",
                 event.eventId(), event.taskCode(), event.taskType(), exception);
+            return failed;
         }
     }
 

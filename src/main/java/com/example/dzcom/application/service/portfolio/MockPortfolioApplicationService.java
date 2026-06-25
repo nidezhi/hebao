@@ -106,6 +106,54 @@ public class MockPortfolioApplicationService {
     @Transactional
     public MockPortfolioView create(CreateMockPortfolioCommand command) {
         CurrentOperator operator = currentOperator.required();
+        return createForUser(command, operator.userBizId(), operator.userBizId());
+    }
+
+    /**
+     * 为指定用户创建或获取自动闭环模拟组合。
+     *
+     * <p>该入口只供系统自动闭环任务使用，真实交易仍被禁止。它避免伪造 HTTP Session，
+     * 同时复用同一套组合、估值和后续 Mock 交易门禁。</p>
+     *
+     * @param userBizId 组合归属用户业务标识
+     * @param portfolioName 组合名称
+     * @param initialCash 初始现金
+     * @return 已存在或新创建的模拟组合
+     * @author dz
+     * @date 2026-06-25
+     */
+    @Transactional
+    public MockPortfolioView ensureAutomationPortfolio(String userBizId, String portfolioName, BigDecimal initialCash) {
+        String normalizedName = normalizeName(portfolioName);
+        PageResult<Portfolio> page = portfolios.search(new PortfolioSearchCriteria(
+            userBizId,
+            PORTFOLIO_TYPE_SIMULATION,
+            1,
+            1,
+            100,
+            "createdAt",
+            true
+        ));
+        Portfolio existed = page.items().stream()
+            .filter(portfolio -> normalizedName.equals(portfolio.portfolioName()))
+            .findFirst()
+            .orElse(null);
+        if (existed != null) {
+            return assembler.assembleDetail(
+                existed,
+                valuations.findLatestByPortfolioBizId(existed.bizId()),
+                positions.findByPortfolioBizId(existed.bizId())
+            );
+        }
+        return createForUser(CreateMockPortfolioCommand.builder()
+            .portfolioName(normalizedName)
+            .baseCurrency(DEFAULT_CURRENCY)
+            .initialCash(initialCash)
+            .build(), userBizId, "AUTO_CLOSED_LOOP");
+    }
+
+    /** 为指定用户创建模拟组合。 */
+    private MockPortfolioView createForUser(CreateMockPortfolioCommand command, String ownerUserBizId, String createdBy) {
         String portfolioName = normalizeName(command.portfolioName());
         String baseCurrency = normalizeCurrency(command.baseCurrency());
         BigDecimal initialCash = normalizeInitialCash(command.initialCash());
@@ -113,7 +161,7 @@ public class MockPortfolioApplicationService {
         Portfolio portfolio = Portfolio.builder()
             .bizId(ids.newBizId())
             .portfolioNo(newPortfolioNo())
-            .ownerUserBizId(operator.userBizId())
+            .ownerUserBizId(ownerUserBizId)
             .portfolioName(portfolioName)
             .portfolioType(PORTFOLIO_TYPE_SIMULATION)
             .baseCurrency(baseCurrency)
@@ -121,8 +169,8 @@ public class MockPortfolioApplicationService {
             .version(0)
             .createdAt(now)
             .updatedAt(now)
-            .createdBy(operator.userBizId())
-            .updatedBy(operator.userBizId())
+            .createdBy(createdBy)
+            .updatedBy(createdBy)
             .deleted(0)
             .deletedAt(null)
             .build();
@@ -896,7 +944,7 @@ public class MockPortfolioApplicationService {
      * @date 2026-06-23
      */
     private void ensureReportExecutable(InvestmentAnalysisReport report, String userBizId) {
-        if (!"SUCCESS".equals(report.status())) {
+        if (!isReportSucceeded(report.status())) {
             rejectWithAudit(userBizId, "REPORT", report.bizId(), "REPORT_STATUS",
                 "HIGH", "REPORT_NOT_SUCCESS", "报告未成功生成，不能执行Mock交易",
                 auditDetail("reportBizId", report.bizId(), "status", report.status()));
@@ -924,6 +972,11 @@ public class MockPortfolioApplicationService {
                 "HIGH", "DATA_GAP_REPORT", "数据缺口报告不能执行Mock交易",
                 Map.of("reportBizId", report.bizId(), "planType", plan.getString("planType")));
         }
+    }
+
+    /** 兼容历史报告状态 SUCCESS 和当前自动报告状态 SUCCEEDED。 */
+    private boolean isReportSucceeded(String status) {
+        return "SUCCESS".equals(status) || "SUCCEEDED".equals(status);
     }
 
     /**

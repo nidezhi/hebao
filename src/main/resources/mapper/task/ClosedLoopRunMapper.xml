@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.task.ClosedLoopRunMapper">
+    <sql id="runSearchCondition">
+        from aiw_closed_loop_run r
+        where 1 = 1
+        <if test="criteria.taskCode != null and criteria.taskCode != ''">
+            and r.task_code = #{criteria.taskCode}
+        </if>
+        <if test="criteria.runStatus != null and criteria.runStatus != ''">
+            and r.run_status = #{criteria.runStatus}
+        </if>
+        <if test="criteria.automationLevel != null and criteria.automationLevel != ''">
+            and r.automation_level = #{criteria.automationLevel}
+        </if>
+        <if test="criteria.marketScope != null and criteria.marketScope != ''">
+            and r.market_scope = #{criteria.marketScope}
+        </if>
+        <if test="criteria.themeCode != null and criteria.themeCode != ''">
+            and r.theme_code = #{criteria.themeCode}
+        </if>
+        <if test="criteria.mockUserBizId != null and criteria.mockUserBizId != ''">
+            and r.mock_user_biz_id = #{criteria.mockUserBizId}
+        </if>
+        <if test="criteria.startedFrom != null">
+            and r.started_at &gt;= #{criteria.startedFrom}
+        </if>
+        <if test="criteria.startedTo != null">
+            and r.started_at &lt;= #{criteria.startedTo}
+        </if>
+    </sql>
+
+    <insert id="saveRun">
+        insert into aiw_closed_loop_run
+        (biz_id, run_no, task_code, trigger_source, run_status, automation_level,
+         market_scope, theme_code, mock_user_biz_id, portfolio_biz_id, report_biz_id,
+         prompt_biz_id, prompt_code, prompt_version, backtest_biz_id, quality_score,
+         gate_result, summary, failure_reason, started_at, completed_at, created_at, updated_at)
+        values
+        (#{bizId}, #{runNo}, #{taskCode}, #{triggerSource}, #{runStatus}, #{automationLevel},
+         #{marketScope}, #{themeCode}, #{mockUserBizId}, #{portfolioBizId}, #{reportBizId},
+         #{promptBizId}, #{promptCode}, #{promptVersion}, #{backtestBizId}, #{qualityScore},
+         #{gateResult}, #{summary}, #{failureReason}, #{startedAt}, #{completedAt}, #{createdAt}, #{updatedAt})
+        on duplicate key update
+        run_status = values(run_status),
+        automation_level = values(automation_level),
+        market_scope = values(market_scope),
+        theme_code = values(theme_code),
+        mock_user_biz_id = values(mock_user_biz_id),
+        portfolio_biz_id = values(portfolio_biz_id),
+        report_biz_id = values(report_biz_id),
+        prompt_biz_id = values(prompt_biz_id),
+        prompt_code = values(prompt_code),
+        prompt_version = values(prompt_version),
+        backtest_biz_id = values(backtest_biz_id),
+        quality_score = values(quality_score),
+        gate_result = values(gate_result),
+        summary = values(summary),
+        failure_reason = values(failure_reason),
+        completed_at = values(completed_at),
+        updated_at = values(updated_at)
+    </insert>
+
+    <insert id="saveStep">
+        insert into aiw_closed_loop_step
+        (biz_id, run_biz_id, step_code, step_name, step_order, step_status,
+         input_summary, output_summary, failure_reason, started_at, completed_at, created_at, updated_at)
+        values
+        (#{bizId}, #{runBizId}, #{stepCode}, #{stepName}, #{stepOrder}, #{stepStatus},
+         #{inputSummary}, #{outputSummary}, #{failureReason}, #{startedAt}, #{completedAt}, #{createdAt}, #{updatedAt})
+        on duplicate key update
+        step_name = values(step_name),
+        step_order = values(step_order),
+        step_status = values(step_status),
+        input_summary = values(input_summary),
+        output_summary = values(output_summary),
+        failure_reason = values(failure_reason),
+        started_at = values(started_at),
+        completed_at = values(completed_at),
+        updated_at = values(updated_at)
+    </insert>
+
+    <select id="selectRunByBizId"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.ClosedLoopRunEntity">
+        select *
+        from aiw_closed_loop_run
+        where biz_id = #{bizId}
+    </select>
+
+    <select id="selectStepsByRunBizId"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.ClosedLoopStepEntity">
+        select *
+        from aiw_closed_loop_step
+        where run_biz_id = #{runBizId}
+        order by step_order asc
+    </select>
+
+    <select id="searchRuns"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.task.ClosedLoopRunEntity">
+        select r.* <include refid="runSearchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="countRuns" resultType="long">
+        select count(*) <include refid="runSearchCondition"/>
+    </select>
+</mapper>

@@ -47,4 +47,29 @@ public class CurrentOperatorContext implements CurrentOperatorProvider {
         }
         return operator;
     }
+
+    /**
+     * 在指定操作者上下文中执行业务逻辑，并在结束后恢复原上下文。
+     *
+     * @param operator 临时操作者
+     * @param action 待执行逻辑
+     * @param <T> 返回值类型
+     * @return 执行结果
+     * @author dz
+     * @date 2026-06-25
+     */
+    @Override
+    public <T> T callAs(CurrentOperator operator, java.util.function.Supplier<T> action) {
+        CurrentOperator previous = HOLDER.get();
+        HOLDER.set(operator);
+        try {
+            return action.get();
+        } finally {
+            if (previous == null) {
+                HOLDER.remove();
+            } else {
+                HOLDER.set(previous);
+            }
+        }
+    }
 }

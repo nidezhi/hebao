@@ -882,3 +882,81 @@ POST /api/ai/prompt-evaluations/list
 - 专用采集任务不写兜底数据；端点未配置或无有效数据时，数据源看板会显示健康/质量缺口。
 - OpenAI 模型配置接口不变：`/api/ai/models/save`、`/list`、`/status`。
 - `mockEnabled=true` 不触发真实 OpenAI 调用；`mockEnabled=false` 需要后端配置 `OPENAI_API_KEY`。
+
+## 6. 2026-06-25：自动投资闭环总编排
+
+新增能力：
+
+| 能力 | 类型 | 前端用途 |
+| --- | --- | --- |
+| `AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION` | 新增任务类型 | 自动串联采集、报告、Prompt/模型候选、Mock 交易、回测和反馈 |
+| `POST /api/investment/closed-loop/runs/list` | 新增接口 | 驾驶舱查询闭环运行列表、状态、质量分、报告、组合和回测 |
+| `POST /api/investment/closed-loop/runs/detail` | 新增接口 | 查看单轮闭环步骤、输入摘要、输出摘要、阻断原因 |
+
+`POST /api/investment/closed-loop/runs/list`
+
+请求：
+
+```json
+{
+  "taskCode": "auto-investment-closed-loop-orchestration",
+  "runStatus": "SUCCEEDED",
+  "automationLevel": "FULL_MOCK",
+  "marketScope": "CN_MAINLAND",
+  "themeCode": "",
+  "mockUserBizId": "21000000-0000-0000-0000-000000000002",
+  "startedFrom": "2026-06-25T00:00:00",
+  "startedTo": "2026-06-25T23:59:59",
+  "page": 1,
+  "size": 20,
+  "sort": "startedAt",
+  "direction": "desc"
+}
+```
+
+响应核心字段：
+
+```json
+{
+  "items": [
+    {
+      "bizId": "closed-loop-run-biz-id",
+      "runNo": "CLR-20260625-00000000",
+      "runStatus": "SUCCEEDED",
+      "automationLevel": "FULL_MOCK",
+      "qualityScore": 0.76,
+      "gateResult": "PASS",
+      "reportBizId": "report-biz-id",
+      "portfolioBizId": "portfolio-biz-id",
+      "backtestBizId": "backtest-biz-id",
+      "failureReason": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "size": 20,
+  "totalPages": 1
+}
+```
+
+`POST /api/investment/closed-loop/runs/detail`
+
+请求：
+
+```json
+{
+  "bizId": "closed-loop-run-biz-id"
+}
+```
+
+响应重点：
+
+- `steps[].stepCode`：`SAFETY_GUARD`、`DATA_COLLECTION`、`REPORT_GENERATION`、`QUALITY_GATE`、`PROMPT_CANDIDATE`、`MODEL_CANDIDATE`、`MOCK_TRADE`、`BACKTEST_FEEDBACK`、`PROMPT_ACTIVATION_GUARD`、`MODEL_ACTIVATION_GUARD`、`REAL_TRADE_GUARD`。
+- `steps[].stepStatus`：`SUCCEEDED`、`SKIPPED`、`BLOCKED`、`FAILED`。
+- `inputSummary` / `outputSummary` 是脱敏 JSON 字符串，适合详情页展开。
+
+前端注意：
+
+- `runStatus=BLOCKED` 不等于系统故障，通常表示质量门禁、任务失败、报告不可执行或自动闸门生效。
+- `allowAutoPromptActivation`、`allowAutoModelActivation`、`allowRealTrade` 即使配置为 `true`，当前后端也只记录闸门步骤，不会自动启用或真实交易。
+- 自动模型候选以 `DRAFT` 写入模型列表，前端可在模型工作台展示评分和来源报告。
