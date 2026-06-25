@@ -23,4 +23,7 @@ public interface InvestmentAnalysisReportMapper {
 
     /** 统计投资分析报告数量。 */
     long count(@Param("criteria") InvestmentAnalysisReportSearchCriteria criteria);
+
+    /** 查询最近生成的投资分析报告。 */
+    List<InvestmentAnalysisReportEntity> selectLatest(@Param("size") int size);
 }

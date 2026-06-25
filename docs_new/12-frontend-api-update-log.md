@@ -865,6 +865,7 @@ POST /api/ai/prompt-evaluations/list
 | 能力 | 类型 | 前端用途 |
 | --- | --- | --- |
 | `AUTO_INVESTMENT_REPORT_GENERATION` | 新增任务类型 | 定时批量生成投资分析报告 |
+| `AUTO_PROMPT_GOVERNANCE` | 新增任务类型 | 自动维护报告转方案 Prompt 基线，并写入 Prompt 评估 |
 | `fallbackEnabled` | 新增任务参数 | 禁止无外部数据时写入兜底资讯 |
 | `REGULATORY_DISCLOSURE_COLLECTION` | 新增任务类型 | 监管披露专用采集 |
 | `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 新增任务类型 | 交易所/巨潮公告专用采集 |
@@ -875,7 +876,7 @@ POST /api/ai/prompt-evaluations/list
 前端注意：
 
 - 任务配置接口不变：`/api/investment/tasks/definitions`、`/definitions/save`、`/trigger`。
-- 新任务默认可配置，运营可以改 Cron、主题、模型、回看窗口和初始资金。
+- 新任务默认可配置，运营可以改 Cron、主题、模型、回看窗口、初始资金、Prompt 编码和评估样本量。
 - 专用采集任务参数需要表单化展示：端点 `endpoints`、格式 `responseFormat`、字段路径 `itemsPath/titlePath/...`、额外字段映射 `extraFieldPaths`、关键词 `includeKeywords`、超时和新鲜度窗口。
 - 理财任务 `WEALTH_PRODUCT_NAV_REFRESH` 会同步产品池和净值行情，前端需展示 `productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel` 配置项。
 - 专用采集任务不写兜底数据；端点未配置或无有效数据时，数据源看板会显示健康/质量缺口。

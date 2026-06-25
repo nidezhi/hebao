@@ -50,6 +50,23 @@ public class InvestmentAnalysisReportStoreImpl implements InvestmentAnalysisRepo
             .build();
     }
 
+    /** 查询最近生成的投资分析报告。 */
+    @Override
+    public PageResult<InvestmentAnalysisReport> latest(int size) {
+        int safeSize = Math.max(1, Math.min(size, 100));
+        List<InvestmentAnalysisReport> items = mapper.selectLatest(safeSize)
+            .stream()
+            .map(this::toDomain)
+            .toList();
+        return PageResult.<InvestmentAnalysisReport>builder()
+            .items(items)
+            .total(items.size())
+            .page(1)
+            .size(safeSize)
+            .totalPages(items.isEmpty() ? 0 : 1)
+            .build();
+    }
+
     /** 将接口排序字段转换为固定数据库列。 */
     private String resolveSortColumn(String sort) {
         return switch (sort) {

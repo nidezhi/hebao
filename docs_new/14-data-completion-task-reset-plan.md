@@ -10,6 +10,7 @@
 - 初始化一组高质量、可配置、可前端查看的定时任务。
 - 让核心数据补全优先围绕 L1/L2/L3 数据源。
 - 增加自动投资报告生成任务。
+- 增加自动 Prompt 治理任务，让报告、反馈和评估形成可复盘链路。
 - 默认挂 OpenAI 兼容模型，并允许前端通过模型配置接口调整。
 
 ## 2. 迁移入口
@@ -26,6 +27,7 @@ src/main/resources/db/migration/V17__reset_quality_tasks_and_openai_default.sql
 2. 初始化高质量数据源注册和健康占位。
 3. 初始化新的可配置任务定义。
 4. 将 `openai-compatible-analysis` 调整为自动报告默认模型。
+5. 本地清库脚本不注入业务样本，产品、行情、资讯、报告和 Mock 结果均由定时任务和用户动作产生。
 
 ## 3. 数据源初始化
 
@@ -58,6 +60,7 @@ src/main/resources/db/migration/V17__reset_quality_tasks_and_openai_default.sql
 | `cn-mainland-hot-theme-return` | `HOT_THEME_RETURN` | 是 | 中国大陆核心主题收益快照 |
 | `cn-mainland-news-heat-aggregation` | `NEWS_HEAT_AGGREGATION` | 是 | 资讯热度和资讯-主题-产品证据链 |
 | `auto-openai-investment-report-generation` | `AUTO_INVESTMENT_REPORT_GENERATION` | 是 | 自动生成投资报告，默认 OpenAI 兼容模型 |
+| `auto-prompt-governance` | `AUTO_PROMPT_GOVERNANCE` | 是 | 自动维护报告转方案 Prompt 基线，并基于真实报告和反馈生成评估记录 |
 
 前端可以继续通过以下接口查看、调整和触发：
 
@@ -141,6 +144,30 @@ AUTO_INVESTMENT_REPORT_GENERATION
 | `themes` | 核心主题映射 | 用于生成主题报告 |
 | `themeCodes` | 空 | 显式主题编码列表，优先级高于 `themes` |
 
+### 5.4 自动 Prompt 治理
+
+任务类型：
+
+```text
+AUTO_PROMPT_GOVERNANCE
+```
+
+核心参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `promptCode` | `investment-plan-from-report` | 报告转投资方案 Prompt 稳定编码 |
+| `promptVersion` | `auto-v1` | 自动治理基线版本 |
+| `scenario` | `INVESTMENT_PLAN` | Prompt 使用场景 |
+| `reportSampleSize` | `20` | 每次复盘最近报告数量 |
+
+任务行为：
+
+- 若 Prompt 基线不存在，自动创建模板、变量和输出 Schema。
+- 若暂无真实报告，只返回等待报告的执行摘要，不写伪评估。
+- 若已有报告，按报告状态、可信等级和数据质量分写入 `aiw_ai_prompt_evaluation`。
+- 用户采纳/拒绝反馈仍由反馈接口写入，并会触发反馈维度 Prompt 评估。
+
 ## 6. 默认 OpenAI 模型
 
 默认模型：
@@ -201,5 +228,7 @@ secretRef = OPENAI_API_KEY
 - L1/L2 数据源在 `/api/admin/data-sources/list` 可见。
 - 无外部源时，L1/L2 任务不会写入 fallback 资讯。
 - 自动报告任务可手动触发并生成报告。
+- 自动 Prompt 治理任务可手动触发；无报告时只返回等待真实报告，不写伪评估。
 - 前端可配置 OpenAI 模型和自动报告任务参数。
 - `mockEnabled=false` 时，如果密钥缺失或模型输出非法，报告不会落库为成功。
+- 清库后产品、行情、资讯、报告、Mock、回测和反馈表应为 0，后续只能由真实采集任务和用户动作增长。

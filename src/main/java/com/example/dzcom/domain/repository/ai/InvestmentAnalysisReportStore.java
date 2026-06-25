@@ -15,4 +15,7 @@ public interface InvestmentAnalysisReportStore {
 
     /** 分页查询投资分析报告。 */
     PageResult<InvestmentAnalysisReport> search(InvestmentAnalysisReportSearchCriteria criteria);
+
+    /** 查询最近生成的投资分析报告，用于自动 Prompt 治理任务复盘真实报告样本。 */
+    PageResult<InvestmentAnalysisReport> latest(int size);
 }

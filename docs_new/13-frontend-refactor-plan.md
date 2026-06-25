@@ -124,6 +124,7 @@
 | `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 采集交易所/巨潮公告 | `endpoints`、`itemsPath`、`externalIdPath`、`titlePath`、`publishTimePath` |
 | `WEALTH_PRODUCT_NAV_REFRESH` | 采集理财产品和净值 | `extraFieldPaths`、`productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel` |
 | `AUTO_INVESTMENT_REPORT_GENERATION` | 自动生成投资报告 | `providerCode`、`modelCode`、`marketScope`、`lookbackDays`、`initialCapital`、`themes` |
+| `AUTO_PROMPT_GOVERNANCE` | 自动 Prompt 治理 | `promptCode`、`promptVersion`、`scenario`、`reportSampleSize` |
 
 理财任务字段映射建议：
 
@@ -325,7 +326,7 @@ API client 分层：
 
 | 字典 | 值 |
 | --- | --- |
-| `taskType` | `INVESTMENT_NEWS_COLLECTION`、`REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`、`MARKET_MOMENTUM_SCAN`、`HOT_THEME_RETURN`、`NEWS_HEAT_AGGREGATION`、`AUTO_INVESTMENT_REPORT_GENERATION` |
+| `taskType` | `INVESTMENT_NEWS_COLLECTION`、`REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`、`MARKET_MOMENTUM_SCAN`、`HOT_THEME_RETURN`、`NEWS_HEAT_AGGREGATION`、`AUTO_INVESTMENT_REPORT_GENERATION`、`AUTO_PROMPT_GOVERNANCE` |
 | `responseFormat` | `JSON`、`HTML` |
 | `taskStatus` | `RUNNING`、`SUCCEEDED`、`FAILED` |
 | `triggerSource` | `SCHEDULE`、`MANUAL`、`RETRY` |

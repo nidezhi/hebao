@@ -47,4 +47,11 @@
     <select id="count" resultType="long">
         select count(*) <include refid="searchCondition"/>
     </select>
+    <select id="selectLatest"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.ai.InvestmentAnalysisReportEntity">
+        select *
+        from aiw_investment_analysis_report
+        order by generated_at desc
+        limit #{size}
+    </select>
 </mapper>

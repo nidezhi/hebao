@@ -169,6 +169,17 @@ class AutoInvestmentReportGenerationTaskHandlerTest {
                 .totalPages(0)
                 .build();
         }
+
+        @Override
+        public PageResult<InvestmentAnalysisReport> latest(int size) {
+            return PageResult.<InvestmentAnalysisReport>builder()
+                .items(List.of())
+                .total(0)
+                .page(1)
+                .size(size)
+                .totalPages(0)
+                .build();
+        }
     }
 
     /** 固定业务 ID 生成器。 */

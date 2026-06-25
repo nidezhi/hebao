@@ -175,7 +175,16 @@ VALUES
    'initialCapital', '100000',
    'themes', 'AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934'
  ),
- '自动投资报告生成任务。默认 OpenAI 兼容模型，前端可配置模型、主题、Cron 和资金参数。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
+ '自动投资报告生成任务。默认 OpenAI 兼容模型，前端可配置模型、主题、Cron 和资金参数。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3)),
+('17000000-0000-0000-0000-000000000208', 'auto-prompt-governance', 'AUTO_PROMPT_GOVERNANCE',
+ '0 20 */2 * * *', 'Asia/Shanghai', 1,
+ JSON_OBJECT(
+   'promptCode', 'investment-plan-from-report',
+   'promptVersion', 'auto-v1',
+   'scenario', 'INVESTMENT_PLAN',
+   'reportSampleSize', '20'
+ ),
+ '自动 Prompt 治理任务。维护报告转方案 Prompt 基线，并基于真实报告和反馈形成评估记录。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
 ON DUPLICATE KEY UPDATE
 task_type = VALUES(task_type),
 cron = VALUES(cron),
