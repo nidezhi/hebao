@@ -27,6 +27,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(accountAuthenticationInterceptor)
             .addPathPatterns(
+                "/api/auth/logout",
                 "/api/auth/me",
                 "/api/users/**",
                 "/api/admin/**",

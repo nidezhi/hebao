@@ -192,7 +192,7 @@ public class DataSourceGovernanceController {
      * @date 2026-06-26
      */
     @PostMapping("/discover")
-    @Operation(summary = "AI发现数据源候选", description = "按市场、资产类别和数据类型生成高质量数据源候选；候选不自动保存，需前端人工确认。")
+    @Operation(summary = "AI发现数据源候选", description = "按市场、资产类别、采集方向和数据类型调用大模型生成高质量数据源候选；接口只返回候选，定时任务可配置为沉淀候选但默认不启用。")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "发现成功，返回候选数据源", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数或模型挂靠配置不合法"),
@@ -204,6 +204,8 @@ public class DataSourceGovernanceController {
             .assetClass(request.assetClass())
             .dataTypes(request.dataTypes())
             .topicKeywords(request.topicKeywords())
+            .collectionDirection(request.collectionDirection())
+            .skillCode(request.skillCode())
             .preferredTrustLevels(request.preferredTrustLevels())
             .candidateLimit(request.candidateLimit())
             .environment(request.environment())

@@ -88,88 +88,108 @@ investment:
     enabled: ${INVESTMENT_TASKS_ENABLED:true}
     topic: ${INVESTMENT_TASK_TOPIC:dzcom.investment.task.trigger.v1}
     definitions:
-      - code: ai-data-source-discovery
+      - code: llm-data-collection-multi-source
         type: AI_DATA_SOURCE_DISCOVERY
-        cron: ${AI_DATA_SOURCE_DISCOVERY_CRON:0 0 */6 * * *}
+        cron: ${LLM_DATA_COLLECTION_MULTI_SOURCE_CRON:0 0 */6 * * *}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
           marketScope: CN_MAINLAND
           assetClass: MULTI_ASSET
           dataTypes: MARKET_QUOTE,NEWS,ANNOUNCEMENT,RESEARCH,REGULATORY
+          topicKeywords: ""
+          collectionDirection: MULTI_SOURCE
+          skillCode: DATA_COLLECTION_MULTI_SOURCE
           preferredTrustLevels: L1,L2,L3,L4
           candidateLimit: "8"
           includeDisabledCandidates: "true"
-      - code: l1-regulatory-disclosure-collection
-        type: REGULATORY_DISCLOSURE_COLLECTION
-        cron: ${L1_REGULATORY_NEWS_CRON:0 */30 * * * *}
+          autoRegisterCandidates: "true"
+          autoEnableCandidates: "false"
+      - code: llm-official-disclosure-collection
+        type: AI_DATA_SOURCE_DISCOVERY
+        cron: ${LLM_OFFICIAL_DISCLOSURE_COLLECTION_CRON:0 10 */6 * * *}
         zone: Asia/Shanghai
-        enabled: false
         parameters:
-          endpoints: ${L1_REGULATORY_ENDPOINTS:}
-          responseFormat: ${L1_REGULATORY_RESPONSE_FORMAT:JSON}
-          itemsPath: ${L1_REGULATORY_ITEMS_PATH:}
-          externalIdPath: ${L1_REGULATORY_EXTERNAL_ID_PATH:id}
-          titlePath: ${L1_REGULATORY_TITLE_PATH:title}
-          summaryPath: ${L1_REGULATORY_SUMMARY_PATH:summary}
-          contentPath: ${L1_REGULATORY_CONTENT_PATH:content}
-          urlPath: ${L1_REGULATORY_URL_PATH:url}
-          publishTimePath: ${L1_REGULATORY_PUBLISH_TIME_PATH:publishTime}
-          extraFieldPaths: ${L1_REGULATORY_EXTRA_FIELD_PATHS:}
-          sourceCode: CSRC
-          articleType: REGULATORY
-          languageCode: zh-CN
-          maxItems: "80"
-          timeoutSeconds: "20"
-          freshnessHours: "72"
-      - code: l1-exchange-announcement-collection
-        type: EXCHANGE_ANNOUNCEMENT_COLLECTION
-        cron: ${L1_EXCHANGE_ANNOUNCEMENT_CRON:0 */20 * * * *}
+          environment: DEFAULT
+          marketScope: CN_MAINLAND
+          assetClass: MULTI_ASSET
+          dataTypes: ANNOUNCEMENT,REGULATORY
+          topicKeywords: 交易所公告,信息披露,产品公告
+          collectionDirection: OFFICIAL_DISCLOSURE
+          skillCode: DATA_COLLECTION_OFFICIAL_DISCLOSURE
+          preferredTrustLevels: L1,L2
+          candidateLimit: "8"
+          includeDisabledCandidates: "true"
+          autoRegisterCandidates: "true"
+          autoEnableCandidates: "false"
+      - code: llm-news-research-collection
+        type: AI_DATA_SOURCE_DISCOVERY
+        cron: ${LLM_NEWS_RESEARCH_COLLECTION_CRON:0 20 */6 * * *}
         zone: Asia/Shanghai
-        enabled: false
         parameters:
-          endpoints: ${L1_EXCHANGE_ANNOUNCEMENT_ENDPOINTS:}
-          responseFormat: ${L1_EXCHANGE_ANNOUNCEMENT_RESPONSE_FORMAT:JSON}
-          itemsPath: ${L1_EXCHANGE_ANNOUNCEMENT_ITEMS_PATH:}
-          externalIdPath: ${L1_EXCHANGE_ANNOUNCEMENT_EXTERNAL_ID_PATH:id}
-          titlePath: ${L1_EXCHANGE_ANNOUNCEMENT_TITLE_PATH:title}
-          summaryPath: ${L1_EXCHANGE_ANNOUNCEMENT_SUMMARY_PATH:summary}
-          contentPath: ${L1_EXCHANGE_ANNOUNCEMENT_CONTENT_PATH:content}
-          urlPath: ${L1_EXCHANGE_ANNOUNCEMENT_URL_PATH:url}
-          publishTimePath: ${L1_EXCHANGE_ANNOUNCEMENT_PUBLISH_TIME_PATH:publishTime}
-          extraFieldPaths: ${L1_EXCHANGE_ANNOUNCEMENT_EXTRA_FIELD_PATHS:}
-          sourceCode: CNINFO
-          articleType: ANNOUNCEMENT
-          languageCode: zh-CN
-          maxItems: "100"
-          timeoutSeconds: "20"
-          freshnessHours: "72"
-      - code: l2-wealth-product-nav-refresh
-        type: WEALTH_PRODUCT_NAV_REFRESH
-        cron: ${L2_WEALTH_PRODUCT_CRON:0 0 */2 * * *}
+          environment: DEFAULT
+          marketScope: CN_MAINLAND
+          assetClass: MULTI_ASSET
+          dataTypes: NEWS,RESEARCH
+          topicKeywords: 财经新闻,研报,机构观点,市场事件
+          collectionDirection: NEWS_RESEARCH
+          skillCode: DATA_COLLECTION_NEWS_RESEARCH
+          preferredTrustLevels: L2,L3,L4
+          candidateLimit: "8"
+          includeDisabledCandidates: "true"
+          autoRegisterCandidates: "true"
+          autoEnableCandidates: "false"
+      - code: llm-product-nav-collection
+        type: AI_DATA_SOURCE_DISCOVERY
+        cron: ${LLM_PRODUCT_NAV_COLLECTION_CRON:0 30 */6 * * *}
         zone: Asia/Shanghai
-        enabled: false
         parameters:
-          endpoints: ${L2_WEALTH_PRODUCT_ENDPOINTS:}
-          responseFormat: ${L2_WEALTH_PRODUCT_RESPONSE_FORMAT:JSON}
-          itemsPath: ${L2_WEALTH_PRODUCT_ITEMS_PATH:}
-          externalIdPath: ${L2_WEALTH_PRODUCT_EXTERNAL_ID_PATH:id}
-          titlePath: ${L2_WEALTH_PRODUCT_TITLE_PATH:productName}
-          summaryPath: ${L2_WEALTH_PRODUCT_SUMMARY_PATH:summary}
-          contentPath: ${L2_WEALTH_PRODUCT_CONTENT_PATH:content}
-          urlPath: ${L2_WEALTH_PRODUCT_URL_PATH:url}
-          publishTimePath: ${L2_WEALTH_PRODUCT_PUBLISH_TIME_PATH:publishTime}
-          extraFieldPaths: ${L2_WEALTH_PRODUCT_EXTRA_FIELD_PATHS:productCode=productCode;productName=productName;nav=nav;previousNav=previousNav;assetSize=assetSize;riskLevel=riskLevel}
-          sourceCode: CHINA_WEALTH
-          articleType: WEALTH_NAV
-          languageCode: zh-CN
-          maxItems: "100"
-          timeoutSeconds: "20"
-          freshnessHours: "168"
-          productMarketCode: BANK_WMP
-          productCurrency: CNY
-          quoteInterval: 1D
-          defaultRiskLevel: "2"
+          environment: DEFAULT
+          marketScope: CN_MAINLAND
+          assetClass: BANK_WMP,FUND,ETF
+          dataTypes: MARKET_QUOTE
+          topicKeywords: 理财产品,基金净值,ETF净值,产品风险等级
+          collectionDirection: PRODUCT_NAV
+          skillCode: DATA_COLLECTION_PRODUCT_NAV
+          preferredTrustLevels: L1,L2,L3
+          candidateLimit: "8"
+          includeDisabledCandidates: "true"
+          autoRegisterCandidates: "true"
+          autoEnableCandidates: "false"
+      - code: llm-market-quote-collection
+        type: AI_DATA_SOURCE_DISCOVERY
+        cron: ${LLM_MARKET_QUOTE_COLLECTION_CRON:0 40 */6 * * *}
+        zone: Asia/Shanghai
+        parameters:
+          environment: DEFAULT
+          marketScope: CN_MAINLAND
+          assetClass: MULTI_ASSET
+          dataTypes: MARKET_QUOTE
+          topicKeywords: 行情,指数,估值,收益率,波动率
+          collectionDirection: MARKET_QUOTE
+          skillCode: DATA_COLLECTION_MARKET_QUOTE
+          preferredTrustLevels: L1,L2,L3
+          candidateLimit: "8"
+          includeDisabledCandidates: "true"
+          autoRegisterCandidates: "true"
+          autoEnableCandidates: "false"
+      - code: llm-regulatory-collection
+        type: AI_DATA_SOURCE_DISCOVERY
+        cron: ${LLM_REGULATORY_COLLECTION_CRON:0 50 */6 * * *}
+        zone: Asia/Shanghai
+        parameters:
+          environment: DEFAULT
+          marketScope: CN_MAINLAND
+          assetClass: MULTI_ASSET
+          dataTypes: REGULATORY
+          topicKeywords: 监管政策,处罚,风险提示,制度变化
+          collectionDirection: REGULATORY
+          skillCode: DATA_COLLECTION_REGULATORY
+          preferredTrustLevels: L1
+          candidateLimit: "8"
+          includeDisabledCandidates: "true"
+          autoRegisterCandidates: "true"
+          autoEnableCandidates: "false"
       - code: cn-mainland-market-momentum-scan
         type: MARKET_MOMENTUM_SCAN
         cron: ${MARKET_MOMENTUM_CRON:0 */5 * * * *}
@@ -235,7 +255,7 @@ investment:
           allowAutoPromptActivation: "false"
           allowAutoModelActivation: "false"
           allowRealTrade: "false"
-          dataTaskCodes: ai-data-source-discovery,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation
+          dataTaskCodes: llm-data-collection-multi-source,llm-official-disclosure-collection,llm-product-nav-collection,llm-market-quote-collection,llm-news-research-collection,llm-regulatory-collection,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation
           reportTaskCode: auto-openai-investment-report-generation
           promptTaskCode: auto-prompt-governance
           modelCode: ${AUTO_INVESTMENT_REPORT_MODEL:openai-compatible-analysis}

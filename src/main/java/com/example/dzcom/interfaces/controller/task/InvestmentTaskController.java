@@ -1,5 +1,6 @@
 package com.example.dzcom.interfaces.controller.task;
 
+import com.alibaba.fastjson2.JSON;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.result.Result;
@@ -29,7 +30,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 投资任务配置、触发与结果查询接口。
@@ -89,7 +92,7 @@ public class InvestmentTaskController {
                 request.cron(),
                 request.zone(),
                 request.enabled(),
-                request.parameters(),
+                normalizeParameters(request.parameters()),
                 request.description()
             ));
         scheduleRefreshPort.refreshSchedules();
@@ -117,7 +120,7 @@ public class InvestmentTaskController {
         @Valid @RequestBody TriggerInvestmentTaskRequest request
     ) {
         return Result.success(InvestmentTaskTriggerResponse.from(
-            tasks.trigger(request.taskCode(), request.parameters(), "MANUAL")));
+            tasks.trigger(request.taskCode(), normalizeParameters(request.parameters()), "MANUAL")));
     }
 
     /**
@@ -185,6 +188,40 @@ public class InvestmentTaskController {
                 request.direction() == null ? "desc" : request.direction()
             )
         ), NewsArticleResponse::from));
+    }
+
+    /**
+     * 将前端自然 JSON 参数转换为任务引擎统一使用的字符串参数。
+     *
+     * <p>任务定义表中的 parameters 是 JSON 对象，但任务处理器以
+     * {@code Map<String, String>} 读取参数。前端传入对象或数组时，这里序列化为
+     * JSON 字符串，避免字段映射、候选配置等结构化参数在反序列化阶段失败。</p>
+     *
+     * @param parameters 前端传入的任务参数
+     * @return 任务引擎可消费的字符串参数
+     * @author dz
+     * @date 2026-06-26
+     */
+    private Map<String, String> normalizeParameters(Map<String, Object> parameters) {
+        if (parameters == null || parameters.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> normalized = new LinkedHashMap<>();
+        parameters.forEach((key, value) -> {
+            if (key == null || key.isBlank()) {
+                return;
+            }
+            if (value == null) {
+                normalized.put(key, "");
+            } else if (value instanceof String stringValue) {
+                normalized.put(key, stringValue);
+            } else if (value instanceof Number || value instanceof Boolean) {
+                normalized.put(key, String.valueOf(value));
+            } else {
+                normalized.put(key, JSON.toJSONString(value));
+            }
+        });
+        return normalized;
     }
 
     /**

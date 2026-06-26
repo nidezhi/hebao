@@ -34,6 +34,10 @@ public record DataSourceDiscoveryCandidateResponse(
     Map<String, String> suggestedParameters,
     @Schema(description = "建议字段映射")
     Map<String, String> fieldMappings,
+    @Schema(description = "AI 整理出的采集计划、接口说明、限制和样例")
+    String collectionPlan,
+    @Schema(description = "AI 整理出的质量校验规则")
+    String qualityPolicy,
     @Schema(description = "候选置信度")
     BigDecimal confidence,
     @Schema(description = "推荐理由")
@@ -55,6 +59,8 @@ public record DataSourceDiscoveryCandidateResponse(
             .recommendedTaskType(view.recommendedTaskType())
             .suggestedParameters(view.suggestedParameters())
             .fieldMappings(view.fieldMappings())
+            .collectionPlan(view.collectionPlan())
+            .qualityPolicy(view.qualityPolicy())
             .confidence(view.confidence())
             .reasons(view.reasons())
             .requiresReview(view.requiresReview())

@@ -26,6 +26,8 @@ public record DataSourceDiscoveryView(
     String dataTypes,
     @Schema(description = "主题关键词")
     String topicKeywords,
+    @Schema(description = "采集方向")
+    String collectionDirection,
     @Schema(description = "模型挂靠配置")
     Map<String, Object> modelBindingConfig,
     @Schema(description = "本次发现使用的 Skill 编码")

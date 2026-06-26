@@ -33,6 +33,10 @@ public record DataSourceDiscoveryCandidateView(
     Map<String, String> suggestedParameters,
     @Schema(description = "建议字段映射")
     Map<String, String> fieldMappings,
+    @Schema(description = "AI 整理出的采集计划、接口说明、限制和样例")
+    String collectionPlan,
+    @Schema(description = "AI 整理出的质量校验规则")
+    String qualityPolicy,
     @Schema(description = "候选置信度")
     BigDecimal confidence,
     @Schema(description = "推荐理由")

@@ -15,6 +15,10 @@ public record DiscoverDataSourcesCommand(
     String dataTypes,
     @Schema(description = "主题关键词，逗号分隔")
     String topicKeywords,
+    @Schema(description = "采集方向，例如 OFFICIAL_DISCLOSURE/NEWS_RESEARCH/PRODUCT_NAV/MULTI_SOURCE")
+    String collectionDirection,
+    @Schema(description = "本次使用的 Skill 编码，空值按数据类型和采集方向自动选择")
+    String skillCode,
     @Schema(description = "偏好的来源等级，逗号分隔")
     String preferredTrustLevels,
     @Schema(description = "候选数量上限")

@@ -27,6 +27,8 @@ public record DataSourceDiscoveryResponse(
     String dataTypes,
     @Schema(description = "主题关键词")
     String topicKeywords,
+    @Schema(description = "采集方向")
+    String collectionDirection,
     @Schema(description = "模型挂靠配置")
     Map<String, Object> modelBindingConfig,
     @Schema(description = "本次发现使用的 Skill 编码")
@@ -53,6 +55,7 @@ public record DataSourceDiscoveryResponse(
             .assetClass(view.assetClass())
             .dataTypes(view.dataTypes())
             .topicKeywords(view.topicKeywords())
+            .collectionDirection(view.collectionDirection())
             .modelBindingConfig(view.modelBindingConfig())
             .skillCode(view.skillCode())
             .skillVersion(view.skillVersion())

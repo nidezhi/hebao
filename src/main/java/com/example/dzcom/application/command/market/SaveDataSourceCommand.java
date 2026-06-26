@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
 /** 保存数据源注册信息命令。 */
-@Builder
+@Builder(toBuilder = true)
 @Schema(description = "保存数据源注册信息命令")
 public record SaveDataSourceCommand(
     @Schema(description = "数据源稳定编码")

@@ -82,9 +82,12 @@
 
 | taskCode | taskType | 作用 |
 | --- | --- | --- |
-| `l1-regulatory-disclosure-collection` | `REGULATORY_DISCLOSURE_COLLECTION` | L1 监管披露采集 |
-| `l1-exchange-announcement-collection` | `EXCHANGE_ANNOUNCEMENT_COLLECTION` | L1 交易所/巨潮公告采集 |
-| `l2-wealth-product-nav-refresh` | `WEALTH_PRODUCT_NAV_REFRESH` | L2 理财产品和净值采集 |
+| `llm-data-collection-multi-source` | `AI_DATA_SOURCE_DISCOVERY` | LLM 多源数据采集规划 |
+| `llm-official-disclosure-collection` | `AI_DATA_SOURCE_DISCOVERY` | LLM 官方披露采集规划 |
+| `llm-product-nav-collection` | `AI_DATA_SOURCE_DISCOVERY` | LLM 产品池和净值采集规划 |
+| `llm-market-quote-collection` | `AI_DATA_SOURCE_DISCOVERY` | LLM 行情估值采集规划 |
+| `llm-news-research-collection` | `AI_DATA_SOURCE_DISCOVERY` | LLM 新闻研报采集规划 |
+| `llm-regulatory-collection` | `AI_DATA_SOURCE_DISCOVERY` | LLM 监管政策采集规划 |
 | `cn-mainland-market-momentum-scan` | `MARKET_MOMENTUM_SCAN` | 主题动量扫描 |
 | `cn-mainland-hot-theme-return` | `HOT_THEME_RETURN` | 主题收益快照 |
 | `cn-mainland-news-heat-aggregation` | `NEWS_HEAT_AGGREGATION` | 资讯热度聚合 |
@@ -94,9 +97,10 @@
 
 重要边界：
 
-- L1/L2 专用采集器没有端点时不会写兜底数据。
-- 端点返回空或解析失败时，只更新健康状态、质量快照和执行摘要。
-- 真实数据增长依赖前端或环境配置补齐官方/授权端点。
+- LLM 方向化任务负责整理候选来源、采集计划、字段映射和质量策略。
+- 定时任务默认把候选沉淀进数据源池，但不会自动启用新数据源。
+- L1/L2 专用采集器仍保留为前端审核候选后的执行原语，没有端点时不会写兜底数据。
+- 真实数据增长依赖真实模型配置、模型/网关可访问的数据能力，以及前端审核后启用的采集任务。
 
 ### 3.3 自动闭环编排
 

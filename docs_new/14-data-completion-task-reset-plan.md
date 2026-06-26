@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档记录 2026-06-24 对投资平台定时任务、数据源和默认 AI 报告生成链路的重置方案。
+本文档记录 2026-06-24 到 2026-06-27 对投资平台定时任务、数据源和默认 AI 报告生成链路的重置方案。
 
 本次重置目标：
 
@@ -14,13 +14,17 @@
 - 增加自动投资闭环总编排任务，让 Mock 投资闭环可以全自动运行。
 - 默认挂 OpenAI 兼容模型，并允许前端通过模型配置接口调整。
 - 增加模型挂靠配置，让数据源发现、报告生成、闭环编排和 Prompt 治理都能通过独立接口绑定模型。
+- V23 后数据源发现由大模型按采集方向直接整理生成来源、采集计划、字段映射和质量策略；Skill 按数据收集类型维护。
 
 ## 2. 迁移入口
 
-迁移文件：
+核心迁移文件：
 
 ```text
 src/main/resources/db/migration/V17__reset_quality_tasks_and_openai_default.sql
+src/main/resources/db/migration/V21__ai_model_binding_and_data_source_discovery.sql
+src/main/resources/db/migration/V22__ai_skills_and_pure_closed_loop_tasks.sql
+src/main/resources/db/migration/V23__llm_collection_skills_and_closed_loop_tasks.sql
 ```
 
 执行内容：
@@ -30,6 +34,8 @@ src/main/resources/db/migration/V17__reset_quality_tasks_and_openai_default.sql
 3. 初始化新的可配置任务定义。
 4. 将 `openai-compatible-analysis` 调整为自动报告默认模型。
 5. 本地清库脚本不注入业务样本，产品、行情、资讯、报告和 Mock 结果均由定时任务和用户动作产生。
+6. V23 停用单一 `ai-data-source-discovery` 默认入口，生成六条 LLM 采集方向任务。
+7. V23 初始化详细 Skill 模版，并把模型实例挂靠到数据采集、报告、方案、Prompt 和复盘审计 Skill。
 
 ## 3. 数据源初始化
 
@@ -55,9 +61,12 @@ src/main/resources/db/migration/V17__reset_quality_tasks_and_openai_default.sql
 
 | taskCode | taskType | 默认启用 | 说明 |
 | --- | --- | --- | --- |
-| `l1-regulatory-disclosure-collection` | `REGULATORY_DISCLOSURE_COLLECTION` | 是 | L1 监管披露专用采集，端点和字段路径前端可配置 |
-| `l1-exchange-announcement-collection` | `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 是 | L1 交易所/巨潮公告专用采集，端点和字段路径前端可配置 |
-| `l2-wealth-product-nav-refresh` | `WEALTH_PRODUCT_NAV_REFRESH` | 是 | L2 理财产品和净值披露专用采集，同步产品池并写入净值行情 |
+| `llm-data-collection-multi-source` | `AI_DATA_SOURCE_DISCOVERY` | 是 | LLM 多源数据采集规划，生成来源、采集计划、字段映射和质量策略 |
+| `llm-official-disclosure-collection` | `AI_DATA_SOURCE_DISCOVERY` | 是 | LLM 官方披露采集规划，重点公告、交易所和发行机构披露 |
+| `llm-product-nav-collection` | `AI_DATA_SOURCE_DISCOVERY` | 是 | LLM 产品净值采集规划，重点产品池 upsert 和净值入行情表 |
+| `llm-market-quote-collection` | `AI_DATA_SOURCE_DISCOVERY` | 是 | LLM 行情估值采集规划，重点行情、指数、估值和历史回溯 |
+| `llm-news-research-collection` | `AI_DATA_SOURCE_DISCOVERY` | 是 | LLM 资讯研报采集规划，重点新闻、研报、机构观点和交叉验证 |
+| `llm-regulatory-collection` | `AI_DATA_SOURCE_DISCOVERY` | 是 | LLM 监管政策采集规划，重点政策、处罚、风险提示和审计路由 |
 | `cn-mainland-market-momentum-scan` | `MARKET_MOMENTUM_SCAN` | 是 | 中国大陆核心主题动量扫描 |
 | `cn-mainland-hot-theme-return` | `HOT_THEME_RETURN` | 是 | 中国大陆核心主题收益快照 |
 | `cn-mainland-news-heat-aggregation` | `NEWS_HEAT_AGGREGATION` | 是 | 资讯热度和资讯-主题-产品证据链 |
@@ -91,10 +100,12 @@ POST /api/admin/data-sources/discover
 
 当外部源无数据且 `fallbackEnabled=false` 时，任务不会写入兜底资讯，只返回“外部资讯源无有效数据”的执行摘要。
 
-### 5.2 官方专用采集参数
+### 5.2 旧官方专用采集参数
 
 `REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`
 共享以下参数：
+
+V23 后这些任务不再默认启用，只作为“LLM 候选被前端审核后”的执行原语。默认闭环入口已经切换为 `AI_DATA_SOURCE_DISCOVERY` 多方向任务。
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -196,10 +207,35 @@ AI_DATA_SOURCE_DISCOVERY
 
 任务行为：
 
-- 使用 `DATA_SOURCE_DISCOVERY` 模型挂靠配置和 `DATA_SOURCE_DISCOVERY_CORE` Skill 生成候选。
-- 输出来源等级、字段映射、推荐任务类型、置信度和审核策略。
-- 不自动保存或启用正式数据源，不把候选当成已采集事实。
-- 闭环只把本任务作为“数据源治理已执行”的审计步骤。
+- 使用 `DATA_SOURCE_DISCOVERY` 模型挂靠配置和方向化 Skill 生成候选。
+- 输出来源等级、字段映射、推荐任务类型、采集计划、质量策略、置信度和审核策略。
+- 定时任务默认 `autoRegisterCandidates=true`，会把候选沉淀到数据源池；默认 `autoEnableCandidates=false`，不会自动启用正式数据源。
+- 已存在的数据源不会因为候选沉淀被改成停用状态。
+- 接口 `/api/admin/data-sources/discover` 只返回候选，不自动保存；自动沉淀只发生在定时任务处理器中。
+
+方向化参数：
+
+| 参数 | 示例 | 说明 |
+| --- | --- | --- |
+| `collectionDirection` | `PRODUCT_NAV` | 采集方向：`MULTI_SOURCE`、`OFFICIAL_DISCLOSURE`、`NEWS_RESEARCH`、`PRODUCT_NAV`、`MARKET_QUOTE`、`REGULATORY` |
+| `skillCode` | `DATA_COLLECTION_PRODUCT_NAV` | 指定 Skill；空值按采集方向自动选择 |
+| `autoRegisterCandidates` | `true` | 是否把模型候选沉淀到数据源池 |
+| `autoEnableCandidates` | `false` | 是否允许自动启用新候选，默认关闭 |
+
+默认 Skill 模版：
+
+| Skill | 类型 | 用途 |
+| --- | --- | --- |
+| `DATA_COLLECTION_MULTI_SOURCE` | `DATA_SOURCE_DISCOVERY` | 多源投资数据采集规划 |
+| `DATA_COLLECTION_OFFICIAL_DISCLOSURE` | `DATA_SOURCE_DISCOVERY` | 官方披露、交易所、发行机构公告 |
+| `DATA_COLLECTION_NEWS_RESEARCH` | `DATA_SOURCE_DISCOVERY` | 新闻、研报、机构观点和事件热度 |
+| `DATA_COLLECTION_PRODUCT_NAV` | `DATA_SOURCE_DISCOVERY` | 产品池、风险等级、净值行情 |
+| `DATA_COLLECTION_MARKET_QUOTE` | `DATA_SOURCE_DISCOVERY` | 行情、指数、估值和历史回溯 |
+| `DATA_COLLECTION_REGULATORY` | `DATA_SOURCE_DISCOVERY` | 监管政策、处罚、风险提示 |
+| `REPORT_GENERATION_CORE` | `REPORT_ANALYSIS` | 投资报告生成和降级 |
+| `INVESTMENT_PLAN_GENERATION_CORE` | `REPORT_ANALYSIS` | 报告转 Mock 投资方案 |
+| `PROMPT_EVOLUTION_CORE` | `PROMPT_GOVERNANCE` | Prompt 候选、评分和进化 |
+| `CLOSED_LOOP_REVIEW_AUDIT_CORE` | `QUALITY_AUDIT` | 闭环复盘、审计和改进路由 |
 
 ### 5.6 自动投资闭环总编排
 
@@ -214,7 +250,7 @@ AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `automationLevel` | `FULL_MOCK` | 自动化等级，当前默认跑完整 Mock 闭环 |
-| `dataTaskCodes` | AI发现/聚合任务列表 | 本轮先同步执行的数据源发现和聚合任务 |
+| `dataTaskCodes` | LLM采集/聚合任务列表 | 本轮先同步执行的数据源发现、候选沉淀和聚合任务 |
 | `reportTaskCode` | `auto-openai-investment-report-generation` | 自动报告任务编码 |
 | `promptTaskCode` | `auto-prompt-governance` | 自动 Prompt 治理任务编码 |
 | `mockUserBizId` | 本地 demo 用户 | 自动 Mock 使用的用户业务标识 |
@@ -232,7 +268,7 @@ AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
 任务行为：
 
 - 子任务失败会阻断闭环，并写入闭环步骤记录。
-- 默认数据源入口为 `ai-data-source-discovery`，旧 RSS/手工 endpoint 专用采集任务不再默认参与主动闭环。
+- 默认数据源入口为六条 `llm-*` 方向任务，旧 RSS/手工 endpoint 专用采集任务不再默认参与主动闭环。
 - 报告必须满足状态成功、可信等级可用、质量分达标、质量门禁通过、不是数据缺口报告。
 - 如果最近报告不达标，闭环会在 `maxReportsForMock` 窗口内继续查找合格报告，并把每份候选报告的阻断原因写入闭环步骤审计。
 - 自动 Mock 会写组合、订单、成交、估值、回测和反馈。

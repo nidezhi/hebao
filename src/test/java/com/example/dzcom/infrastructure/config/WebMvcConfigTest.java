@@ -36,6 +36,7 @@ class WebMvcConfigTest {
             .filter(mappedInterceptor -> mappedInterceptor.getInterceptor() == interceptor)
             .toList();
 
+        assertProtected(mappedInterceptors, "/api/auth/logout");
         assertProtected(mappedInterceptors, "/api/mock/portfolios/mine");
         assertProtected(mappedInterceptors, "/api/mock/portfolios/orders/buy");
         assertProtected(mappedInterceptors, "/api/backtests/detail");

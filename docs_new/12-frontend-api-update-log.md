@@ -1012,7 +1012,7 @@ POST /api/ai/prompt-evaluations/list
 | `POST /api/ai/models/detail` | 响应新增 `skills[]` | 模型详情页可直接展示已启用 Skill 绑定 |
 | `POST /api/admin/data-sources/discover` | 响应新增 `skillCode/skillVersion/skillInstruction` | 数据源发现页展示本次使用的 Skill |
 | 任务类型 | 新增 `AI_DATA_SOURCE_DISCOVERY` | 任务配置页增加该类型和参数表单 |
-| 自动闭环默认 `dataTaskCodes` | 改为 `ai-data-source-discovery,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation` | 驾驶舱应把数据源发现作为前置治理步骤展示 |
+| 自动闭环默认 `dataTaskCodes` | V22 改为单一 `ai-data-source-discovery` 前置治理，V23 已覆盖为六条 `llm-*` 方向化任务 | 驾驶舱应以 V23 默认任务为准 |
 | 旧专用采集任务 | 默认停用 | 前端不要再把 RSS/手工 endpoint 当作默认主方案 |
 
 Skill 字典：
@@ -1027,5 +1027,82 @@ Skill 字典：
 
 - Skill 是版本化资产，建议页面支持“复制为新版本”。
 - 模型 Skill 绑定使用 `modelBizId` 和 `skillBizId`，不是只用编码，便于复盘追踪。
-- 数据源不佳时优先检查 `DATA_SOURCE_DISCOVERY_CORE`；Prompt 不佳时优先检查 `PROMPT_GOVERNANCE_CORE`。
-- `AI_DATA_SOURCE_DISCOVERY` 任务只生成候选和审计摘要，不代表真实数据已落库。
+- 数据源不佳时优先检查对应 `DATA_COLLECTION_*` Skill；Prompt 不佳时优先检查 `PROMPT_EVOLUTION_CORE`。
+- `AI_DATA_SOURCE_DISCOVERY` 接口只生成候选；定时任务可配置为把候选沉淀进数据源池，默认不自动启用。
+
+## 9. 2026-06-27：LLM 方向化数据源采集与默认闭环任务重置
+
+变更目标：
+
+```text
+数据源发现不再依赖后端固定候选清单
+  -> 大模型按采集方向整理生成来源、采集计划、字段映射和质量策略
+  -> Skill 按数据收集类型维护
+  -> 定时任务沉淀候选到数据源池
+  -> 默认不自动启用正式数据源
+```
+
+接口变更：
+
+| 接口 | 变化 | 前端影响 |
+| --- | --- | --- |
+| `POST /api/admin/data-sources/discover` | 请求新增 `collectionDirection`、`skillCode` | 数据源发现页增加采集方向和 Skill 选择 |
+| `POST /api/admin/data-sources/discover` | 响应新增 `collectionDirection`，候选新增 `collectionPlan/qualityPolicy` | 候选卡片展示采集计划和质量策略 |
+| `POST /api/investment/tasks/definitions` | 默认任务改为六条 `llm-*` 数据采集任务 | 任务页按方向展示 LLM 采集任务 |
+| `POST /api/investment/tasks/trigger` | 可触发任一 `llm-*` 任务 | 前端可以先单独跑产品净值或监管方向 |
+
+新增默认任务：
+
+| taskCode | collectionDirection | skillCode |
+| --- | --- | --- |
+| `llm-data-collection-multi-source` | `MULTI_SOURCE` | `DATA_COLLECTION_MULTI_SOURCE` |
+| `llm-official-disclosure-collection` | `OFFICIAL_DISCLOSURE` | `DATA_COLLECTION_OFFICIAL_DISCLOSURE` |
+| `llm-product-nav-collection` | `PRODUCT_NAV` | `DATA_COLLECTION_PRODUCT_NAV` |
+| `llm-market-quote-collection` | `MARKET_QUOTE` | `DATA_COLLECTION_MARKET_QUOTE` |
+| `llm-news-research-collection` | `NEWS_RESEARCH` | `DATA_COLLECTION_NEWS_RESEARCH` |
+| `llm-regulatory-collection` | `REGULATORY` | `DATA_COLLECTION_REGULATORY` |
+
+新增或重置 Skill 模版：
+
+| skillCode | skillType | 用途 |
+| --- | --- | --- |
+| `DATA_COLLECTION_MULTI_SOURCE` | `DATA_SOURCE_DISCOVERY` | 多源投资数据采集规划 |
+| `DATA_COLLECTION_OFFICIAL_DISCLOSURE` | `DATA_SOURCE_DISCOVERY` | 官方披露、交易所、发行机构公告 |
+| `DATA_COLLECTION_PRODUCT_NAV` | `DATA_SOURCE_DISCOVERY` | 产品池、风险等级、净值行情 |
+| `DATA_COLLECTION_MARKET_QUOTE` | `DATA_SOURCE_DISCOVERY` | 行情、指数、估值和历史回溯 |
+| `DATA_COLLECTION_NEWS_RESEARCH` | `DATA_SOURCE_DISCOVERY` | 新闻、研报、机构观点和事件热度 |
+| `DATA_COLLECTION_REGULATORY` | `DATA_SOURCE_DISCOVERY` | 监管政策、处罚、风险提示 |
+| `REPORT_GENERATION_CORE` | `REPORT_ANALYSIS` | 投资报告生成和降级 |
+| `INVESTMENT_PLAN_GENERATION_CORE` | `REPORT_ANALYSIS` | 报告转 Mock 投资方案 |
+| `PROMPT_EVOLUTION_CORE` | `PROMPT_GOVERNANCE` | Prompt 候选、评分和进化 |
+| `CLOSED_LOOP_REVIEW_AUDIT_CORE` | `QUALITY_AUDIT` | 闭环复盘、审计和改进路由 |
+
+任务参数新增：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `collectionDirection` | `MULTI_SOURCE` | 采集方向 |
+| `skillCode` | `DATA_COLLECTION_MULTI_SOURCE` | 本次使用的 Skill |
+| `autoRegisterCandidates` | `true` | 是否把候选沉淀进数据源池 |
+| `autoEnableCandidates` | `false` | 是否自动启用新候选，默认关闭 |
+
+默认闭环 `dataTaskCodes` 已改为：
+
+```text
+llm-data-collection-multi-source,
+llm-official-disclosure-collection,
+llm-product-nav-collection,
+llm-market-quote-collection,
+llm-news-research-collection,
+llm-regulatory-collection,
+cn-mainland-market-momentum-scan,
+cn-mainland-hot-theme-return,
+cn-mainland-news-heat-aggregation
+```
+
+前端注意：
+
+- `/api/admin/data-sources/discover` 本身不保存候选。
+- `AI_DATA_SOURCE_DISCOVERY` 定时任务默认沉淀候选，但不会自动启用新数据源。
+- 已存在数据源不会因为候选沉淀被改成停用。
+- 旧 `REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH` 仍可作为审核后的执行原语，但不再是默认闭环入口。

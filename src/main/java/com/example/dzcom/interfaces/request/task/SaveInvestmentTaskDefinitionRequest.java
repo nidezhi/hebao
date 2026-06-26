@@ -21,8 +21,8 @@ public record SaveInvestmentTaskDefinitionRequest(
     String zone,
     @Schema(description = "是否启用", example = "true")
     Boolean enabled,
-    @Schema(description = "任务参数；收益、动量和资讯热度任务默认只处理 CN_MAINLAND")
-    Map<String, String> parameters,
+    @Schema(description = "任务参数；支持字符串、数字、布尔、对象和数组，对象/数组会在接口层序列化为 JSON 字符串")
+    Map<String, Object> parameters,
     @Schema(description = "配置说明", example = "中国大陆热门投资方向收益汇总")
     String description
 ) {
