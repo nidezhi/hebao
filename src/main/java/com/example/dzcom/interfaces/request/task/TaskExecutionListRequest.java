@@ -11,7 +11,7 @@ public record TaskExecutionListRequest(
     String taskCode,
     @Schema(description = "任务类型", example = "INVESTMENT_NEWS_COLLECTION")
     String taskType,
-    @Schema(description = "执行状态：RUNNING/SUCCEEDED/FAILED", example = "SUCCEEDED")
+    @Schema(description = "执行状态：RUNNING/SUCCEEDED/BLOCKED/FAILED", example = "SUCCEEDED")
     String status,
     @Schema(description = "执行开始时间起点", example = "2026-06-16T00:00:00")
     LocalDateTime startedFrom,

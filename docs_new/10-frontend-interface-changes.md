@@ -799,4 +799,4 @@ POST /api/ai/prompt-evaluations/list
   - `lookbackDays=30`
   - `initialCapital=100000`
 - OpenAI 模型仍通过 `/api/ai/models/save`、`/api/ai/models/list`、`/api/ai/models/status` 前端可配置。
-- `openai-compatible-analysis` 默认 `mockEnabled=true`，不会调用外部网络；前端或运营配置为 `mockEnabled=false` 并配置 `OPENAI_API_KEY` 后才会真实调用。
+- `openai-compatible-analysis` 默认 `secretRef=OPENAI_MOCK_API_KEY` 且 `mockEnabled=true`，不会调用外部网络；前端或运营配置为 `mockEnabled=false` 时，需要后端按当前模型 `secretRef` 配置同名密钥后才会真实调用。

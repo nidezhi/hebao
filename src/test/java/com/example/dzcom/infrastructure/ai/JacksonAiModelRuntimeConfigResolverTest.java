@@ -54,4 +54,45 @@ class JacksonAiModelRuntimeConfigResolverTest {
         assertEquals(60, runtimeConfig.timeoutSeconds());
         assertTrue(runtimeConfig.mockEnabled());
     }
+
+    /**
+     * 兼容已执行过早期 V17 迁移的环境，旧 secretRef 应能回退到默认 Mock Key。
+     *
+     * @author dz
+     * @date 2026-06-26
+     */
+    @Test
+    void shouldFallbackLegacyOpenAiSecretRefToMockSecret() {
+        String mockApiKey = "83ec6f52-567b-40a7-87ad-8b60df196d6c";
+        AiSecretProperties properties = new AiSecretProperties();
+        properties.setValues(Map.of("OPENAI_MOCK_API_KEY", mockApiKey));
+        PropertyAiSecretResolver secretResolver = new PropertyAiSecretResolver(properties);
+        JacksonAiModelRuntimeConfigResolver resolver =
+            new JacksonAiModelRuntimeConfigResolver(
+                JsonMapper.builder().findAndAddModules().build(),
+                secretResolver
+            );
+        AiModel model = AiModel.builder()
+            .modelCode("openai-compatible-analysis")
+            .modelVersion("default-v1")
+            .provider("OPENAI_COMPATIBLE")
+            .modelConfig("""
+                {
+                  "baseUrl": "https://api.openai.com/v1",
+                  "model": "gpt-4.1-mini",
+                  "secretRef": "OPENAI_API_KEY",
+                  "timeoutSeconds": 90,
+                  "temperature": 0.2,
+                  "mockEnabled": true
+                }
+                """)
+            .build();
+
+        AiModelRuntimeConfig runtimeConfig = resolver.resolve(model);
+
+        assertEquals(mockApiKey, runtimeConfig.apiKey());
+        assertEquals("OPENAI_API_KEY", runtimeConfig.secretRef());
+        assertEquals(90, runtimeConfig.timeoutSeconds());
+        assertTrue(runtimeConfig.mockEnabled());
+    }
 }

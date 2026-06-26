@@ -196,7 +196,7 @@ VALUES
    'providerCode', 'OPENAI_COMPATIBLE',
    'lookbackDays', '30',
    'themeCodes', '',
-   'maxReportsForMock', '1'
+   'maxReportsForMock', '20'
  ),
  '自动投资闭环总编排任务。自动采集、报告、Prompt候选、模型候选、Mock交易、回测和反馈；默认不自动启用新Prompt/模型、不触发真实交易。', CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3));
 
@@ -208,7 +208,7 @@ VALUES
  JSON_OBJECT('model', 'local-rule-v1', 'timeoutSeconds', 30, 'temperature', 0, 'mockEnabled', false),
  JSON_OBJECT('configurationType', 'LOCAL_RULE', 'initializedBy', 'real-ingestion-reset'), 'ACTIVE', CURRENT_TIMESTAMP(3), NULL, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3)),
 ('10000000-0000-0000-0000-000000000002', 'openai-compatible-analysis', 'default-v1', 'OpenAI 默认投资分析模型', 'ANALYSIS', 'OPENAI_COMPATIBLE', 'https://api.openai.com/v1',
- JSON_OBJECT('baseUrl', 'https://api.openai.com/v1', 'model', 'gpt-4.1-mini', 'secretRef', 'OPENAI_API_KEY', 'timeoutSeconds', 90, 'temperature', 0.2, 'mockEnabled', true),
+ JSON_OBJECT('baseUrl', 'https://api.openai.com/v1', 'model', 'gpt-4.1-mini', 'secretRef', 'OPENAI_MOCK_API_KEY', 'timeoutSeconds', 90, 'temperature', 0.2, 'mockEnabled', true),
  JSON_OBJECT('configurationType', 'OPENAI_DEFAULT', 'protocol', 'OPENAI_COMPATIBLE', 'frontConfigurable', true, 'defaultForAutoReport', true, 'mockEnabledDefault', true), 'ACTIVE', CURRENT_TIMESTAMP(3), NULL, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3));
 
 -- 6. 初始化 Prompt 基线。它是系统配置，不是某次业务报告产物。

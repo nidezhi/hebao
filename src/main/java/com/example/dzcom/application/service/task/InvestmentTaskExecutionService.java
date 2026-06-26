@@ -69,6 +69,15 @@ public class InvestmentTaskExecutionService {
                 .completedAt(clock.now())
                 .build());
             return succeeded;
+        } catch (InvestmentTaskBlockedException exception) {
+            ScheduledTaskExecution blocked = executions.save(running.toBuilder()
+                .status("BLOCKED")
+                .failureReason(limit(exception.getMessage(), 2048))
+                .completedAt(clock.now())
+                .build());
+            log.warn("投资任务被业务门禁阻断: eventId={}, taskCode={}, taskType={}, reason={}",
+                event.eventId(), event.taskCode(), event.taskType(), exception.getMessage());
+            return blocked;
         } catch (Exception exception) {
             ScheduledTaskExecution failed = executions.save(running.toBuilder()
                 .status("FAILED")

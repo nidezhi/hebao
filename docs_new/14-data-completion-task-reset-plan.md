@@ -190,6 +190,7 @@ AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
 | `mockPortfolioName` | `全自动闭环模拟组合` | 自动创建或复用的 Mock 组合名称 |
 | `initialCash` | `100000` | 自动 Mock 组合初始现金 |
 | `minQualityScore` | `0.45` | 报告进入 Mock 前的最低质量分 |
+| `maxReportsForMock` | `20` | 报告进入 Mock 前最多向前检查的候选报告数量 |
 | `allowAutoMockTrade` | `true` | 是否允许自动 Mock 交易 |
 | `allowPromptCandidate` | `true` | 是否允许自动 Prompt 候选和评分 |
 | `allowModelCandidate` | `true` | 是否允许自动 DRAFT 模型候选 |
@@ -201,6 +202,7 @@ AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
 
 - 子任务失败会阻断闭环，并写入闭环步骤记录。
 - 报告必须满足状态成功、可信等级可用、质量分达标、质量门禁通过、不是数据缺口报告。
+- 如果最近报告不达标，闭环会在 `maxReportsForMock` 窗口内继续查找合格报告，并把每份候选报告的阻断原因写入闭环步骤审计。
 - 自动 Mock 会写组合、订单、成交、估值、回测和反馈。
 - Prompt/模型只自动产出候选与评分，不自动正式启用。
 - 真实交易只记录闸门步骤，不调用任何真实交易接口。
@@ -213,7 +215,7 @@ AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
 modelCode = openai-compatible-analysis
 provider = OPENAI_COMPATIBLE
 remote model = gpt-4.1-mini
-secretRef = OPENAI_API_KEY
+secretRef = OPENAI_MOCK_API_KEY
 ```
 
 默认配置仍保留：
@@ -228,7 +230,7 @@ secretRef = OPENAI_API_KEY
 
 - 本地和开发环境不应默认依赖真实外部网络与真实 API Key。
 - 前端可通过 `/api/ai/models/save` 或 `/api/ai/models/status` 调整模型配置。
-- 当 `mockEnabled=false` 且外部密钥 `OPENAI_API_KEY` 配置完成时，后端会调用 OpenAI Chat Completions 兼容接口。
+- 当 `mockEnabled=false` 且外部密钥按当前模型 `secretRef` 配置完成时，后端会调用 OpenAI Chat Completions 兼容接口。
 
 ## 7. 真实大模型调用边界
 

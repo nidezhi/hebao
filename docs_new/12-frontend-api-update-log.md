@@ -881,7 +881,8 @@ POST /api/ai/prompt-evaluations/list
 - 理财任务 `WEALTH_PRODUCT_NAV_REFRESH` 会同步产品池和净值行情，前端需展示 `productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel` 配置项。
 - 专用采集任务不写兜底数据；端点未配置或无有效数据时，数据源看板会显示健康/质量缺口。
 - OpenAI 模型配置接口不变：`/api/ai/models/save`、`/list`、`/status`。
-- `mockEnabled=true` 不触发真实 OpenAI 调用；`mockEnabled=false` 需要后端配置 `OPENAI_API_KEY`。
+- 默认 `secretRef=OPENAI_MOCK_API_KEY`，与 `config/application-secrets.yaml` 的本地/开发密钥保持一致。
+- `mockEnabled=true` 不触发真实 OpenAI 调用；`mockEnabled=false` 需要后端按当前模型配置的 `secretRef` 配置同名密钥。
 
 ## 6. 2026-06-25：自动投资闭环总编排
 
@@ -892,6 +893,7 @@ POST /api/ai/prompt-evaluations/list
 | `AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION` | 新增任务类型 | 自动串联采集、报告、Prompt/模型候选、Mock 交易、回测和反馈 |
 | `POST /api/investment/closed-loop/runs/list` | 新增接口 | 驾驶舱查询闭环运行列表、状态、质量分、报告、组合和回测 |
 | `POST /api/investment/closed-loop/runs/detail` | 新增接口 | 查看单轮闭环步骤、输入摘要、输出摘要、阻断原因 |
+| `POST /api/investment/tasks/executions/list` | 状态扩展 | 执行状态增加 `BLOCKED`，用于区分质量/风控门禁阻断和系统失败 |
 
 `POST /api/investment/closed-loop/runs/list`
 
@@ -958,5 +960,6 @@ POST /api/ai/prompt-evaluations/list
 前端注意：
 
 - `runStatus=BLOCKED` 不等于系统故障，通常表示质量门禁、任务失败、报告不可执行或自动闸门生效。
+- 自动闭环默认 `maxReportsForMock=20`；当最近报告不达标时，会继续检查候选窗口内的报告，并在 `QUALITY_GATE` 步骤写入候选报告阻断原因。
 - `allowAutoPromptActivation`、`allowAutoModelActivation`、`allowRealTrade` 即使配置为 `true`，当前后端也只记录闸门步骤，不会自动启用或真实交易。
 - 自动模型候选以 `DRAFT` 写入模型列表，前端可在模型工作台展示评分和来源报告。

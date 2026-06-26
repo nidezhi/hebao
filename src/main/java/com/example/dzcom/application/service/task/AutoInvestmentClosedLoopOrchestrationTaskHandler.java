@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -202,21 +203,25 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     /** 选择最近可进入 Mock 闭环的报告。 */
     private InvestmentAnalysisReport selectExecutableReport(ClosedLoopRun run, Map<String, String> parameters) {
-        int maxReports = TaskParameterParser.positiveInt(parameters, "maxReportsForMock", 1);
+        int maxReports = TaskParameterParser.positiveInt(parameters, "maxReportsForMock", 20);
         BigDecimal minQualityScore = minQualityScore(parameters);
-        InvestmentAnalysisReport selected = reports.latest(maxReports).items().stream()
-            .filter(report -> isReportStatusSucceeded(report.status()))
-            .filter(report -> !"UNUSABLE".equals(report.confidenceLevel()))
-            .filter(report -> report.dataQualityScore() != null
-                && report.dataQualityScore().compareTo(minQualityScore) >= 0)
-            .filter(this::isDataQualityGatePassed)
-            .filter(report -> !isDataGapReport(report))
+        List<ReportGateCheck> checks = reports.latest(maxReports).items().stream()
+            .map(report -> evaluateReportGate(report, minQualityScore))
+            .toList();
+        InvestmentAnalysisReport selected = checks.stream()
+            .filter(ReportGateCheck::passed)
+            .map(ReportGateCheck::report)
             .findFirst()
             .orElse(null);
         if (selected == null) {
             String reason = "没有找到满足质量门禁的最新投资报告";
             closedLoops.blockedStep(run, "QUALITY_GATE", "数据质量与报告门禁", 40, reason,
-                Map.of("maxReportsForMock", maxReports, "minQualityScore", minQualityScore));
+                Map.of(
+                    "maxReportsForMock", maxReports,
+                    "minQualityScore", minQualityScore,
+                    "evaluatedReportCount", checks.size(),
+                    "evaluatedReports", checks.stream().map(ReportGateCheck::summary).toList()
+                ));
             throw new ClosedLoopBlockedException(reason);
         }
         return selected;
@@ -451,6 +456,46 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         return "SUCCESS".equals(status) || "SUCCEEDED".equals(status);
     }
 
+    /**
+     * 对单份报告执行 Mock 前质量门禁检查，并输出前端可展示的阻断原因。
+     *
+     * @param report 待检查的投资报告
+     * @param minQualityScore 本轮自动 Mock 最低质量分
+     * @return 报告门禁检查结果
+     * @author dz
+     * @date 2026-06-26
+     */
+    private ReportGateCheck evaluateReportGate(InvestmentAnalysisReport report, BigDecimal minQualityScore) {
+        List<String> reasons = new ArrayList<>();
+        if (!isReportStatusSucceeded(report.status())) {
+            reasons.add("REPORT_STATUS_NOT_SUCCEEDED");
+        }
+        if ("UNUSABLE".equals(report.confidenceLevel())) {
+            reasons.add("CONFIDENCE_UNUSABLE");
+        }
+        if (report.dataQualityScore() == null) {
+            reasons.add("QUALITY_SCORE_MISSING");
+        } else if (report.dataQualityScore().compareTo(minQualityScore) < 0) {
+            reasons.add("QUALITY_SCORE_BELOW_THRESHOLD");
+        }
+        if (!isDataQualityGatePassed(report)) {
+            reasons.add("DATA_QUALITY_GATE_NOT_PASSED");
+        }
+        if (isDataGapReport(report)) {
+            reasons.add("DATA_GAP_REPORT");
+        }
+        Map<String, Object> summary = mapOfNullable(
+            "reportBizId", report.bizId(),
+            "status", report.status(),
+            "themeCode", report.themeCode(),
+            "confidenceLevel", report.confidenceLevel(),
+            "dataQualityScore", report.dataQualityScore(),
+            "passed", reasons.isEmpty(),
+            "blockedReasons", reasons
+        );
+        return new ReportGateCheck(report, reasons.isEmpty(), summary);
+    }
+
     /** 判断报告数据质量门禁是否通过。 */
     private boolean isDataQualityGatePassed(InvestmentAnalysisReport report) {
         if (report.dataQualityGate() == null || report.dataQualityGate().isBlank()) {
@@ -508,9 +553,13 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     }
 
     /** 闭环门禁阻断异常，用于区分业务阻断和系统异常。 */
-    private static class ClosedLoopBlockedException extends RuntimeException {
+    private static class ClosedLoopBlockedException extends InvestmentTaskBlockedException {
         ClosedLoopBlockedException(String message) {
             super(message);
         }
+    }
+
+    /** 报告质量门禁检查结果。 */
+    private record ReportGateCheck(InvestmentAnalysisReport report, boolean passed, Map<String, Object> summary) {
     }
 }

@@ -127,6 +127,7 @@
 | `allowAutoModelActivation` | `false` | 当前只记录闸门，不自动 ACTIVE |
 | `allowRealTrade` | `false` | 当前只记录闸门，不触发真实交易 |
 | `minQualityScore` | `0.45` | 自动 Mock 前最低报告质量分 |
+| `maxReportsForMock` | `20` | 报告候选窗口，避免多主题批量报告只检查最后一份 |
 
 ## 4. 产品池、行情与投资方案
 

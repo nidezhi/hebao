@@ -3,10 +3,18 @@ package com.example.dzcom.application.service.task;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.IdGenerator;
+import com.example.dzcom.application.command.ai.GenerateBacktestFromPortfolioCommand;
+import com.example.dzcom.application.command.ai.SaveInvestmentFeedbackCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
+import com.example.dzcom.application.dto.ai.BacktestResultView;
+import com.example.dzcom.application.dto.ai.InvestmentFeedbackView;
+import com.example.dzcom.application.dto.portfolio.MockOrderExecutionView;
+import com.example.dzcom.application.dto.portfolio.MockOrderView;
 import com.example.dzcom.application.dto.portfolio.MockPortfolioView;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.ai.AiModelApplicationService;
+import com.example.dzcom.application.service.ai.InvestmentClosedLoopApplicationService;
 import com.example.dzcom.domain.model.ai.AiModel;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
 import com.example.dzcom.domain.model.task.ClosedLoopRun;
@@ -26,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -72,6 +81,71 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             .anyMatch(step -> "QUALITY_GATE".equals(step.stepCode()) && "BLOCKED".equals(step.stepStatus())));
     }
 
+    /** 最近一份报告不合格时，应继续在候选窗口内选择更早的合格报告。 */
+    @Test
+    void shouldSelectEarlierQualifiedReportWithinDefaultCandidateWindow() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(report("report-low", new BigDecimal("0.20"), false));
+        fixture.reports.items.add(report("report-pass", new BigDecimal("0.80"), true));
+
+        String summary = fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-2")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "reportTaskCode", "report-task",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertTrue(summary.contains("reportBizId=report-pass"));
+        assertEquals(1, fixture.portfolioService.ensureCalls);
+        assertEquals("report-pass", fixture.portfolioService.lastReportBizId);
+        assertEquals(1, fixture.closedLoopService.backtestCalls);
+        assertEquals(1, fixture.closedLoopService.feedbackCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "QUALITY_GATE".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
+    }
+
+    /** 质量门禁阻断应作为任务 BLOCKED 记录，不应被审计为系统失败。 */
+    @Test
+    void shouldPersistBlockedExecutionWhenClosedLoopGateBlocks() {
+        Fixture fixture = new Fixture();
+        InvestmentTaskExecutionService executionService = new InvestmentTaskExecutionService(
+            List.of(fixture.handler),
+            fixture.executions,
+            fixture.ids,
+            () -> NOW
+        );
+
+        ScheduledTaskExecution execution = executionService.executeAndReturn(
+            InvestmentTaskEvent.builder()
+                .eventId("event-3")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "reportTaskCode", "report-task",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals("BLOCKED", execution.status());
+        assertEquals("没有找到满足质量门禁的最新投资报告", execution.failureReason());
+    }
+
     private static InvestmentAnalysisReport report(String bizId, BigDecimal qualityScore, boolean gatePassed) {
         return InvestmentAnalysisReport.builder()
             .bizId(bizId)
@@ -97,6 +171,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private final MemoryClosedLoopRunStore closedLoopStore = new MemoryClosedLoopRunStore();
         private final MemoryReportStore reports = new MemoryReportStore();
         private final CountingPortfolioService portfolioService = new CountingPortfolioService();
+        private final FakeInvestmentClosedLoopService closedLoopService = new FakeInvestmentClosedLoopService();
         private final AutoInvestmentClosedLoopOrchestrationTaskHandler handler;
 
         private Fixture() {
@@ -116,7 +191,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 closedLoops,
                 reports,
                 portfolioService,
-                null,
+                closedLoopService,
                 new AiModelApplicationService(new MemoryAiModelStore(), ids, () -> NOW),
                 new PassThroughOperatorProvider(),
                 ids,
@@ -197,6 +272,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
     /** 统计组合服务，质量门禁阻断时不应被调用。 */
     private static final class CountingPortfolioService extends com.example.dzcom.application.service.portfolio.MockPortfolioApplicationService {
         private int ensureCalls;
+        private String lastReportBizId;
 
         private CountingPortfolioService() {
             super(null, null, null, null, null, null, null, null, null, null, null,
@@ -206,7 +282,78 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         @Override
         public MockPortfolioView ensureAutomationPortfolio(String userBizId, String portfolioName, BigDecimal initialCash) {
             ensureCalls++;
-            return null;
+            return portfolio(userBizId);
+        }
+
+        @Override
+        public MockOrderExecutionView buyFromReport(ExecuteMockPlanFromReportCommand command) {
+            lastReportBizId = command.reportBizId();
+            MockPortfolioView portfolio = portfolio("user-1");
+            return MockOrderExecutionView.builder()
+                .portfolio(portfolio)
+                .order(MockOrderView.builder()
+                    .bizId("order-1")
+                    .portfolioBizId(portfolio.bizId())
+                    .status("FILLED")
+                    .build())
+                .build();
+        }
+
+        @Override
+        public MockPortfolioView refreshValuation(String portfolioBizId) {
+            return portfolio("user-1");
+        }
+
+        private MockPortfolioView portfolio(String userBizId) {
+            return MockPortfolioView.builder()
+                .bizId("portfolio-1")
+                .ownerUserBizId(userBizId)
+                .portfolioName("全自动闭环模拟组合")
+                .status(1)
+                .createdAt(NOW)
+                .updatedAt(NOW)
+                .build();
+        }
+    }
+
+    /** 自动闭环测试用的回测和反馈服务。 */
+    private static final class FakeInvestmentClosedLoopService extends InvestmentClosedLoopApplicationService {
+        private int backtestCalls;
+        private int feedbackCalls;
+
+        private FakeInvestmentClosedLoopService() {
+            super(null, null, null, null, null, null, null, null);
+        }
+
+        @Override
+        public BacktestResultView generateBacktestFromPortfolio(GenerateBacktestFromPortfolioCommand command) {
+            backtestCalls++;
+            return BacktestResultView.builder()
+                .bizId("backtest-1")
+                .ownerUserBizId("user-1")
+                .strategyCode(command.strategyCode())
+                .strategyVersion(command.strategyVersion())
+                .startDate(LocalDate.of(2026, 6, 25))
+                .endDate(LocalDate.of(2026, 6, 25))
+                .status("SUCCEEDED")
+                .createdAt(NOW)
+                .updatedAt(NOW)
+                .build();
+        }
+
+        @Override
+        public InvestmentFeedbackView saveFeedback(SaveInvestmentFeedbackCommand command) {
+            feedbackCalls++;
+            return InvestmentFeedbackView.builder()
+                .bizId("feedback-1")
+                .userBizId("user-1")
+                .targetType(command.targetType())
+                .targetBizId(command.targetBizId())
+                .reportBizId(command.reportBizId())
+                .backtestBizId(command.backtestBizId())
+                .feedbackAction(command.feedbackAction())
+                .createdAt(NOW)
+                .build();
         }
     }
 

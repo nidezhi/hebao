@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class PropertyAiSecretResolver implements AiSecretResolver {
+    private static final String LEGACY_OPENAI_SECRET_REF = "OPENAI_API_KEY";
+    private static final String DEFAULT_OPENAI_MOCK_SECRET_REF = "OPENAI_MOCK_API_KEY";
+
     private final AiSecretProperties properties;
 
     /**
@@ -28,6 +31,10 @@ public class PropertyAiSecretResolver implements AiSecretResolver {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "AI模型未配置密钥引用");
         }
         String apiKey = properties.getValues().get(secretRef);
+        if ((apiKey == null || apiKey.isBlank()) && LEGACY_OPENAI_SECRET_REF.equals(secretRef)) {
+            // 兼容 V17 早期默认值，避免已初始化环境只配置 OPENAI_MOCK_API_KEY 时自动报告被阻断。
+            apiKey = properties.getValues().get(DEFAULT_OPENAI_MOCK_SECRET_REF);
+        }
         if (apiKey == null || apiKey.isBlank()) {
             throw new BusinessException(
                 HttpStatus.SERVICE_UNAVAILABLE,
