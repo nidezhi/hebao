@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.ai.AiSkillMapper">
+    <sql id="searchCondition">
+        from aiw_ai_skill s
+        where 1 = 1
+        <if test="criteria.skillCode != null and criteria.skillCode != ''">
+            and s.skill_code = #{criteria.skillCode}
+        </if>
+        <if test="criteria.skillType != null and criteria.skillType != ''">
+            and s.skill_type = #{criteria.skillType}
+        </if>
+        <if test="criteria.status != null and criteria.status != ''">
+            and s.status = #{criteria.status}
+        </if>
+        <if test="criteria.keyword != null and criteria.keyword != ''">
+            and (s.skill_code like concat('%', #{criteria.keyword}, '%')
+                 or s.skill_name like concat('%', #{criteria.keyword}, '%')
+                 or s.description like concat('%', #{criteria.keyword}, '%'))
+        </if>
+    </sql>
+
+    <insert id="save">
+        insert into aiw_ai_skill
+        (biz_id, skill_code, skill_version, skill_name, skill_type, status, instruction_content,
+         input_schema, output_schema, evaluation_policy, description, created_at, updated_at, created_by, updated_by)
+        values
+        (#{bizId}, #{skillCode}, #{skillVersion}, #{skillName}, #{skillType}, #{status}, #{instructionContent},
+         #{inputSchema}, #{outputSchema}, #{evaluationPolicy}, #{description}, #{createdAt}, #{updatedAt},
+         #{createdBy}, #{updatedBy})
+        on duplicate key update
+        skill_name = values(skill_name),
+        skill_type = values(skill_type),
+        status = values(status),
+        instruction_content = values(instruction_content),
+        input_schema = values(input_schema),
+        output_schema = values(output_schema),
+        evaluation_policy = values(evaluation_policy),
+        description = values(description),
+        updated_at = values(updated_at),
+        updated_by = values(updated_by)
+    </insert>
+
+    <select id="selectByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiSkillEntity">
+        select *
+        from aiw_ai_skill
+        where biz_id = #{bizId}
+    </select>
+
+    <select id="selectByCodeAndVersion" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiSkillEntity">
+        select *
+        from aiw_ai_skill
+        where skill_code = #{skillCode}
+          and skill_version = #{skillVersion}
+    </select>
+
+    <select id="selectActiveByCode" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiSkillEntity">
+        select *
+        from aiw_ai_skill
+        where skill_code = #{skillCode}
+          and status = 'ACTIVE'
+        order by updated_at desc
+        limit 1
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiSkillEntity">
+        select s.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

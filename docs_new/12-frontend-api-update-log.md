@@ -963,3 +963,69 @@ POST /api/ai/prompt-evaluations/list
 - 自动闭环默认 `maxReportsForMock=20`；当最近报告不达标时，会继续检查候选窗口内的报告，并在 `QUALITY_GATE` 步骤写入候选报告阻断原因。
 - `allowAutoPromptActivation`、`allowAutoModelActivation`、`allowRealTrade` 即使配置为 `true`，当前后端也只记录闸门步骤，不会自动启用或真实交易。
 - 自动模型候选以 `DRAFT` 写入模型列表，前端可在模型工作台展示评分和来源报告。
+
+## 7. 2026-06-26：模型挂靠配置与 AI 数据源发现
+
+新增接口：
+
+| 接口 | 类型 | 前端用途 |
+| --- | --- | --- |
+| `POST /api/ai/model-bindings/save` | 新增 | 配置业务场景挂靠哪个 AI 模型 |
+| `POST /api/ai/model-bindings/list` | 新增 | 查询所有模型挂靠配置 |
+| `POST /api/ai/model-bindings/detail` | 新增 | 查询单个场景的模型挂靠配置 |
+| `POST /api/admin/data-sources/discover` | 新增 | 通过模型挂靠配置生成数据源候选、字段映射和采集任务建议 |
+
+模型挂靠场景字典：
+
+| scenarioCode | 说明 |
+| --- | --- |
+| `DATA_SOURCE_DISCOVERY` | 数据源 AI 发现和字段映射建议 |
+| `AUTO_REPORT_GENERATION` | 自动投资报告生成 |
+| `AUTO_CLOSED_LOOP_ORCHESTRATION` | 自动投资闭环编排 |
+| `PROMPT_GOVERNANCE` | Prompt 候选、评分和复盘 |
+
+前端注意：
+
+- `/api/admin/data-sources/discover` 只返回候选，不自动保存或启用数据源。
+- 候选中的 `suggestedParameters` 可用于填充任务配置表单，`fieldMappings` 可用于填充专用采集器字段路径。
+- 正式启用仍应调用 `/api/admin/data-sources/save` 和 `/api/investment/tasks/definitions/save`，保留人工确认与审计。
+
+## 8. 2026-06-26：AI Skills、模型 Skill 绑定与纯净闭环任务
+
+新增接口：
+
+| 接口 | 类型 | 前端用途 |
+| --- | --- | --- |
+| `POST /api/ai/skills/save` | 新增 | 保存数据源发现、Prompt 治理等 Skill 版本 |
+| `POST /api/ai/skills/list` | 新增 | Skill 工作台分页查询 |
+| `POST /api/ai/skills/detail` | 新增 | 查看 Skill 指令、输入输出 Schema、评估策略 |
+| `POST /api/ai/skills/status` | 新增 | 变更 Skill 生命周期 |
+| `POST /api/ai/model-skills/save` | 新增 | 绑定模型实例与 Skill 版本 |
+| `POST /api/ai/model-skills/list` | 新增 | 查询模型 Skill 绑定 |
+| `POST /api/ai/model-skills/detail` | 新增 | 查看绑定详情 |
+| `POST /api/ai/model-skills/by-model` | 新增 | 查询指定模型启用的 Skill |
+
+变更：
+
+| 位置 | 变化 | 前端影响 |
+| --- | --- | --- |
+| `POST /api/ai/models/detail` | 响应新增 `skills[]` | 模型详情页可直接展示已启用 Skill 绑定 |
+| `POST /api/admin/data-sources/discover` | 响应新增 `skillCode/skillVersion/skillInstruction` | 数据源发现页展示本次使用的 Skill |
+| 任务类型 | 新增 `AI_DATA_SOURCE_DISCOVERY` | 任务配置页增加该类型和参数表单 |
+| 自动闭环默认 `dataTaskCodes` | 改为 `ai-data-source-discovery,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation` | 驾驶舱应把数据源发现作为前置治理步骤展示 |
+| 旧专用采集任务 | 默认停用 | 前端不要再把 RSS/手工 endpoint 当作默认主方案 |
+
+Skill 字典：
+
+| 字典 | 值 |
+| --- | --- |
+| `skillType` | `DATA_SOURCE_DISCOVERY`、`PROMPT_GOVERNANCE`、`REPORT_ANALYSIS`、`QUALITY_AUDIT`、`MODEL_FEEDBACK` |
+| `skillStatus` | `DRAFT`、`VALIDATING`、`ACTIVE`、`RETIRED`、`ARCHIVED` |
+| `modelSkillScenarioCode` | `DATA_SOURCE_DISCOVERY`、`PROMPT_GOVERNANCE`、`AUTO_REPORT_GENERATION`、`AUTO_CLOSED_LOOP_ORCHESTRATION` |
+
+前端注意：
+
+- Skill 是版本化资产，建议页面支持“复制为新版本”。
+- 模型 Skill 绑定使用 `modelBizId` 和 `skillBizId`，不是只用编码，便于复盘追踪。
+- 数据源不佳时优先检查 `DATA_SOURCE_DISCOVERY_CORE`；Prompt 不佳时优先检查 `PROMPT_GOVERNANCE_CORE`。
+- `AI_DATA_SOURCE_DISCOVERY` 任务只生成候选和审计摘要，不代表真实数据已落库。

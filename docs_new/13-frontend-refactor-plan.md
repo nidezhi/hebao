@@ -1,5 +1,7 @@
 # 前端重构方案
 
+> 2026-06-26 更新：前端任务和数据源页面应以 AI Skill、模型 Skill 绑定和 `AI_DATA_SOURCE_DISCOVERY` 为默认主入口。旧 RSS/fallback/手工 endpoint 配置只作为人工审核后的高级执行原语展示。
+
 ## 1. 文档目的
 
 本文档用于指导 DZCOM 投资平台前端重构。

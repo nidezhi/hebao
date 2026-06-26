@@ -2,6 +2,8 @@ package com.example.dzcom.application.service.market;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONException;
+import com.alibaba.fastjson2.JSONObject;
+import com.example.dzcom.application.command.market.DiscoverDataSourcesCommand;
 import com.example.dzcom.application.command.market.SaveDataQualitySnapshotCommand;
 import com.example.dzcom.application.command.market.SaveDataSourceCommand;
 import com.example.dzcom.application.command.market.SaveDataSourceHealthCommand;
@@ -11,13 +13,19 @@ import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.application.dto.market.DataQualitySnapshotView;
+import com.example.dzcom.application.dto.market.DataSourceDiscoveryCandidateView;
+import com.example.dzcom.application.dto.market.DataSourceDiscoveryView;
 import com.example.dzcom.application.dto.market.DataSourceHealthView;
 import com.example.dzcom.application.dto.market.DataSourceView;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
+import com.example.dzcom.application.service.ai.AiModelBindingApplicationService;
+import com.example.dzcom.domain.model.ai.AiModelBinding;
+import com.example.dzcom.domain.model.ai.AiSkill;
 import com.example.dzcom.domain.model.market.DataQualitySnapshot;
 import com.example.dzcom.domain.model.market.DataSource;
 import com.example.dzcom.domain.model.market.DataSourceHealth;
+import com.example.dzcom.domain.repository.ai.AiSkillStore;
 import com.example.dzcom.domain.repository.market.DataSourceSearchCriteria;
 import com.example.dzcom.domain.repository.market.DataSourceStore;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /** 数据源治理应用服务。 */
@@ -43,8 +55,12 @@ public class DataSourceGovernanceApplicationService {
         Set.of("MARKET_QUOTE", "NEWS", "ANNOUNCEMENT", "RESEARCH", "REGULATORY");
     private static final Set<String> SORT_FIELDS =
         Set.of("updatedAt", "sourceCode", "sourceName", "sourceType", "trustLevel", "enabled");
+    private static final String CN_MAINLAND = "CN_MAINLAND";
+    private static final String DATA_SOURCE_DISCOVERY_SKILL = "DATA_SOURCE_DISCOVERY_CORE";
 
     private final DataSourceStore sources;
+    private final AiModelBindingApplicationService modelBindings;
+    private final AiSkillStore skills;
     private final CurrentOperatorProvider currentOperator;
     private final IdGenerator ids;
     private final ClockProvider clock;
@@ -201,6 +217,52 @@ public class DataSourceGovernanceApplicationService {
         return sources.findQualitySnapshots(source.sourceCode(), safeDataType, safeLimit).stream()
             .map(this::toQualityView)
             .toList();
+    }
+
+    /**
+     * 使用 AI 模型挂靠配置生成数据源候选建议。
+     *
+     * <p>该方法只输出候选，不直接写入正式数据源。前端需要展示候选来源、字段映射、
+     * 置信度和人工审核要求，再由运营确认后调用保存数据源和任务配置接口。</p>
+     *
+     * @param command 数据源发现命令
+     * @return 数据源发现候选结果
+     * @author dz
+     * @date 2026-06-26
+     */
+    @Transactional(readOnly = true)
+    public DataSourceDiscoveryView discover(DiscoverDataSourcesCommand command) {
+        AiModelBinding binding = modelBindings.enabledBinding(
+            AiModelBindingApplicationService.DATA_SOURCE_DISCOVERY,
+            command.environment()
+        );
+        AiSkill skill = skills.findActiveByCode(DATA_SOURCE_DISCOVERY_SKILL).orElse(null);
+        int limit = normalizeDiscoveryLimit(command.candidateLimit(), binding.config());
+        List<String> dataTypes = discoveryDataTypes(command.dataTypes());
+        List<String> trustLevels = discoveryTrustLevels(command.preferredTrustLevels());
+        List<DataSourceDiscoveryCandidateView> candidates = defaultDiscoveryCandidates(dataTypes).stream()
+            .filter(candidate -> trustLevels.isEmpty() || trustLevels.contains(candidate.trustLevel()))
+            .filter(candidate -> Boolean.TRUE.equals(command.includeDisabledCandidates())
+                || !"L3".equals(candidate.trustLevel()))
+            .limit(limit)
+            .toList();
+        return DataSourceDiscoveryView.builder()
+            .scenarioCode(binding.scenarioCode())
+            .modelCode(binding.modelCode())
+            .providerCode(binding.providerCode())
+            .environment(binding.environment())
+            .marketScope(defaultText(command.marketScope(), CN_MAINLAND))
+            .assetClass(defaultText(command.assetClass(), "MULTI_ASSET"))
+            .dataTypes(String.join(",", dataTypes))
+            .topicKeywords(defaultText(command.topicKeywords(), ""))
+            .modelBindingConfig(new LinkedHashMap<>(parseObject(binding.config())))
+            .skillCode(skill == null ? DATA_SOURCE_DISCOVERY_SKILL : skill.skillCode())
+            .skillVersion(skill == null ? "" : skill.skillVersion())
+            .skillInstruction(skill == null ? "未找到启用的 Skill，将使用系统内置发现约束。" : skill.instructionContent())
+            .candidates(candidates)
+            .reviewPolicy("AI 只生成候选；正式保存、启用采集和字段映射必须由前端人工确认。")
+            .promptPreview(discoveryPromptPreview(command, binding, skill, dataTypes, trustLevels, limit))
+            .build();
     }
 
     /** 组装数据源治理视图。 */
@@ -372,5 +434,174 @@ public class DataSourceGovernanceApplicationService {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "质量快照数量必须在1到200之间");
         }
         return limit;
+    }
+
+    /** 解析数据源发现候选数量。 */
+    private int normalizeDiscoveryLimit(Integer limit, String bindingConfig) {
+        if (limit != null && limit > 0) {
+            return Math.min(limit, 20);
+        }
+        JSONObject config = parseObject(bindingConfig);
+        int configured = config.getIntValue("candidateLimit", 8);
+        return Math.max(1, Math.min(configured, 20));
+    }
+
+    /** 解析数据源发现目标数据类型。 */
+    private List<String> discoveryDataTypes(String dataTypes) {
+        if (dataTypes == null || dataTypes.isBlank()) {
+            return List.of("MARKET_QUOTE", "NEWS", "ANNOUNCEMENT", "RESEARCH", "REGULATORY");
+        }
+        return Arrays.stream(dataTypes.split(","))
+            .map(String::trim)
+            .filter(value -> !value.isBlank())
+            .map(value -> normalizeAllowed(value, DATA_TYPES, "数据质量类型不合法"))
+            .distinct()
+            .toList();
+    }
+
+    /** 解析偏好的来源等级。 */
+    private List<String> discoveryTrustLevels(String trustLevels) {
+        if (trustLevels == null || trustLevels.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(trustLevels.split(","))
+            .map(String::trim)
+            .filter(value -> !value.isBlank())
+            .map(value -> normalizeAllowed(value, TRUST_LEVELS, "来源等级不合法"))
+            .distinct()
+            .toList();
+    }
+
+    /** 构建默认数据源候选，后续可替换为真实大模型联网检索结果。 */
+    private List<DataSourceDiscoveryCandidateView> defaultDiscoveryCandidates(List<String> dataTypes) {
+        List<DataSourceDiscoveryCandidateView> candidates = new ArrayList<>();
+        if (dataTypes.contains("REGULATORY")) {
+            candidates.add(candidate("CSRC", "中国证监会", "REGULATORY", "L1", "https://www.csrc.gov.cn",
+                "0 0 */6 * * *", "监管披露与政策公告", "REGULATORY_DISCLOSURE_COLLECTION",
+                Map.of("responseFormat", "HTML", "freshnessHours", "168", "maxItems", "80"),
+                Map.of("title", "页面标题", "publishTime", "发布时间", "content", "正文"),
+                "官方监管来源，适合补充政策、处罚、制度和监管事件。", new BigDecimal("0.92")));
+        }
+        if (dataTypes.contains("ANNOUNCEMENT")) {
+            candidates.add(candidate("CNINFO", "巨潮资讯", "ANNOUNCEMENT", "L1", "https://www.cninfo.com.cn",
+                "0 20 */4 * * *", "公告与信息披露", "EXCHANGE_ANNOUNCEMENT_COLLECTION",
+                Map.of("responseFormat", "JSON", "freshnessHours", "168", "maxItems", "100"),
+                Map.of("externalId", "announcementId", "title", "announcementTitle",
+                    "publishTime", "announcementTime", "url", "adjunctUrl"),
+                "上市公司公告和披露文档集中来源，适合和交易所公告交叉验证。", new BigDecimal("0.90")));
+            candidates.add(candidate("SSE", "上海证券交易所", "ANNOUNCEMENT", "L1", "https://www.sse.com.cn",
+                "0 10 */4 * * *", "上交所公告", "EXCHANGE_ANNOUNCEMENT_COLLECTION",
+                Map.of("responseFormat", "JSON", "freshnessHours", "168", "maxItems", "100"),
+                Map.of("title", "title", "publishTime", "publishDate", "url", "url"),
+                "交易所官方披露来源，适合校验上市公司和 ETF 公告。", new BigDecimal("0.88")));
+        }
+        if (dataTypes.contains("MARKET_QUOTE")) {
+            candidates.add(candidate("CHINA_WEALTH", "中国理财网", "MARKET", "L2", "https://www.chinawealth.com.cn",
+                "0 30 */6 * * *", "银行理财产品与净值", "WEALTH_PRODUCT_NAV_REFRESH",
+                Map.of("responseFormat", "HTML", "productMarketCode", "BANK_WMP", "quoteInterval", "1D"),
+                Map.of("productCode", "产品登记编码", "productName", "产品名称",
+                    "nav", "单位净值", "riskLevel", "风险等级"),
+                "银行理财产品官方披露入口，适合补产品池和净值行情。", new BigDecimal("0.86")));
+        }
+        if (dataTypes.contains("NEWS")) {
+            candidates.add(candidate("EASTMONEY", "东方财富", "NEWS", "L4", "https://www.eastmoney.com",
+                "0 */30 * * * *", "财经新闻和市场热度", "AI_DATA_SOURCE_DISCOVERY",
+                Map.of("sourceReviewRequired", "true", "fallbackEnabled", "false", "freshnessHours", "72"),
+                Map.of("title", "由Skill生成", "summary", "由Skill生成", "publishTime", "由Skill生成", "url", "由Skill生成"),
+                "主流财经媒体只作为候选线索，由数据源发现Skill继续校验，不再默认推荐RSS采集。", new BigDecimal("0.72")));
+        }
+        if (dataTypes.contains("RESEARCH")) {
+            candidates.add(candidate("CHOICE", "Choice 数据", "RESEARCH", "L3", "https://choice.eastmoney.com",
+                "0 0 */12 * * *", "研报与专业数据供应商", "VENDOR_MARKET_QUOTE_SYNC",
+                Map.of("responseFormat", "VENDOR_API", "requiresLicense", "true", "freshnessHours", "24"),
+                Map.of("reportTitle", "title", "publishTime", "publishTime", "institution", "institution"),
+                "专业供应商候选，需要授权后启用，适合作为研报和行情增强源。", new BigDecimal("0.80")));
+        }
+        return candidates;
+    }
+
+    /** 构建单个数据源发现候选。 */
+    private DataSourceDiscoveryCandidateView candidate(
+        String sourceCode,
+        String sourceName,
+        String sourceType,
+        String trustLevel,
+        String baseUrl,
+        String fetchFrequency,
+        String owner,
+        String taskType,
+        Map<String, String> parameters,
+        Map<String, String> fieldMappings,
+        String reason,
+        BigDecimal confidence
+    ) {
+        return DataSourceDiscoveryCandidateView.builder()
+            .sourceCode(sourceCode)
+            .sourceName(sourceName)
+            .sourceType(sourceType)
+            .trustLevel(trustLevel)
+            .baseUrl(baseUrl)
+            .fetchFrequency(fetchFrequency)
+            .owner(owner)
+            .description(reason)
+            .recommendedTaskType(taskType)
+            .suggestedParameters(new LinkedHashMap<>(parameters))
+            .fieldMappings(new LinkedHashMap<>(fieldMappings))
+            .confidence(confidence)
+            .reasons(List.of(reason))
+            .requiresReview(true)
+            .build();
+    }
+
+    /** 构造前端可展示和可复盘的 Prompt 预览。 */
+    private String discoveryPromptPreview(
+        DiscoverDataSourcesCommand command,
+        AiModelBinding binding,
+        AiSkill skill,
+        List<String> dataTypes,
+        List<String> trustLevels,
+        int limit
+    ) {
+        return """
+            skillCode=%s
+            skillVersion=%s
+            skillInstruction=%s
+            请为投资平台推荐高质量数据源候选。要求优先官方、监管、交易所和产品披露来源；
+            不允许把低质量媒体源标记为正式投资依据；输出必须包含 sourceCode、sourceName、
+            sourceType、trustLevel、baseUrl、recommendedTaskType、fieldMappings、confidence、requiresReview。
+            marketScope=%s
+            assetClass=%s
+            dataTypes=%s
+            preferredTrustLevels=%s
+            candidateLimit=%s
+            modelCode=%s
+            """.formatted(
+            skill == null ? DATA_SOURCE_DISCOVERY_SKILL : skill.skillCode(),
+            skill == null ? "" : skill.skillVersion(),
+            skill == null ? "SYSTEM_BUILT_IN_DISCOVERY_POLICY" : skill.instructionContent(),
+            defaultText(command.marketScope(), CN_MAINLAND),
+            defaultText(command.assetClass(), "MULTI_ASSET"),
+            dataTypes,
+            trustLevels,
+            limit,
+            binding.modelCode()
+        );
+    }
+
+    /** 解析 JSON 对象配置。 */
+    private JSONObject parseObject(String value) {
+        if (value == null || value.isBlank()) {
+            return new JSONObject();
+        }
+        try {
+            return JSON.parseObject(value);
+        } catch (JSONException exception) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "数据源发现模型配置JSON不合法");
+        }
+    }
+
+    /** 空文本默认值。 */
+    private String defaultText(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 }

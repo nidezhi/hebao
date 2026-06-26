@@ -5,8 +5,11 @@ import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
+import com.example.dzcom.application.dto.ai.AiModelSkillBindingView;
 import com.example.dzcom.domain.model.ai.AiModel;
+import com.example.dzcom.domain.model.ai.AiModelSkillBinding;
 import com.example.dzcom.domain.repository.ai.AiModelSearchCriteria;
+import com.example.dzcom.domain.repository.ai.AiModelSkillBindingStore;
 import com.example.dzcom.domain.repository.ai.AiModelStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -31,6 +35,7 @@ public class AiModelApplicationService {
         "updatedAt", "modelCode", "modelVersion", "modelType", "provider", "status", "activatedAt");
 
     private final AiModelStore models;
+    private final AiModelSkillBindingStore modelSkillBindings;
     private final IdGenerator ids;
     private final ClockProvider clock;
 
@@ -172,6 +177,41 @@ public class AiModelApplicationService {
     @Transactional
     public AiModel archive(String bizId) {
         return changeStatus(bizId, ARCHIVED_STATUS);
+    }
+
+    /**
+     * 查询指定模型实例当前启用的 Skill 绑定。
+     *
+     * @param modelBizId 模型业务唯一标识
+     * @return 模型启用的 Skill 绑定视图
+     * @author dz
+     * @date 2026-06-26
+     */
+    @Transactional(readOnly = true)
+    public List<AiModelSkillBindingView> enabledSkills(String modelBizId) {
+        return modelSkillBindings.findEnabledByModelBizId(modelBizId).stream()
+            .map(this::toSkillBindingView)
+            .toList();
+    }
+
+    /** 将模型 Skill 绑定领域对象转换为应用层视图。 */
+    private AiModelSkillBindingView toSkillBindingView(AiModelSkillBinding binding) {
+        return AiModelSkillBindingView.builder()
+            .bizId(binding.bizId())
+            .modelBizId(binding.modelBizId())
+            .modelCode(binding.modelCode())
+            .modelVersion(binding.modelVersion())
+            .skillBizId(binding.skillBizId())
+            .skillCode(binding.skillCode())
+            .skillVersion(binding.skillVersion())
+            .scenarioCode(binding.scenarioCode())
+            .priority(binding.priority())
+            .enabled(binding.enabled())
+            .config(binding.config())
+            .description(binding.description())
+            .createdAt(binding.createdAt())
+            .updatedAt(binding.updatedAt())
+            .build();
     }
 
     /**

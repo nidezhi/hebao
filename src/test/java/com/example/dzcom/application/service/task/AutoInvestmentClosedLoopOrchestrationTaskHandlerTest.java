@@ -16,12 +16,15 @@ import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.ai.AiModelApplicationService;
 import com.example.dzcom.application.service.ai.InvestmentClosedLoopApplicationService;
 import com.example.dzcom.domain.model.ai.AiModel;
+import com.example.dzcom.domain.model.ai.AiModelSkillBinding;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
 import com.example.dzcom.domain.model.task.ClosedLoopRun;
 import com.example.dzcom.domain.model.task.ClosedLoopStep;
 import com.example.dzcom.domain.model.task.InvestmentTaskDefinition;
 import com.example.dzcom.domain.model.task.ScheduledTaskExecution;
 import com.example.dzcom.domain.repository.ai.AiModelSearchCriteria;
+import com.example.dzcom.domain.repository.ai.AiModelSkillBindingSearchCriteria;
+import com.example.dzcom.domain.repository.ai.AiModelSkillBindingStore;
 import com.example.dzcom.domain.repository.ai.AiModelStore;
 import com.example.dzcom.domain.repository.ai.InvestmentAnalysisReportSearchCriteria;
 import com.example.dzcom.domain.repository.ai.InvestmentAnalysisReportStore;
@@ -192,7 +195,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 reports,
                 portfolioService,
                 closedLoopService,
-                new AiModelApplicationService(new MemoryAiModelStore(), ids, () -> NOW),
+                new AiModelApplicationService(new MemoryAiModelStore(), new MemoryAiModelSkillBindingStore(), ids, () -> NOW),
                 new PassThroughOperatorProvider(),
                 ids,
                 () -> NOW
@@ -509,6 +512,44 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         @Override
         public PageResult<AiModel> search(AiModelSearchCriteria criteria) {
             return PageResult.<AiModel>builder()
+                .items(List.of())
+                .total(0)
+                .page(criteria.page())
+                .size(criteria.size())
+                .totalPages(0)
+                .build();
+        }
+    }
+
+    /** 内存模型 Skill 绑定仓储。 */
+    private static final class MemoryAiModelSkillBindingStore implements AiModelSkillBindingStore {
+        @Override
+        public AiModelSkillBinding save(AiModelSkillBinding binding) {
+            return binding;
+        }
+
+        @Override
+        public Optional<AiModelSkillBinding> findByBizId(String bizId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<AiModelSkillBinding> findByModelSkillAndScenario(
+            String modelBizId,
+            String skillBizId,
+            String scenarioCode
+        ) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<AiModelSkillBinding> findEnabledByModelBizId(String modelBizId) {
+            return List.of();
+        }
+
+        @Override
+        public PageResult<AiModelSkillBinding> search(AiModelSkillBindingSearchCriteria criteria) {
+            return PageResult.<AiModelSkillBinding>builder()
                 .items(List.of())
                 .total(0)
                 .page(criteria.page())

@@ -13,6 +13,7 @@
 - 增加自动 Prompt 治理任务，让报告、反馈和评估形成可复盘链路。
 - 增加自动投资闭环总编排任务，让 Mock 投资闭环可以全自动运行。
 - 默认挂 OpenAI 兼容模型，并允许前端通过模型配置接口调整。
+- 增加模型挂靠配置，让数据源发现、报告生成、闭环编排和 Prompt 治理都能通过独立接口绑定模型。
 
 ## 2. 迁移入口
 
@@ -71,6 +72,9 @@ POST /api/investment/tasks/definitions
 POST /api/investment/tasks/definitions/save
 POST /api/investment/tasks/trigger
 POST /api/investment/tasks/executions/list
+POST /api/ai/model-bindings/list
+POST /api/ai/model-bindings/save
+POST /api/admin/data-sources/discover
 ```
 
 ## 5. 任务参数关键约定
@@ -170,7 +174,34 @@ AUTO_PROMPT_GOVERNANCE
 - 若已有报告，按报告状态、可信等级和数据质量分写入 `aiw_ai_prompt_evaluation`。
 - 用户采纳/拒绝反馈仍由反馈接口写入，并会触发反馈维度 Prompt 评估。
 
-### 5.5 自动投资闭环总编排
+### 5.5 AI 数据源发现
+
+任务类型：
+
+```text
+AI_DATA_SOURCE_DISCOVERY
+```
+
+核心参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `environment` | `DEFAULT` | 模型挂靠配置环境 |
+| `marketScope` | `CN_MAINLAND` | 市场范围 |
+| `assetClass` | `MULTI_ASSET` | 资产类别 |
+| `dataTypes` | `MARKET_QUOTE,NEWS,ANNOUNCEMENT,RESEARCH,REGULATORY` | 需要发现的数据类型 |
+| `preferredTrustLevels` | `L1,L2,L3,L4` | 候选来源等级 |
+| `candidateLimit` | `8` | 候选数量上限 |
+| `includeDisabledCandidates` | `true` | 是否包含需授权或暂不可用候选 |
+
+任务行为：
+
+- 使用 `DATA_SOURCE_DISCOVERY` 模型挂靠配置和 `DATA_SOURCE_DISCOVERY_CORE` Skill 生成候选。
+- 输出来源等级、字段映射、推荐任务类型、置信度和审核策略。
+- 不自动保存或启用正式数据源，不把候选当成已采集事实。
+- 闭环只把本任务作为“数据源治理已执行”的审计步骤。
+
+### 5.6 自动投资闭环总编排
 
 任务类型：
 
@@ -183,7 +214,7 @@ AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `automationLevel` | `FULL_MOCK` | 自动化等级，当前默认跑完整 Mock 闭环 |
-| `dataTaskCodes` | L1/L2/聚合任务列表 | 本轮先同步执行的数据采集和聚合任务 |
+| `dataTaskCodes` | AI发现/聚合任务列表 | 本轮先同步执行的数据源发现和聚合任务 |
 | `reportTaskCode` | `auto-openai-investment-report-generation` | 自动报告任务编码 |
 | `promptTaskCode` | `auto-prompt-governance` | 自动 Prompt 治理任务编码 |
 | `mockUserBizId` | 本地 demo 用户 | 自动 Mock 使用的用户业务标识 |
@@ -201,6 +232,7 @@ AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
 任务行为：
 
 - 子任务失败会阻断闭环，并写入闭环步骤记录。
+- 默认数据源入口为 `ai-data-source-discovery`，旧 RSS/手工 endpoint 专用采集任务不再默认参与主动闭环。
 - 报告必须满足状态成功、可信等级可用、质量分达标、质量门禁通过、不是数据缺口报告。
 - 如果最近报告不达标，闭环会在 `maxReportsForMock` 窗口内继续查找合格报告，并把每份候选报告的阻断原因写入闭环步骤审计。
 - 自动 Mock 会写组合、订单、成交、估值、回测和反馈。
@@ -248,7 +280,24 @@ secretRef = OPENAI_MOCK_API_KEY
   - `promptSnapshot`
 - 输出缺字段或 JSON 非法时，后端拒绝落库，不伪造成功报告。
 
-## 8. 仍需补齐的高质量数据处理器
+## 8. 弃案逻辑与保留边界
+
+本轮后以下逻辑退出默认主动闭环：
+
+| 旧逻辑 | 当前状态 | 处理方式 |
+| --- | --- | --- |
+| RSS/fallback 资讯作为默认数据补充 | 废弃 | `INVESTMENT_NEWS_COLLECTION` 不再作为闭环默认数据源任务；fallback 只能用于本地链路验证 |
+| 手工 `endpoints/itemsPath/titlePath` 作为默认来源方案 | 废弃默认入口 | `REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH` 默认停用，只保留为候选审核后的执行原语 |
+| `maxReportsForMock=1` | 废弃 | 默认改为 `20`，避免多报告批量生成时误判无合格报告 |
+| 数据源候选直接启用 | 禁止 | AI 发现只输出候选，正式启用需要前端保存或灰度开关 |
+
+保留旧采集器类的原因：
+
+- 它们仍可作为前端确认后的执行原语。
+- 删除历史迁移或处理器会影响已部署环境和任务审计。
+- 真正废弃的是“默认主方案”和“无审核启用”，不是所有采集执行能力。
+
+## 9. 仍需补齐的高质量数据处理器
 
 本次已补齐第一版可配置专用采集器，不再只是 RSS 占位。
 
@@ -260,10 +309,10 @@ secretRef = OPENAI_MOCK_API_KEY
 - `VENDOR_MARKET_QUOTE_SYNC`：Wind/Choice 等授权供应商行情同步。
 - `DATA_SOURCE_QUALITY_AUDIT`：周期性读取采集结果并写质量快照。
 
-## 9. 验收标准
+## 10. 验收标准
 
-- `/api/investment/tasks/definitions` 能看到新的 V17 任务。
-- 历史旧任务默认停用。
+- `/api/investment/tasks/definitions` 能看到 `AI_DATA_SOURCE_DISCOVERY`。
+- 旧 RSS/手工 endpoint 专用任务默认停用，不进入自动闭环默认 `dataTaskCodes`。
 - L1/L2 数据源在 `/api/admin/data-sources/list` 可见。
 - 无外部源时，L1/L2 任务不会写入 fallback 资讯。
 - 自动报告任务可手动触发并生成报告。
@@ -271,5 +320,6 @@ secretRef = OPENAI_MOCK_API_KEY
 - 自动闭环总编排任务可手动触发；质量不足时应写 `BLOCKED` 运行和 `QUALITY_GATE` 阻断步骤。
 - `/api/investment/closed-loop/runs/list` 和 `/runs/detail` 能查询闭环运行与步骤审计。
 - 前端可配置 OpenAI 模型和自动报告任务参数。
+- 前端可配置 AI Skill 和模型 Skill 绑定。
 - `mockEnabled=false` 时，如果密钥缺失或模型输出非法，报告不会落库为成功。
 - 清库后产品、行情、资讯、报告、Mock、回测和反馈表应为 0，后续只能由真实采集任务和用户动作增长。

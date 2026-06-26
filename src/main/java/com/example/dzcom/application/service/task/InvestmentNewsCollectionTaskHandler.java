@@ -56,7 +56,7 @@ public class InvestmentNewsCollectionTaskHandler implements InvestmentTaskHandle
         int maxItems = TaskParameterParser.positiveInt(event.parameters(), "maxItems", 50);
         String sourceCode = TaskParameterParser.string(event.parameters(), "sourceCode", "RSS");
         String languageCode = TaskParameterParser.string(event.parameters(), "languageCode", "zh-CN");
-        boolean fallbackEnabled = TaskParameterParser.bool(event.parameters(), "fallbackEnabled", true);
+        boolean fallbackEnabled = TaskParameterParser.bool(event.parameters(), "fallbackEnabled", false);
         LocalDateTime now = clock.now();
 
         List<InvestmentNewsFeedClient.FeedItem> feedItems = feedUrls.stream()

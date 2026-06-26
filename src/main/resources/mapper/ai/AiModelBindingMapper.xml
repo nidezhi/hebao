@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.ai.AiModelBindingMapper">
+    <sql id="searchCondition">
+        from aiw_ai_model_binding b
+        where 1 = 1
+        <if test="criteria.scenarioCode != null and criteria.scenarioCode != ''">
+            and b.scenario_code = #{criteria.scenarioCode}
+        </if>
+        <if test="criteria.modelCode != null and criteria.modelCode != ''">
+            and b.model_code = #{criteria.modelCode}
+        </if>
+        <if test="criteria.providerCode != null and criteria.providerCode != ''">
+            and b.provider_code = #{criteria.providerCode}
+        </if>
+        <if test="criteria.environment != null and criteria.environment != ''">
+            and b.environment = #{criteria.environment}
+        </if>
+        <if test="criteria.enabled != null">
+            and b.enabled = #{criteria.enabled}
+        </if>
+    </sql>
+
+    <insert id="save">
+        insert into aiw_ai_model_binding
+        (biz_id, scenario_code, scenario_name, model_code, provider_code, environment,
+         enabled, config, description, created_at, updated_at, created_by, updated_by)
+        values
+        (#{bizId}, #{scenarioCode}, #{scenarioName}, #{modelCode}, #{providerCode}, #{environment},
+         #{enabled}, #{config}, #{description}, #{createdAt}, #{updatedAt}, #{createdBy}, #{updatedBy})
+        on duplicate key update
+        scenario_name = values(scenario_name),
+        model_code = values(model_code),
+        provider_code = values(provider_code),
+        enabled = values(enabled),
+        config = values(config),
+        description = values(description),
+        updated_at = values(updated_at),
+        updated_by = values(updated_by)
+    </insert>
+
+    <select id="selectByBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiModelBindingEntity">
+        select *
+        from aiw_ai_model_binding
+        where biz_id = #{bizId}
+    </select>
+
+    <select id="selectByScenarioAndEnvironment" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiModelBindingEntity">
+        select *
+        from aiw_ai_model_binding
+        where scenario_code = #{scenarioCode}
+          and environment = #{environment}
+        limit 1
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.ai.AiModelBindingEntity">
+        select b.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

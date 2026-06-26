@@ -3,14 +3,17 @@ package com.example.dzcom.interfaces.controller.market;
 import com.example.dzcom.application.command.market.SaveDataQualitySnapshotCommand;
 import com.example.dzcom.application.command.market.SaveDataSourceCommand;
 import com.example.dzcom.application.command.market.SaveDataSourceHealthCommand;
+import com.example.dzcom.application.command.market.DiscoverDataSourcesCommand;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.application.service.market.DataSourceGovernanceApplicationService;
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.market.DataQualitySnapshotResponse;
+import com.example.dzcom.interfaces.dto.response.market.DataSourceDiscoveryResponse;
 import com.example.dzcom.interfaces.dto.response.market.DataSourceResponse;
 import com.example.dzcom.interfaces.request.market.DataQualitySnapshotListRequest;
 import com.example.dzcom.interfaces.request.market.DataSourceListRequest;
+import com.example.dzcom.interfaces.request.market.DiscoverDataSourcesRequest;
 import com.example.dzcom.interfaces.request.market.SaveDataQualitySnapshotRequest;
 import com.example.dzcom.interfaces.request.market.SaveDataSourceHealthRequest;
 import com.example.dzcom.interfaces.request.market.SaveDataSourceRequest;
@@ -178,5 +181,33 @@ public class DataSourceGovernanceController {
             request.dataType(),
             request.limit()
         ).stream().map(DataQualitySnapshotResponse::from).toList());
+    }
+
+    /**
+     * 使用 AI 模型挂靠配置发现数据源候选。
+     *
+     * @param request 数据源发现请求
+     * @return 数据源候选、字段映射和 Prompt 预览
+     * @author dz
+     * @date 2026-06-26
+     */
+    @PostMapping("/discover")
+    @Operation(summary = "AI发现数据源候选", description = "按市场、资产类别和数据类型生成高质量数据源候选；候选不自动保存，需前端人工确认。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "发现成功，返回候选数据源", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "参数或模型挂靠配置不合法"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<DataSourceDiscoveryResponse> discover(@Valid @RequestBody DiscoverDataSourcesRequest request) {
+        return Result.success(DataSourceDiscoveryResponse.from(sources.discover(DiscoverDataSourcesCommand.builder()
+            .marketScope(request.marketScope())
+            .assetClass(request.assetClass())
+            .dataTypes(request.dataTypes())
+            .topicKeywords(request.topicKeywords())
+            .preferredTrustLevels(request.preferredTrustLevels())
+            .candidateLimit(request.candidateLimit())
+            .environment(request.environment())
+            .includeDisabledCandidates(request.includeDisabledCandidates())
+            .build())));
     }
 }

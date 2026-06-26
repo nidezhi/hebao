@@ -1,5 +1,7 @@
 # 前端接口变更说明
 
+> 2026-06-26 更新：旧 RSS/fallback/手工 endpoint 采集配置已退出默认主链路。前端应优先参考 `docs_new/19-frontend-api-update-log-20260626-ai-skills.md` 生成 AI Skill、模型 Skill 绑定和 AI 数据源发现页面。
+
 ## 1. 文档目的
 
 本文档整理本轮投资任务、资讯热度、主题快照和投资分析相关接口变化。

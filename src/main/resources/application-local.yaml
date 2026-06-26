@@ -88,10 +88,23 @@ investment:
     enabled: ${INVESTMENT_TASKS_ENABLED:true}
     topic: ${INVESTMENT_TASK_TOPIC:dzcom.investment.task.trigger.v1}
     definitions:
+      - code: ai-data-source-discovery
+        type: AI_DATA_SOURCE_DISCOVERY
+        cron: ${AI_DATA_SOURCE_DISCOVERY_CRON:0 0 */6 * * *}
+        zone: Asia/Shanghai
+        parameters:
+          environment: DEFAULT
+          marketScope: CN_MAINLAND
+          assetClass: MULTI_ASSET
+          dataTypes: MARKET_QUOTE,NEWS,ANNOUNCEMENT,RESEARCH,REGULATORY
+          preferredTrustLevels: L1,L2,L3,L4
+          candidateLimit: "8"
+          includeDisabledCandidates: "true"
       - code: l1-regulatory-disclosure-collection
         type: REGULATORY_DISCLOSURE_COLLECTION
         cron: ${L1_REGULATORY_NEWS_CRON:0 */30 * * * *}
         zone: Asia/Shanghai
+        enabled: false
         parameters:
           endpoints: ${L1_REGULATORY_ENDPOINTS:}
           responseFormat: ${L1_REGULATORY_RESPONSE_FORMAT:JSON}
@@ -113,6 +126,7 @@ investment:
         type: EXCHANGE_ANNOUNCEMENT_COLLECTION
         cron: ${L1_EXCHANGE_ANNOUNCEMENT_CRON:0 */20 * * * *}
         zone: Asia/Shanghai
+        enabled: false
         parameters:
           endpoints: ${L1_EXCHANGE_ANNOUNCEMENT_ENDPOINTS:}
           responseFormat: ${L1_EXCHANGE_ANNOUNCEMENT_RESPONSE_FORMAT:JSON}
@@ -134,6 +148,7 @@ investment:
         type: WEALTH_PRODUCT_NAV_REFRESH
         cron: ${L2_WEALTH_PRODUCT_CRON:0 0 */2 * * *}
         zone: Asia/Shanghai
+        enabled: false
         parameters:
           endpoints: ${L2_WEALTH_PRODUCT_ENDPOINTS:}
           responseFormat: ${L2_WEALTH_PRODUCT_RESPONSE_FORMAT:JSON}
@@ -220,11 +235,11 @@ investment:
           allowAutoPromptActivation: "false"
           allowAutoModelActivation: "false"
           allowRealTrade: "false"
-          dataTaskCodes: l1-regulatory-disclosure-collection,l1-exchange-announcement-collection,l2-wealth-product-nav-refresh,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation
+          dataTaskCodes: ai-data-source-discovery,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation
           reportTaskCode: auto-openai-investment-report-generation
           promptTaskCode: auto-prompt-governance
           modelCode: ${AUTO_INVESTMENT_REPORT_MODEL:openai-compatible-analysis}
           providerCode: OPENAI_COMPATIBLE
           lookbackDays: "30"
           themeCodes: ""
-          maxReportsForMock: "1"
+          maxReportsForMock: "20"

@@ -262,6 +262,7 @@ interface PageResult<T> {
 | `AUTO_INVESTMENT_REPORT_GENERATION` | 自动投资报告 | providerCode、modelCode、lookbackDays |
 | `AUTO_PROMPT_GOVERNANCE` | 自动 Prompt 治理 | promptCode、promptVersion、reportSampleSize |
 | `AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION` | 自动闭环总编排 | dataTaskCodes、reportTaskCode、mockUserBizId、安全闸门 |
+| `DATA_SOURCE_DISCOVERY` | 数据源 AI 发现 | marketScope、assetClass、dataTypes、preferredTrustLevels |
 
 ### 7.4 任务执行状态
 

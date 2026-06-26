@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** AI 模型响应。 */
 @Builder
@@ -23,10 +24,17 @@ public record AiModelResponse(
     @Schema(description = "启用时间") LocalDateTime activatedAt,
     @Schema(description = "停用时间") LocalDateTime retiredAt,
     @Schema(description = "创建时间") LocalDateTime createdAt,
-    @Schema(description = "更新时间") LocalDateTime updatedAt
+    @Schema(description = "更新时间") LocalDateTime updatedAt,
+    @Schema(description = "当前模型实例启用的 Skill 绑定")
+    List<AiModelSkillBindingResponse> skills
 ) {
     /** 将领域对象转换为接口响应。 */
     public static AiModelResponse from(AiModel model) {
+        return from(model, List.of());
+    }
+
+    /** 将领域对象和 Skill 绑定转换为接口响应。 */
+    public static AiModelResponse from(AiModel model, List<AiModelSkillBindingResponse> skills) {
         return AiModelResponse.builder()
             .bizId(model.bizId())
             .modelCode(model.modelCode())
@@ -42,6 +50,7 @@ public record AiModelResponse(
             .retiredAt(model.retiredAt())
             .createdAt(model.createdAt())
             .updatedAt(model.updatedAt())
+            .skills(skills == null ? List.of() : skills)
             .build();
     }
 }

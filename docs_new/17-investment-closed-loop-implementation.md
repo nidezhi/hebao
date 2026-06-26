@@ -52,6 +52,7 @@
 | 能力 | 接口 |
 | --- | --- |
 | 保存数据源 | `POST /api/admin/data-sources/save` |
+| AI 发现数据源候选 | `POST /api/admin/data-sources/discover` |
 | 保存健康状态 | `POST /api/admin/data-sources/health/save` |
 | 保存质量快照 | `POST /api/admin/data-sources/quality/save` |
 | 查询数据源看板 | `POST /api/admin/data-sources/list` |
@@ -70,6 +71,7 @@
 | --- | --- |
 | 查询任务定义 | `POST /api/investment/tasks/definitions` |
 | 保存任务定义 | `POST /api/investment/tasks/definitions/save` |
+| 模型挂靠配置 | `POST /api/ai/model-bindings/list`、`/save`、`/detail` |
 | 手动触发任务 | `POST /api/investment/tasks/trigger` |
 | 查询执行记录 | `POST /api/investment/tasks/executions/list` |
 | 查询采集资讯 | `POST /api/investment/tasks/articles/list` |
@@ -307,13 +309,13 @@ Prompt 已是业务资产：
 
 | 驾驶舱区域 | 数据接口 |
 | --- | --- |
-| 数据源健康 | `/api/admin/data-sources/list` |
+| 数据源健康 | `/api/admin/data-sources/list`、`/api/admin/data-sources/discover` |
 | 采集任务运行 | `/api/investment/tasks/definitions`、`/api/investment/tasks/executions/list` |
 | 数据质量趋势 | `/api/admin/data-sources/quality/list` |
 | 产品池和行情 | `/api/products/list`、`/api/products/quotes/latest`、`/api/products/quotes/history` |
 | 资讯热度和主题快照 | `/api/investment/tasks/articles/list`、`/api/investment/tasks/snapshots/list` |
 | 投资报告 | `/api/investment/analysis/reports/list` |
-| Prompt/模型候选 | `/api/ai/prompts/list`、`/api/ai/prompt-evaluations/list`、`/api/ai/models/list` |
+| Prompt/模型候选 | `/api/ai/prompts/list`、`/api/ai/prompt-evaluations/list`、`/api/ai/models/list`、`/api/ai/skills/list`、`/api/ai/model-skills/list` |
 | Mock 资产 | `/api/mock/portfolios/mine`、`/api/mock/portfolios/performance/curve` |
 | 风控拦截 | `/api/risk/checks/list` |
 | 回测反馈 | `/api/backtests/list`、`/api/ai/feedback/list` |
@@ -331,8 +333,8 @@ Prompt 已是业务资产：
 
 ### 9.1 必须明确的边界
 
-1. 真实数据源端点默认未内置生产可用地址。
-   后端支持配置真实端点和字段路径，但需要前端或环境变量补齐官方/授权端点。
+1. 真实数据源启用仍需前端确认。
+   后端默认通过模型和 Skill 发现候选来源、字段映射和任务建议；候选不会自动成为正式数据源。
 
 2. 驾驶舱目前没有单一聚合接口。
    前端可以先聚合现有接口完成驾驶舱；后续如性能或体验需要，可补 `DashboardApplicationService` 和 `/api/investment/dashboard/overview`。
@@ -345,6 +347,7 @@ Prompt 已是业务资产：
 | 优先级 | 增强项 | 原因 |
 | --- | --- | --- |
 | P0 | 配置真实官方/授权数据端点模板 | 让清库后的业务数据真正增长 |
+| P0 | AI Skill 管理页 | 数据源不佳/Prompt不佳时能调整对应 Skill 并关联模型 |
 | P0 | 前端驾驶舱聚合页 | 把已有接口串成可视化闭环 |
 | P1 | 后端驾驶舱聚合接口 | 降低前端多接口并发和拼装复杂度 |
 | P1 | 自动 Prompt 新版本候选生成 | 当前已有 Prompt 基线和评估，后续可扩展为自动复制候选版本 |

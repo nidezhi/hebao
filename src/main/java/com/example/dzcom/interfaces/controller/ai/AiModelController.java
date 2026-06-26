@@ -103,7 +103,12 @@ public class AiModelController {
         @ApiResponse(responseCode = "500", description = "系统错误")
     })
     public Result<AiModelResponse> detail(@Valid @RequestBody AiModelBizIdRequest request) {
-        return Result.success(AiModelResponse.from(models.detail(request.bizId())));
+        return Result.success(AiModelResponse.from(
+            models.detail(request.bizId()),
+            models.enabledSkills(request.bizId()).stream()
+                .map(com.example.dzcom.interfaces.dto.response.ai.AiModelSkillBindingResponse::from)
+                .toList()
+        ));
     }
 
     /**
