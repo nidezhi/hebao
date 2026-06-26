@@ -34,6 +34,7 @@ import com.example.dzcom.domain.repository.ai.AiSkillStore;
 import com.example.dzcom.domain.repository.market.DataSourceSearchCriteria;
 import com.example.dzcom.domain.repository.market.DataSourceStore;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +53,7 @@ import java.util.Set;
 /** 数据源治理应用服务。 */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DataSourceGovernanceApplicationService {
     private static final Set<String> SOURCE_TYPES =
         Set.of("MARKET", "NEWS", "ANNOUNCEMENT", "RESEARCH", "REGULATORY", "FALLBACK");
@@ -273,6 +275,17 @@ public class DataSourceGovernanceApplicationService {
      */
     @Transactional(readOnly = true)
     public DataSourceDiscoveryView discover(DiscoverDataSourcesCommand command) {
+        log.info(
+            "AI数据源发现开始: environment={}, marketScope={}, assetClass={}, dataTypes={}, collectionDirection={}, skillCode={}, preferredTrustLevels={}, candidateLimit={}",
+            command.environment(),
+            command.marketScope(),
+            command.assetClass(),
+            command.dataTypes(),
+            command.collectionDirection(),
+            command.skillCode(),
+            command.preferredTrustLevels(),
+            command.candidateLimit()
+        );
         AiModelBinding binding = modelBindings.enabledBinding(
             AiModelBindingApplicationService.DATA_SOURCE_DISCOVERY,
             command.environment()
@@ -291,6 +304,16 @@ public class DataSourceGovernanceApplicationService {
                 || !"L3".equals(candidate.trustLevel()))
             .limit(limit)
             .toList();
+        log.info(
+            "AI数据源发现完成: scenarioCode={}, modelCode={}, providerCode={}, skillCode={}, skillVersion={}, candidateCount={}, candidateCodes={}",
+            binding.scenarioCode(),
+            binding.modelCode(),
+            binding.providerCode(),
+            skill.skillCode(),
+            skill.skillVersion(),
+            candidates.size(),
+            candidates.stream().map(DataSourceDiscoveryCandidateView::sourceCode).toList()
+        );
         return DataSourceDiscoveryView.builder()
             .scenarioCode(binding.scenarioCode())
             .modelCode(binding.modelCode())
@@ -530,6 +553,17 @@ public class DataSourceGovernanceApplicationService {
     ) {
         var runtimeConfig = modelRuntimeConfigs.resolve(model);
         if (runtimeConfig.mockEnabled()) {
+            log.info(
+                "AI数据源发现使用本地候选: modelCode={}, modelVersion={}, providerCode={}, skillCode={}, collectionDirection={}, mockEnabled={}, dataTypes={}, limit={}",
+                runtimeConfig.modelCode(),
+                runtimeConfig.modelVersion(),
+                runtimeConfig.providerCode(),
+                skill.skillCode(),
+                command.collectionDirection(),
+                runtimeConfig.mockEnabled(),
+                dataTypes,
+                limit
+            );
             return defaultDiscoveryCandidates(dataTypes);
         }
         AiJsonCompletionClient client = aiJsonClients.stream()
@@ -544,9 +578,28 @@ public class DataSourceGovernanceApplicationService {
             runtimeConfig
         );
         if (content == null || content.isBlank()) {
+            log.warn(
+                "AI数据源发现模型返回为空，使用本地候选兜底: modelCode={}, modelVersion={}, providerCode={}, skillCode={}, dataTypes={}, limit={}",
+                runtimeConfig.modelCode(),
+                runtimeConfig.modelVersion(),
+                runtimeConfig.providerCode(),
+                skill.skillCode(),
+                dataTypes,
+                limit
+            );
             return defaultDiscoveryCandidates(dataTypes);
         }
-        return parseModelCandidates(content, dataTypes, trustLevels, limit);
+        List<DataSourceDiscoveryCandidateView> candidates = parseModelCandidates(content, dataTypes, trustLevels, limit);
+        log.info(
+            "AI数据源发现模型候选解析完成: modelCode={}, modelVersion={}, providerCode={}, skillCode={}, contentLength={}, parsedCandidateCount={}",
+            runtimeConfig.modelCode(),
+            runtimeConfig.modelVersion(),
+            runtimeConfig.providerCode(),
+            skill.skillCode(),
+            content.length(),
+            candidates.size()
+        );
+        return candidates;
     }
 
     /** 解析大模型返回的数据源候选 JSON。 */

@@ -1,6 +1,6 @@
 # Kafka 配置驱动投资任务
 
-> 2026-06-26 更新：`INVESTMENT_NEWS_COLLECTION`、RSS/fallback 和手工 endpoint 字段路径已退出自动闭环默认主链路。当前默认入口是 `AI_DATA_SOURCE_DISCOVERY`；旧任务仅作为人工审核后的执行原语或历史兼容说明。
+> 2026-06-27 更新：`INVESTMENT_NEWS_COLLECTION`、RSS/fallback 采集代码已删除。当前默认入口是 `AI_DATA_SOURCE_DISCOVERY`；手工 endpoint 字段路径仅作为人工审核后的执行原语说明。
 
 ## 目标
 

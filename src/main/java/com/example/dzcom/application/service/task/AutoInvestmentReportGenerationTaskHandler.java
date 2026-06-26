@@ -3,6 +3,7 @@ package com.example.dzcom.application.service.task;
 import com.example.dzcom.application.command.ai.GenerateInvestmentAnalysisCommand;
 import com.example.dzcom.application.service.ai.InvestmentAnalysisApplicationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +14,7 @@ import java.util.List;
 /** 自动投资报告生成任务。 */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTaskHandler {
     private static final String TASK_TYPE = "AUTO_INVESTMENT_REPORT_GENERATION";
     private static final String DEFAULT_MODEL_CODE = "openai-compatible-analysis";
@@ -54,13 +56,42 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
         int lookbackDays = TaskParameterParser.positiveInt(event.parameters(), "lookbackDays", 30);
         BigDecimal initialCapital = parseInitialCapital(event);
         List<String> themeCodes = resolveThemeCodes(event);
+        log.info(
+            "自动投资报告任务开始: taskCode={}, eventId={}, providerCode={}, modelCode={}, marketScope={}, lookbackDays={}, initialCapital={}, themeCount={}, themeCodes={}",
+            event.taskCode(),
+            event.eventId(),
+            providerCode,
+            modelCode,
+            marketScope,
+            lookbackDays,
+            initialCapital,
+            themeCodes.size(),
+            themeCodes
+        );
         if (themeCodes.isEmpty()) {
             analysis.generate(command(providerCode, modelCode, marketScope, null, lookbackDays, initialCapital));
+            log.info(
+                "自动投资报告任务完成: taskCode={}, eventId={}, generatedCount={}, modelCode={}, providerCode={}",
+                event.taskCode(),
+                event.eventId(),
+                1,
+                modelCode,
+                providerCode
+            );
             return "已生成 1 份市场级自动投资分析报告";
         }
         themeCodes.forEach(themeCode -> analysis.generate(
             command(providerCode, modelCode, marketScope, themeCode, lookbackDays, initialCapital)
         ));
+        log.info(
+            "自动投资报告任务完成: taskCode={}, eventId={}, generatedCount={}, modelCode={}, providerCode={}, themeCodes={}",
+            event.taskCode(),
+            event.eventId(),
+            themeCodes.size(),
+            modelCode,
+            providerCode,
+            themeCodes
+        );
         return "已生成 " + themeCodes.size() + " 份主题自动投资分析报告";
     }
 

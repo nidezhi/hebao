@@ -74,7 +74,8 @@ knife4j:
 logging:
   level:
     com.example.dzcom: DEBUG
-    com.example.dzcom.infrastructure.persistence.mapper: DEBUG
+    # dev SQL 日志默认关闭；需要排查 SQL 时设置 DEV_SQL_LOG_LEVEL=DEBUG。
+    com.example.dzcom.infrastructure.persistence.mapper: ${DEV_SQL_LOG_LEVEL:INFO}
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml

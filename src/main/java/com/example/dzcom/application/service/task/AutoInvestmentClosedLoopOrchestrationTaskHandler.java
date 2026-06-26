@@ -22,6 +22,7 @@ import com.example.dzcom.domain.model.task.ScheduledTaskExecution;
 import com.example.dzcom.domain.repository.ai.InvestmentAnalysisReportStore;
 import com.example.dzcom.domain.repository.task.InvestmentTaskDefinitionStore;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -37,6 +38,7 @@ import java.util.Set;
 /** 自动投资闭环总编排任务。 */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements InvestmentTaskHandler {
     private static final String TASK_TYPE = "AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION";
     private static final String DEFAULT_PORTFOLIO_NAME = "全自动闭环模拟组合";
@@ -77,6 +79,21 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         String automationLevel = TaskParameterParser.string(parameters, "automationLevel", "FULL_MOCK");
         String marketScope = TaskParameterParser.marketScope(parameters);
         String mockUserBizId = TaskParameterParser.string(parameters, "mockUserBizId", "");
+        log.info(
+            "自动投资闭环开始: taskCode={}, eventId={}, triggerSource={}, automationLevel={}, marketScope={}, themeCode={}, reportTaskCode={}, dataTaskCodes={}, promptTaskCode={}, modelCode={}, providerCode={}, mockUserConfigured={}",
+            event.taskCode(),
+            event.eventId(),
+            event.triggerSource(),
+            automationLevel,
+            marketScope,
+            singleThemeCode(parameters),
+            TaskParameterParser.string(parameters, "reportTaskCode", ""),
+            TaskParameterParser.list(parameters, "dataTaskCodes"),
+            TaskParameterParser.string(parameters, "promptTaskCode", ""),
+            TaskParameterParser.string(parameters, "modelCode", ""),
+            TaskParameterParser.string(parameters, "providerCode", ""),
+            !mockUserBizId.isBlank()
+        );
         ClosedLoopRun run = closedLoops.createRun(
             event.taskCode(),
             event.triggerSource(),
@@ -113,17 +130,41 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "modelCandidateBizId", candidate == null ? "" : candidate.bizId(),
                 "automationBoundary", "FULL_MOCK_ONLY_FORMAL_ACTIVATION_REQUIRES_REVIEW"
             ));
+            log.info(
+                "自动投资闭环完成: runNo={}, taskCode={}, reportBizId={}, portfolioBizId={}, backtestBizId={}, modelCandidateBizId={}",
+                completed.runNo(),
+                event.taskCode(),
+                report.bizId(),
+                portfolio.bizId(),
+                backtest.bizId(),
+                candidate == null ? "" : candidate.bizId()
+            );
             return "自动闭环完成: runNo=" + completed.runNo()
                 + ", reportBizId=" + report.bizId()
                 + ", portfolioBizId=" + portfolio.bizId()
                 + ", backtestBizId=" + backtest.bizId();
         } catch (ClosedLoopBlockedException blocked) {
+            log.warn(
+                "自动投资闭环被业务门禁阻断: taskCode={}, eventId={}, runNo={}, reason={}",
+                event.taskCode(),
+                event.eventId(),
+                run.runNo(),
+                blocked.getMessage()
+            );
             closedLoops.completeRun(run, "BLOCKED", "BLOCK", blocked.getMessage(), Map.of(
                 "blockedReason", blocked.getMessage(),
                 "automationBoundary", "STOPPED_BEFORE_MOCK_OR_FORMAL_ACTIVATION"
             ));
             throw blocked;
         } catch (Exception exception) {
+            log.warn(
+                "自动投资闭环异常失败: taskCode={}, eventId={}, runNo={}, exceptionType={}, reason={}",
+                event.taskCode(),
+                event.eventId(),
+                run.runNo(),
+                exception.getClass().getSimpleName(),
+                exception.getMessage()
+            );
             closedLoops.failedStep(run, "UNEXPECTED_FAILURE", "闭环异常兜底", 999,
                 exception.getMessage(), Map.of("taskCode", event.taskCode()));
             closedLoops.completeRun(run, "FAILED", "BLOCK", exception.getMessage(), Map.of(
@@ -156,18 +197,23 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     ) {
         List<String> taskCodes = TaskParameterParser.list(parentParameters, taskCodesKey);
         if (taskCodes.isEmpty()) {
+            log.info("自动投资闭环子任务组跳过: runNo={}, stepCode={}, taskCodesKey={}, reason=未配置子任务",
+                run.runNo(), stepCode, taskCodesKey);
             closedLoops.skippedStep(run, stepCode, stepName, stepOrder, "未配置子任务", Map.of("paramKey", taskCodesKey));
             return;
         }
+        log.info("自动投资闭环子任务组开始: runNo={}, stepCode={}, taskCodes={}", run.runNo(), stepCode, taskCodes);
         List<Map<String, Object>> results = taskCodes.stream()
             .map(taskCode -> executeChildTask(parentEvent, taskCode, Map.of()))
             .toList();
         boolean failed = results.stream().anyMatch(result -> !"SUCCEEDED".equals(result.get("status")));
         if (failed) {
             String reason = "子任务执行失败: " + JSON.toJSONString(results);
+            log.warn("自动投资闭环子任务组失败: runNo={}, stepCode={}, reason={}", run.runNo(), stepCode, reason);
             closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of("taskCodes", taskCodes));
             throw new ClosedLoopBlockedException(reason);
         }
+        log.info("自动投资闭环子任务组完成: runNo={}, stepCode={}, results={}", run.runNo(), stepCode, JSON.toJSONString(results));
         closedLoops.succeedStep(run, stepCode, stepName, stepOrder,
             Map.of("taskCodes", taskCodes),
             Map.of("executions", results));
@@ -178,6 +224,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         String reportTaskCode = TaskParameterParser.string(parameters, "reportTaskCode", "");
         if (reportTaskCode.isBlank()) {
             String reason = "未配置自动报告任务";
+            log.warn("自动投资闭环报告任务阻断: runNo={}, reason={}", run.runNo(), reason);
             closedLoops.blockedStep(run, "REPORT_GENERATION", "自动报告生成", 30, reason, Map.of());
             throw new ClosedLoopBlockedException(reason);
         }
@@ -189,13 +236,27 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         copyIfPresent(parameters, overrides, "themeCodes");
         copyIfPresent(parameters, overrides, "themes");
         copyIfPresent(parameters, overrides, "initialCapital");
+        log.info(
+            "自动投资闭环报告任务开始: runNo={}, reportTaskCode={}, overrides={}",
+            run.runNo(),
+            reportTaskCode,
+            overrides
+        );
         Map<String, Object> result = executeChildTask(parentEvent, reportTaskCode, overrides);
         if (!"SUCCEEDED".equals(result.get("status"))) {
             String reason = "自动报告任务失败: " + result.get("failureReason");
+            log.warn(
+                "自动投资闭环报告任务失败: runNo={}, reportTaskCode={}, status={}, failureReason={}",
+                run.runNo(),
+                reportTaskCode,
+                result.get("status"),
+                result.get("failureReason")
+            );
             closedLoops.blockedStep(run, "REPORT_GENERATION", "自动报告生成", 30, reason,
                 Map.of("taskCode", reportTaskCode));
             throw new ClosedLoopBlockedException(reason);
         }
+        log.info("自动投资闭环报告任务完成: runNo={}, reportTaskCode={}, result={}", run.runNo(), reportTaskCode, result);
         closedLoops.succeedStep(run, "REPORT_GENERATION", "自动报告生成", 30,
             Map.of("taskCode", reportTaskCode, "overrides", overrides),
             result);
@@ -208,6 +269,14 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         List<ReportGateCheck> checks = reports.latest(maxReports).items().stream()
             .map(report -> evaluateReportGate(report, minQualityScore))
             .toList();
+        log.info(
+            "自动投资闭环报告质量门禁检查: runNo={}, maxReports={}, minQualityScore={}, evaluatedReportCount={}, evaluatedReports={}",
+            run.runNo(),
+            maxReports,
+            minQualityScore,
+            checks.size(),
+            checks.stream().map(ReportGateCheck::summary).toList()
+        );
         InvestmentAnalysisReport selected = checks.stream()
             .filter(ReportGateCheck::passed)
             .map(ReportGateCheck::report)
@@ -215,6 +284,13 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             .orElse(null);
         if (selected == null) {
             String reason = "没有找到满足质量门禁的最新投资报告";
+            log.warn(
+                "自动投资闭环报告质量门禁阻断: runNo={}, minQualityScore={}, evaluatedReportCount={}, evaluatedReports={}",
+                run.runNo(),
+                minQualityScore,
+                checks.size(),
+                checks.stream().map(ReportGateCheck::summary).toList()
+            );
             closedLoops.blockedStep(run, "QUALITY_GATE", "数据质量与报告门禁", 40, reason,
                 Map.of(
                     "maxReportsForMock", maxReports,
@@ -224,6 +300,15 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 ));
             throw new ClosedLoopBlockedException(reason);
         }
+        log.info(
+            "自动投资闭环报告质量门禁通过: runNo={}, reportBizId={}, status={}, confidenceLevel={}, dataQualityScore={}, themeCode={}",
+            run.runNo(),
+            selected.bizId(),
+            selected.status(),
+            selected.confidenceLevel(),
+            selected.dataQualityScore(),
+            selected.themeCode()
+        );
         return selected;
     }
 
@@ -235,22 +320,30 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         InvestmentAnalysisReport report
     ) {
         if (!TaskParameterParser.bool(parameters, "allowPromptCandidate", true)) {
+            log.info("自动投资闭环Prompt候选跳过: runNo={}, reportBizId={}, reason=配置未开启", run.runNo(), report.bizId());
             closedLoops.skippedStep(run, "PROMPT_CANDIDATE", "Prompt候选与评分", 50,
                 "配置未开启 Prompt 候选生成", Map.of("reportBizId", report.bizId()));
             return;
         }
         String promptTaskCode = TaskParameterParser.string(parameters, "promptTaskCode", "");
         if (promptTaskCode.isBlank()) {
+            log.info("自动投资闭环Prompt候选跳过: runNo={}, reportBizId={}, reason=未配置任务", run.runNo(), report.bizId());
             closedLoops.skippedStep(run, "PROMPT_CANDIDATE", "Prompt候选与评分", 50,
                 "未配置 Prompt 治理任务", Map.of("reportBizId", report.bizId()));
             return;
         }
+        log.info("自动投资闭环Prompt候选任务开始: runNo={}, promptTaskCode={}, reportBizId={}",
+            run.runNo(), promptTaskCode, report.bizId());
         Map<String, Object> result = executeChildTask(parentEvent, promptTaskCode, Map.of());
         if (!"SUCCEEDED".equals(result.get("status"))) {
+            log.warn("自动投资闭环Prompt候选任务失败: runNo={}, promptTaskCode={}, result={}",
+                run.runNo(), promptTaskCode, result);
             closedLoops.blockedStep(run, "PROMPT_CANDIDATE", "Prompt候选与评分", 50,
                 "Prompt 治理任务失败: " + result.get("failureReason"), Map.of("taskCode", promptTaskCode));
             return;
         }
+        log.info("自动投资闭环Prompt候选任务完成: runNo={}, promptTaskCode={}, result={}",
+            run.runNo(), promptTaskCode, result);
         closedLoops.succeedStep(run, "PROMPT_CANDIDATE", "Prompt候选与评分", 50,
             Map.of("taskCode", promptTaskCode, "reportBizId", report.bizId()),
             result);
@@ -263,6 +356,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         InvestmentAnalysisReport report
     ) {
         if (!TaskParameterParser.bool(parameters, "allowModelCandidate", true)) {
+            log.info("自动投资闭环模型候选跳过: runNo={}, reportBizId={}, reason=配置未开启", run.runNo(), report.bizId());
             closedLoops.skippedStep(run, "MODEL_CANDIDATE", "模型候选与评分", 60,
                 "配置未开启模型候选生成", Map.of("reportBizId", report.bizId()));
             return null;
@@ -292,6 +386,16 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             JSON.toJSONString(metrics),
             "DRAFT"
         );
+        log.info(
+            "自动投资闭环模型候选已保存: runNo={}, reportBizId={}, modelBizId={}, modelCode={}, modelVersion={}, providerCode={}, score={}",
+            run.runNo(),
+            report.bizId(),
+            candidate.bizId(),
+            candidate.modelCode(),
+            candidate.modelVersion(),
+            providerCode,
+            score
+        );
         closedLoops.succeedStep(run, "MODEL_CANDIDATE", "模型候选与评分", 60,
             Map.of("reportBizId", report.bizId(), "modelCode", modelCode),
             mapOfNullable("modelBizId", candidate.bizId(), "modelVersion", candidate.modelVersion(), "score", score,
@@ -307,6 +411,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     ) {
         if (!TaskParameterParser.bool(parameters, "allowAutoMockTrade", true)) {
             String reason = "配置未开启自动 Mock 交易，闭环停止在报告和候选阶段";
+            log.warn("自动投资闭环Mock交易阻断: runNo={}, reportBizId={}, reason={}", run.runNo(), report.bizId(), reason);
             closedLoops.blockedStep(run, "MOCK_TRADE", "自动Mock交易", 70, reason,
                 Map.of("reportBizId", report.bizId()));
             throw new ClosedLoopBlockedException(reason);
@@ -314,6 +419,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         String mockUserBizId = TaskParameterParser.string(parameters, "mockUserBizId", "");
         if (mockUserBizId.isBlank()) {
             String reason = "未配置自动 Mock 用户";
+            log.warn("自动投资闭环Mock交易阻断: runNo={}, reportBizId={}, reason={}", run.runNo(), report.bizId(), reason);
             closedLoops.blockedStep(run, "MOCK_TRADE", "自动Mock交易", 70, reason,
                 Map.of("reportBizId", report.bizId()));
             throw new ClosedLoopBlockedException(reason);
@@ -321,6 +427,14 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         CurrentOperator operator = new CurrentOperator(mockUserBizId, "AUTO_CLOSED_LOOP", Set.of("USER"), Set.of());
         return currentOperator.callAs(operator, () -> {
             BigDecimal initialCash = positiveDecimal(parameters, "initialCash", new BigDecimal("100000"));
+            log.info(
+                "自动投资闭环Mock交易开始: runNo={}, reportBizId={}, mockUserBizId={}, initialCash={}, mockProductBizId={}",
+                run.runNo(),
+                report.bizId(),
+                mockUserBizId,
+                initialCash,
+                TaskParameterParser.string(parameters, "mockProductBizId", null)
+            );
             MockPortfolioView portfolio = portfolios.ensureAutomationPortfolio(
                 mockUserBizId,
                 TaskParameterParser.string(parameters, "mockPortfolioName", DEFAULT_PORTFOLIO_NAME),
@@ -337,6 +451,14 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 Map.of("reportBizId", report.bizId(), "portfolioBizId", portfolio.bizId()),
                 Map.of("orderBizId", execution.order().bizId(), "portfolioBizId", refreshed.bizId(),
                     "status", execution.order().status()));
+            log.info(
+                "自动投资闭环Mock交易完成: runNo={}, reportBizId={}, portfolioBizId={}, orderBizId={}, orderStatus={}",
+                run.runNo(),
+                report.bizId(),
+                refreshed.bizId(),
+                execution.order().bizId(),
+                execution.order().status()
+            );
             return refreshed;
         });
     }
@@ -350,6 +472,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     ) {
         CurrentOperator operator = new CurrentOperator(portfolio.ownerUserBizId(), "AUTO_CLOSED_LOOP", Set.of("USER"), Set.of());
         return currentOperator.callAs(operator, () -> {
+            log.info("自动投资闭环回测反馈开始: runNo={}, reportBizId={}, portfolioBizId={}",
+                run.runNo(), report.bizId(), portfolio.bizId());
             BacktestResultView backtest = investmentClosedLoop.generateBacktestFromPortfolio(
                 GenerateBacktestFromPortfolioCommand.builder()
                     .portfolioBizId(portfolio.bizId())
@@ -382,6 +506,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             closedLoops.succeedStep(run, "BACKTEST_FEEDBACK", "回测与反馈沉淀", 80,
                 Map.of("portfolioBizId", portfolio.bizId(), "reportBizId", report.bizId()),
                 Map.of("backtestBizId", backtest.bizId(), "feedbackBizId", feedback.bizId()));
+            log.info("自动投资闭环回测反馈完成: runNo={}, reportBizId={}, portfolioBizId={}, backtestBizId={}, feedbackBizId={}",
+                run.runNo(), report.bizId(), portfolio.bizId(), backtest.bizId(), feedback.bizId());
             return backtest;
         });
     }
@@ -413,6 +539,13 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         }
         Map<String, String> parameters = new LinkedHashMap<>(definition.parameters());
         parameters.putAll(overrides);
+        log.info(
+            "自动投资闭环子任务开始: parentTaskCode={}, childTaskCode={}, childTaskType={}, overrides={}",
+            parentEvent.taskCode(),
+            definition.taskCode(),
+            definition.taskType(),
+            overrides
+        );
         ScheduledTaskExecution execution = taskExecution.getObject().executeAndReturn(InvestmentTaskEvent.builder()
             .eventId(ids.newBizId())
             .taskCode(definition.taskCode())
@@ -428,6 +561,15 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         result.put("status", execution.status());
         result.put("resultSummary", execution.resultSummary());
         result.put("failureReason", execution.failureReason());
+        log.info(
+            "自动投资闭环子任务完成: parentTaskCode={}, childTaskCode={}, childTaskType={}, eventId={}, status={}, failureReason={}",
+            parentEvent.taskCode(),
+            execution.taskCode(),
+            execution.taskType(),
+            execution.eventId(),
+            execution.status(),
+            execution.failureReason()
+        );
         return result;
     }
 

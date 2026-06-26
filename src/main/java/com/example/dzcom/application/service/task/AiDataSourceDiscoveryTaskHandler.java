@@ -9,6 +9,7 @@ import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.market.DataSourceGovernanceApplicationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -19,6 +20,7 @@ import java.util.Set;
 /** AI 数据源发现任务，负责按模型挂靠和 Skill 产出候选来源、字段映射和采集建议。 */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
     private static final String TASK_TYPE = "AI_DATA_SOURCE_DISCOVERY";
 
@@ -52,6 +54,21 @@ public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
     @Override
     public String execute(InvestmentTaskEvent event) {
         Map<String, String> parameters = event.parameters() == null ? Map.of() : event.parameters();
+        log.info(
+            "AI数据源发现任务开始: taskCode={}, eventId={}, triggerSource={}, environment={}, marketScope={}, assetClass={}, dataTypes={}, collectionDirection={}, skillCode={}, candidateLimit={}, autoRegisterCandidates={}, autoEnableCandidates={}",
+            event.taskCode(),
+            event.eventId(),
+            event.triggerSource(),
+            TaskParameterParser.string(parameters, "environment", AiModelBindingApplicationServiceDefault.DEFAULT_ENVIRONMENT),
+            TaskParameterParser.string(parameters, "marketScope", TaskParameterParser.CN_MAINLAND),
+            TaskParameterParser.string(parameters, "assetClass", "MULTI_ASSET"),
+            TaskParameterParser.string(parameters, "dataTypes", "MARKET_QUOTE,NEWS,ANNOUNCEMENT,RESEARCH,REGULATORY"),
+            TaskParameterParser.string(parameters, "collectionDirection", "MULTI_SOURCE"),
+            TaskParameterParser.string(parameters, "skillCode", ""),
+            TaskParameterParser.positiveInt(parameters, "candidateLimit", 8),
+            TaskParameterParser.bool(parameters, "autoRegisterCandidates", true),
+            TaskParameterParser.bool(parameters, "autoEnableCandidates", false)
+        );
         DataSourceDiscoveryView discovery = dataSources.discover(DiscoverDataSourcesCommand.builder()
             .marketScope(TaskParameterParser.string(parameters, "marketScope", TaskParameterParser.CN_MAINLAND))
             .assetClass(TaskParameterParser.string(parameters, "assetClass", "MULTI_ASSET"))
@@ -82,6 +99,17 @@ public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
         summary.put("registeredCodes", registeredCodes);
         summary.put("autoEnableCandidates", TaskParameterParser.bool(parameters, "autoEnableCandidates", false));
         summary.put("reviewPolicy", discovery.reviewPolicy());
+        log.info(
+            "AI数据源发现任务完成: taskCode={}, eventId={}, scenarioCode={}, modelCode={}, skillCode={}, skillVersion={}, candidateCount={}, registeredCount={}",
+            event.taskCode(),
+            event.eventId(),
+            discovery.scenarioCode(),
+            discovery.modelCode(),
+            discovery.skillCode(),
+            discovery.skillVersion(),
+            discovery.candidates().size(),
+            registeredCodes.size()
+        );
         return JSON.toJSONString(summary);
     }
 

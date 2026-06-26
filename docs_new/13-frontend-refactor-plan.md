@@ -128,6 +128,7 @@ docs_new/18-frontend-generation-blueprint.md
 
 | 任务类型 | 前端用途 | 必须展示的关键参数 |
 | --- | --- | --- |
+| `AI_DATA_SOURCE_DISCOVERY` | LLM 方向化数据源发现 | `collectionDirection`、`skillCode`、`dataTypes`、`autoRegisterCandidates`、`autoEnableCandidates` |
 | `REGULATORY_DISCLOSURE_COLLECTION` | 采集证监会等监管披露 | `endpoints`、`responseFormat`、字段路径、`includeKeywords` |
 | `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 采集交易所/巨潮公告 | `endpoints`、`itemsPath`、`externalIdPath`、`titlePath`、`publishTimePath` |
 | `WEALTH_PRODUCT_NAV_REFRESH` | 采集理财产品和净值 | `extraFieldPaths`、`productMarketCode`、`productCurrency`、`quoteInterval`、`defaultRiskLevel` |
@@ -336,7 +337,7 @@ API client 分层：
 
 | 字典 | 值 |
 | --- | --- |
-| `taskType` | `INVESTMENT_NEWS_COLLECTION`、`REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`、`MARKET_MOMENTUM_SCAN`、`HOT_THEME_RETURN`、`NEWS_HEAT_AGGREGATION`、`AUTO_INVESTMENT_REPORT_GENERATION`、`AUTO_PROMPT_GOVERNANCE` |
+| `taskType` | `AI_DATA_SOURCE_DISCOVERY`、`REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH`、`MARKET_MOMENTUM_SCAN`、`HOT_THEME_RETURN`、`NEWS_HEAT_AGGREGATION`、`AUTO_INVESTMENT_REPORT_GENERATION`、`AUTO_PROMPT_GOVERNANCE`、`AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION` |
 | `responseFormat` | `JSON`、`HTML` |
 | `taskStatus` | `RUNNING`、`SUCCEEDED`、`FAILED` |
 | `triggerSource` | `SCHEDULE`、`MANUAL`、`RETRY` |

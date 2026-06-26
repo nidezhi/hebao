@@ -16,9 +16,9 @@ public record NewsArticleResponse(
     @Schema(description = "标题") String title,
     @Schema(description = "摘要") String summary,
     @Schema(description = "正文或清洗后的内容") String content,
-    @Schema(description = "来源编码", example = "OFFICIAL_RSS") String sourceCode,
+    @Schema(description = "来源编码", example = "CNINFO") String sourceCode,
     @Schema(description = "原文链接") String sourceUrl,
-    @Schema(description = "语言编码", example = "en-US") String languageCode,
+    @Schema(description = "语言编码", example = "zh-CN") String languageCode,
     @Schema(description = "发布时间") LocalDateTime publishTime,
     @Schema(description = "采集时间") LocalDateTime collectedAt,
     @Schema(description = "创建时间") LocalDateTime createdAt

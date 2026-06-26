@@ -13,6 +13,7 @@ import com.example.dzcom.domain.repository.ai.InvestmentAnalysisReportSearchCrit
 import com.example.dzcom.domain.repository.ai.InvestmentAnalysisReportStore;
 import com.example.dzcom.application.service.task.TaskParameterParser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.Set;
 /** 投资分析报告生成与查询用例。 */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class InvestmentAnalysisApplicationService {
     private static final String DEFAULT_MODEL_CODE = "openai-compatible-analysis";
     private static final Set<String> SORTS =
@@ -50,6 +52,15 @@ public class InvestmentAnalysisApplicationService {
     @Transactional
     public InvestmentAnalysisReport generate(GenerateInvestmentAnalysisCommand command) {
         String modelCode = resolveModelCode(command.modelCode());
+        log.info(
+            "投资分析报告生成开始: requestedProviderCode={}, modelCode={}, marketScope={}, themeCode={}, lookbackDays={}, initialCapital={}",
+            command.providerCode(),
+            modelCode,
+            command.marketScope(),
+            command.themeCode(),
+            command.lookbackDays(),
+            command.initialCapital()
+        );
         AiModel model = models.findActiveByCode(modelCode)
             .orElseThrow(() -> new BusinessException(
                 HttpStatus.NOT_FOUND,
@@ -62,12 +73,34 @@ public class InvestmentAnalysisApplicationService {
             .filter(candidate -> candidate.supports(model.provider()))
             .findFirst()
             .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "投资分析提供方不存在"));
+        log.info(
+            "投资分析报告模型已选择: modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, mockEnabled={}, secretRef={}, apiKeyConfigured={}",
+            runtimeConfig.modelCode(),
+            runtimeConfig.modelVersion(),
+            runtimeConfig.providerCode(),
+            runtimeConfig.remoteModel(),
+            runtimeConfig.mockEnabled(),
+            runtimeConfig.secretRef(),
+            runtimeConfig.apiKey() != null && !runtimeConfig.apiKey().isBlank()
+        );
         InvestmentAnalysisReport report = provider.analyze(
             ids.newBizId(),
             command,
             runtimeConfig
         );
-        return reports.save(report);
+        InvestmentAnalysisReport saved = reports.save(report);
+        log.info(
+            "投资分析报告生成完成: reportBizId={}, requestId={}, modelCode={}, providerCode={}, status={}, confidenceLevel={}, dataQualityScore={}, themeCode={}",
+            saved.bizId(),
+            saved.requestId(),
+            saved.modelCode(),
+            saved.providerCode(),
+            saved.status(),
+            saved.confidenceLevel(),
+            saved.dataQualityScore(),
+            saved.themeCode()
+        );
+        return saved;
     }
 
     /**

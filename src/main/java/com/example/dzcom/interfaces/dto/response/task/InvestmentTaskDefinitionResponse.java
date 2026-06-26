@@ -10,9 +10,9 @@ import java.util.Map;
 @Builder
 @Schema(description = "投资任务配置响应")
 public record InvestmentTaskDefinitionResponse(
-    @Schema(description = "任务编码", example = "investment-news-collection")
+    @Schema(description = "任务编码", example = "llm-product-nav-collection")
     String code,
-    @Schema(description = "任务类型", example = "INVESTMENT_NEWS_COLLECTION")
+    @Schema(description = "任务类型", example = "AI_DATA_SOURCE_DISCOVERY")
     String type,
     @Schema(description = "Spring Cron 表达式", example = "0 0/30 * * * ?")
     String cron,

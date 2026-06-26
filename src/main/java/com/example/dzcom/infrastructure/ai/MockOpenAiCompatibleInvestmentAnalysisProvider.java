@@ -9,6 +9,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +32,7 @@ import java.util.Map;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class MockOpenAiCompatibleInvestmentAnalysisProvider
     implements InvestmentAnalysisProvider {
 
@@ -75,8 +77,33 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             modelConfig
         );
         if (!modelConfig.mockEnabled()) {
+            log.info(
+                "投资分析模型准备远端调用: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, marketScope={}, themeCode={}, lookbackDays={}, localQualityScore={}, localGate={}",
+                requestId,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                modelConfig.remoteModel(),
+                command.marketScope(),
+                command.themeCode(),
+                command.lookbackDays(),
+                localReport.dataQualityScore(),
+                localReport.dataQualityGate()
+            );
             return callRemoteModel(localReport, command, modelConfig);
         }
+        log.info(
+            "投资分析模型使用本地规则: requestId={}, modelCode={}, modelVersion={}, providerCode={}, mockEnabled={}, marketScope={}, themeCode={}, qualityScore={}, confidenceLevel={}",
+            requestId,
+            modelConfig.modelCode(),
+            modelConfig.modelVersion(),
+            modelConfig.providerCode(),
+            modelConfig.mockEnabled(),
+            command.marketScope(),
+            command.themeCode(),
+            localReport.dataQualityScore(),
+            localReport.confidenceLevel()
+        );
         return InvestmentAnalysisReport.builder()
             .bizId(localReport.bizId())
             .requestId(localReport.requestId())
@@ -116,28 +143,95 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         GenerateInvestmentAnalysisCommand command,
         AiModelRuntimeConfig modelConfig
     ) {
+        long startedAt = System.nanoTime();
+        String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
+        String userPrompt = prompt(localReport, command);
+        log.info(
+            "投资分析模型远端调用开始: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, temperature={}, userPromptLength={}",
+            localReport.requestId(),
+            modelConfig.modelCode(),
+            modelConfig.modelVersion(),
+            modelConfig.providerCode(),
+            modelConfig.remoteModel(),
+            endpoint,
+            modelConfig.secretRef(),
+            modelConfig.apiKey() != null && !modelConfig.apiKey().isBlank(),
+            modelConfig.timeoutSeconds(),
+            modelConfig.temperature(),
+            userPrompt.length()
+        );
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(resolveChatCompletionsUrl(modelConfig.baseUrl())))
+                .uri(URI.create(endpoint))
                 .timeout(Duration.ofSeconds(modelConfig.timeoutSeconds()))
                 .header("Authorization", "Bearer " + modelConfig.apiKey())
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(writeJson(requestPayload(localReport, command, modelConfig))))
+                .POST(HttpRequest.BodyPublishers.ofString(writeJson(requestPayload(userPrompt, modelConfig))))
                 .build();
             HttpResponse<String> response = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(modelConfig.timeoutSeconds()))
                 .build()
                 .send(request, HttpResponse.BodyHandlers.ofString());
+            log.info(
+                "投资分析模型远端响应: requestId={}, modelCode={}, modelVersion={}, providerCode={}, httpStatus={}, durationMs={}, responseLength={}",
+                localReport.requestId(),
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                response.statusCode(),
+                elapsedMs(startedAt),
+                textLength(response.body())
+            );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型调用失败: HTTP " + response.statusCode());
             }
-            return mergeRemoteOutput(localReport, modelConfig, extractContent(response.body()));
+            String content = extractContent(response.body());
+            InvestmentAnalysisReport report = mergeRemoteOutput(localReport, modelConfig, content);
+            log.info(
+                "投资分析模型远端调用完成: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}, qualityScore={}, confidenceLevel={}",
+                localReport.requestId(),
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt),
+                textLength(content),
+                report.dataQualityScore(),
+                report.confidenceLevel()
+            );
+            return report;
         } catch (BusinessException exception) {
+            log.warn(
+                "投资分析模型远端业务失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
+                localReport.requestId(),
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt),
+                exception.getMessage()
+            );
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            log.warn(
+                "投资分析模型远端调用被中断: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
+                localReport.requestId(),
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt)
+            );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型调用被中断");
         } catch (Exception exception) {
+            log.warn(
+                "投资分析模型远端调用异常: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
+                localReport.requestId(),
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt),
+                exception.getClass().getSimpleName(),
+                exception.getMessage()
+            );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型调用失败: " + exception.getMessage());
         }
     }
@@ -153,8 +247,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
      * @date 2026-06-24
      */
     private Map<String, Object> requestPayload(
-        InvestmentAnalysisReport localReport,
-        GenerateInvestmentAnalysisCommand command,
+        String userPrompt,
         AiModelRuntimeConfig modelConfig
     ) {
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -168,7 +261,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             ),
             Map.of(
                 "role", "user",
-                "content", prompt(localReport, command)
+                "content", userPrompt
             )
         ));
         return payload;
@@ -290,5 +383,15 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         } catch (JsonProcessingException exception) {
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型请求JSON序列化失败");
         }
+    }
+
+    /** 计算文本长度，避免日志输出完整模型响应。 */
+    private int textLength(String value) {
+        return value == null ? 0 : value.length();
+    }
+
+    /** 计算模型远端调用耗时毫秒。 */
+    private long elapsedMs(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
     }
 }

@@ -1,6 +1,6 @@
 # 投资任务与投资分析业务说明
 
-> 2026-06-26 更新：本文中 RSS/Atom、fallbackArticles 和手工 endpoints 章节保留为历史能力说明，不再代表默认闭环方案。当前默认数据源入口是 `AI_DATA_SOURCE_DISCOVERY` + 模型 Skill；旧采集器默认停用，fallback 默认不写入正式资讯。
+> 2026-06-27 更新：RSS/Atom 与 fallbackArticles 采集代码已删除，本文相关章节仅作为历史说明；当前默认数据源入口是 `AI_DATA_SOURCE_DISCOVERY` + 方向化模型 Skill。手工 endpoints 专用采集器仅作为候选审核后的执行原语。
 
 ## 1. 文档目标
 

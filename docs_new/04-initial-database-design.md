@@ -111,13 +111,11 @@
 | 表名 | 职责 |
 | --- | --- |
 | `aiw_ai_model` | 模型编码、版本、配置和评估指标 |
-| `aiw_ai_signal` | 模型生成的可解释信号 |
-| `aiw_ai_recommendation` | 面向用户或组合的分析建议与风险提示 |
 | `aiw_backtest_result` | 回测任务、参数和结果摘要 |
 | `aiw_system_config` | 非敏感配置或外部密钥引用 |
 | `aiw_outbox_event` | 与业务事务同库提交的待发布领域事件 |
 
-AI 结果必须记录模型版本、生成时间和解释信息。AI 建议属于辅助分析，不直接代替用户下单，也不构成收益承诺。
+AI 结果必须记录模型版本、生成时间和解释信息。早期 `aiw_ai_signal`、`aiw_ai_recommendation` 占位表已在 V24 退役，当前由投资报告、Prompt、Mock 交易、回测和反馈链路承接。
 
 ## 9. 索引规范
 

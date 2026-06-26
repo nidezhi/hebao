@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
 @Schema(description = "定时任务执行记录响应")
 public record ScheduledTaskExecutionResponse(
     @Schema(description = "执行记录业务 ID") String bizId,
-    @Schema(description = "任务编码", example = "investment-news-collection") String taskCode,
-    @Schema(description = "任务类型", example = "INVESTMENT_NEWS_COLLECTION") String taskType,
+    @Schema(description = "任务编码", example = "llm-product-nav-collection") String taskCode,
+    @Schema(description = "任务类型", example = "AI_DATA_SOURCE_DISCOVERY") String taskType,
     @Schema(description = "触发来源：SCHEDULE/MANUAL", example = "SCHEDULE") String triggerSource,
     @Schema(description = "执行状态：RUNNING/SUCCEEDED/BLOCKED/FAILED", example = "SUCCEEDED") String status,
     @Schema(description = "Kafka 事件 ID") String eventId,

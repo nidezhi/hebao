@@ -1106,3 +1106,38 @@ cn-mainland-news-heat-aggregation
 - `AI_DATA_SOURCE_DISCOVERY` 定时任务默认沉淀候选，但不会自动启用新数据源。
 - 已存在数据源不会因为候选沉淀被改成停用。
 - 旧 `REGULATORY_DISCLOSURE_COLLECTION`、`EXCHANGE_ANNOUNCEMENT_COLLECTION`、`WEALTH_PRODUCT_NAV_REFRESH` 仍可作为审核后的执行原语，但不再是默认闭环入口。
+
+## 10. 2026-06-27：后端第一轮瘦身
+
+已删除接口背后的废弃实现，但没有删除现有前端查询接口。
+
+删除内容：
+
+| 对象 | 前端影响 |
+| --- | --- |
+| `INVESTMENT_NEWS_COLLECTION` RSS/fallback 采集处理器 | 任务类型不再可执行，任务表单不要展示该类型 |
+| RSS/Atom feed 客户端 | 不再支持配置 `feedUrls` 采集 RSS/Atom |
+| `fallbackArticles` 写入逻辑 | 不再允许兜底资讯通过任务写入正式资讯表 |
+| 未引用 `ExcelUtil/JsonUtil/RedisUtil` | 无接口影响 |
+| `aiw_ai_signal`、`aiw_ai_recommendation` | 数据库退役，前端不要生成“AI信号/AI建议”独立页面 |
+
+保留内容：
+
+| 对象 | 原因 |
+| --- | --- |
+| `REGULATORY_DISCLOSURE_COLLECTION` | LLM 候选审核后的监管披露执行原语 |
+| `EXCHANGE_ANNOUNCEMENT_COLLECTION` | LLM 候选审核后的公告执行原语 |
+| `WEALTH_PRODUCT_NAV_REFRESH` | 产品池 upsert 和净值入行情表执行原语 |
+| 资讯列表接口 | 仍用于展示公告、研报、监管和后续结构化采集结果 |
+
+前端任务类型下拉应移除：
+
+```text
+INVESTMENT_NEWS_COLLECTION
+```
+
+数据库迁移：
+
+```text
+V24__slim_deprecated_ai_signal_recommendation_tables.sql
+```

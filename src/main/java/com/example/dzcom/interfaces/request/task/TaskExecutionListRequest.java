@@ -7,9 +7,9 @@ import java.time.LocalDateTime;
 /** 投资任务执行记录分页请求。 */
 @Schema(description = "投资任务执行记录分页请求")
 public record TaskExecutionListRequest(
-    @Schema(description = "任务编码", example = "investment-news-collection")
+    @Schema(description = "任务编码", example = "llm-product-nav-collection")
     String taskCode,
-    @Schema(description = "任务类型", example = "INVESTMENT_NEWS_COLLECTION")
+    @Schema(description = "任务类型", example = "AI_DATA_SOURCE_DISCOVERY")
     String taskType,
     @Schema(description = "执行状态：RUNNING/SUCCEEDED/BLOCKED/FAILED", example = "SUCCEEDED")
     String status,

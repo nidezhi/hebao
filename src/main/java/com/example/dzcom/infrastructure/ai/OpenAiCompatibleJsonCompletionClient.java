@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,7 @@ import java.util.Map;
 /** OpenAI Chat Completions 兼容 JSON 调用客户端。 */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionClient {
     private static final String PROVIDER_CODE = "OPENAI_COMPATIBLE";
 
@@ -62,11 +64,39 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         AiModelRuntimeConfig modelConfig
     ) {
         if (modelConfig.mockEnabled()) {
+            log.info(
+                "AI JSON模型调用跳过: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, mockEnabled={}, systemPromptLength={}, userPromptLength={}",
+                operationCode,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                modelConfig.remoteModel(),
+                modelConfig.mockEnabled(),
+                textLength(systemPrompt),
+                textLength(userPrompt)
+            );
             return "";
         }
+        long startedAt = System.nanoTime();
+        String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
+        log.info(
+            "AI JSON模型调用开始: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, temperature={}, systemPromptLength={}, userPromptLength={}",
+            operationCode,
+            modelConfig.modelCode(),
+            modelConfig.modelVersion(),
+            modelConfig.providerCode(),
+            modelConfig.remoteModel(),
+            endpoint,
+            modelConfig.secretRef(),
+            modelConfig.apiKey() != null && !modelConfig.apiKey().isBlank(),
+            modelConfig.timeoutSeconds(),
+            modelConfig.temperature(),
+            textLength(systemPrompt),
+            textLength(userPrompt)
+        );
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(resolveChatCompletionsUrl(modelConfig.baseUrl())))
+                .uri(URI.create(endpoint))
                 .timeout(Duration.ofSeconds(modelConfig.timeoutSeconds()))
                 .header("Authorization", "Bearer " + modelConfig.apiKey())
                 .header("Content-Type", "application/json")
@@ -76,19 +106,66 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
                 .connectTimeout(Duration.ofSeconds(modelConfig.timeoutSeconds()))
                 .build()
                 .send(request, HttpResponse.BodyHandlers.ofString());
+            long durationMs = elapsedMs(startedAt);
+            log.info(
+                "AI JSON模型调用响应: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, httpStatus={}, durationMs={}, responseLength={}",
+                operationCode,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                response.statusCode(),
+                durationMs,
+                textLength(response.body())
+            );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new BusinessException(HttpStatus.BAD_GATEWAY,
                     operationCode + "模型调用失败: HTTP " + response.statusCode());
             }
             String content = extractContent(response.body(), operationCode);
             validateJsonObject(content, operationCode);
+            log.info(
+                "AI JSON模型调用完成: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}",
+                operationCode,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt),
+                textLength(content)
+            );
             return content;
         } catch (BusinessException exception) {
+            log.warn(
+                "AI JSON模型调用业务失败: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
+                operationCode,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt),
+                exception.getMessage()
+            );
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            log.warn(
+                "AI JSON模型调用被中断: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
+                operationCode,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt)
+            );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, operationCode + "模型调用被中断");
         } catch (Exception exception) {
+            log.warn(
+                "AI JSON模型调用异常: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
+                operationCode,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                elapsedMs(startedAt),
+                exception.getClass().getSimpleName(),
+                exception.getMessage()
+            );
             throw new BusinessException(HttpStatus.BAD_GATEWAY,
                 operationCode + "模型调用失败: " + exception.getMessage());
         }
@@ -154,5 +231,15 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         } catch (JsonProcessingException exception) {
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "模型请求JSON序列化失败");
         }
+    }
+
+    /** 计算文本长度，日志只记录长度，避免泄露完整 Prompt 和模型响应。 */
+    private int textLength(String value) {
+        return value == null ? 0 : value.length();
+    }
+
+    /** 计算模型调用耗时毫秒。 */
+    private long elapsedMs(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
     }
 }

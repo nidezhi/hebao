@@ -9,6 +9,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ import java.math.BigDecimal;
 /** 使用 Jackson 解析模型 JSON 配置并注入外部密钥。 */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfigResolver {
     private static final int DEFAULT_TIMEOUT_SECONDS = 60;
     private static final BigDecimal DEFAULT_TEMPERATURE = new BigDecimal("0.2");
@@ -37,9 +39,20 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
     public AiModelRuntimeConfig resolve(AiModel model) {
         JsonNode config = readConfig(model.modelConfig());
         String secretRef = text(config, "secretRef");
-        String apiKey = secretRef.isBlank() ? "" : secretResolver.resolve(secretRef);
+        boolean mockEnabled = bool(config, "mockEnabled", false);
+        log.info(
+            "AI模型运行配置解析开始: modelCode={}, modelVersion={}, providerCode={}, secretRef={}, mockEnabled={}, baseUrlConfigured={}, remoteModel={}",
+            model.modelCode(),
+            model.modelVersion(),
+            model.provider(),
+            secretRef,
+            mockEnabled,
+            !text(config, "baseUrl").isBlank(),
+            text(config, "model")
+        );
+        String apiKey = resolveSecret(model, secretRef);
 
-        return AiModelRuntimeConfig.builder()
+        AiModelRuntimeConfig runtimeConfig = AiModelRuntimeConfig.builder()
             .modelCode(model.modelCode())
             .modelVersion(model.modelVersion())
             .providerCode(model.provider())
@@ -49,8 +62,40 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
             .apiKey(apiKey)
             .timeoutSeconds(integer(config, "timeoutSeconds", DEFAULT_TIMEOUT_SECONDS))
             .temperature(decimal(config, "temperature", DEFAULT_TEMPERATURE))
-            .mockEnabled(bool(config, "mockEnabled", false))
+            .mockEnabled(mockEnabled)
             .build();
+        log.info(
+            "AI模型运行配置解析完成: modelCode={}, modelVersion={}, providerCode={}, secretRef={}, apiKeyConfigured={}, mockEnabled={}, timeoutSeconds={}, temperature={}",
+            runtimeConfig.modelCode(),
+            runtimeConfig.modelVersion(),
+            runtimeConfig.providerCode(),
+            runtimeConfig.secretRef(),
+            runtimeConfig.apiKey() != null && !runtimeConfig.apiKey().isBlank(),
+            runtimeConfig.mockEnabled(),
+            runtimeConfig.timeoutSeconds(),
+            runtimeConfig.temperature()
+        );
+        return runtimeConfig;
+    }
+
+    /** 解析外部密钥并记录失败原因，日志不输出密钥明文。 */
+    private String resolveSecret(AiModel model, String secretRef) {
+        if (secretRef.isBlank()) {
+            return "";
+        }
+        try {
+            return secretResolver.resolve(secretRef);
+        } catch (BusinessException exception) {
+            log.warn(
+                "AI模型密钥解析失败: modelCode={}, modelVersion={}, providerCode={}, secretRef={}, reason={}",
+                model.modelCode(),
+                model.modelVersion(),
+                model.provider(),
+                secretRef,
+                exception.getMessage()
+            );
+            throw exception;
+        }
     }
 
     /**

@@ -11,9 +11,9 @@ public record NewsArticleListRequest(
     String keyword,
     @Schema(description = "资讯类型", example = "NEWS")
     String articleType,
-    @Schema(description = "来源编码", example = "OFFICIAL_RSS")
+    @Schema(description = "来源编码", example = "CNINFO")
     String sourceCode,
-    @Schema(description = "语言编码", example = "en-US")
+    @Schema(description = "语言编码", example = "zh-CN")
     String languageCode,
     @Schema(description = "发布时间起点", example = "2026-06-16T00:00:00")
     LocalDateTime publishFrom,

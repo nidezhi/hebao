@@ -253,6 +253,7 @@ interface PageResult<T> {
 
 | 值 | 文案 | 关键参数 |
 | --- | --- | --- |
+| `AI_DATA_SOURCE_DISCOVERY` | LLM 数据源发现 | collectionDirection、skillCode、dataTypes、autoRegisterCandidates |
 | `REGULATORY_DISCLOSURE_COLLECTION` | 监管披露采集 | endpoints、itemsPath、titlePath |
 | `EXCHANGE_ANNOUNCEMENT_COLLECTION` | 交易所/巨潮公告采集 | endpoints、externalIdPath、publishTimePath |
 | `WEALTH_PRODUCT_NAV_REFRESH` | 理财产品净值刷新 | extraFieldPaths、productMarketCode、quoteInterval |
@@ -1614,7 +1615,7 @@ POST /api/risk/checks/list
 | 字段 | 控件 |
 | --- | --- |
 | `endpoints` | 可增删端点列表 |
-| `responseFormat` | Select：JSON/HTML/RSS |
+| `responseFormat` | Select：JSON/HTML |
 | `itemsPath` | Input |
 | `externalIdPath` | Input |
 | `titlePath` | Input |
