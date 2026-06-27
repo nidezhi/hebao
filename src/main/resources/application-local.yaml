@@ -98,6 +98,7 @@ investment:
       - code: llm-data-collection-multi-source
         type: AI_DATA_SOURCE_DISCOVERY
         cron: ${LLM_DATA_COLLECTION_MULTI_SOURCE_CRON:0 0 */6 * * *}
+        enabled: ${LLM_DATA_COLLECTION_MULTI_SOURCE_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
@@ -117,6 +118,7 @@ investment:
       - code: llm-official-disclosure-collection
         type: AI_DATA_SOURCE_DISCOVERY
         cron: ${LLM_OFFICIAL_DISCLOSURE_COLLECTION_CRON:0 10 */6 * * *}
+        enabled: ${LLM_OFFICIAL_DISCLOSURE_COLLECTION_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
@@ -136,6 +138,7 @@ investment:
       - code: llm-news-research-collection
         type: AI_DATA_SOURCE_DISCOVERY
         cron: ${LLM_NEWS_RESEARCH_COLLECTION_CRON:0 20 */6 * * *}
+        enabled: ${LLM_NEWS_RESEARCH_COLLECTION_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
@@ -155,6 +158,7 @@ investment:
       - code: llm-product-nav-collection
         type: AI_DATA_SOURCE_DISCOVERY
         cron: ${LLM_PRODUCT_NAV_COLLECTION_CRON:0 30 */6 * * *}
+        enabled: ${LLM_PRODUCT_NAV_COLLECTION_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
@@ -174,6 +178,7 @@ investment:
       - code: llm-market-quote-collection
         type: AI_DATA_SOURCE_DISCOVERY
         cron: ${LLM_MARKET_QUOTE_COLLECTION_CRON:0 40 */6 * * *}
+        enabled: ${LLM_MARKET_QUOTE_COLLECTION_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
@@ -193,6 +198,7 @@ investment:
       - code: llm-regulatory-collection
         type: AI_DATA_SOURCE_DISCOVERY
         cron: ${LLM_REGULATORY_COLLECTION_CRON:0 50 */6 * * *}
+        enabled: ${LLM_REGULATORY_COLLECTION_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
@@ -212,6 +218,7 @@ investment:
       - code: llm-structured-core-data-collection
         type: AI_STRUCTURED_DATA_COLLECTION
         cron: ${LLM_STRUCTURED_CORE_DATA_COLLECTION_CRON:0 5 */2 * * *}
+        enabled: ${LLM_STRUCTURED_CORE_DATA_COLLECTION_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           environment: DEFAULT
@@ -225,9 +232,62 @@ investment:
           maxProducts: "12"
           maxQuotes: "36"
           themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
+      - code: real-product-universe-sync
+        type: REAL_PRODUCT_UNIVERSE_SYNC
+        cron: ${REAL_PRODUCT_UNIVERSE_SYNC_CRON:0 30 8 * * *}
+        enabled: ${REAL_PRODUCT_UNIVERSE_SYNC_ENABLED:true}
+        zone: Asia/Shanghai
+        parameters:
+          sourceCode: ${REAL_MARKET_SOURCE_CODE:EASTMONEY_PUBLIC}
+          providerBaseUrl: ${AKSHARE_PROVIDER_BASE_URL:${REAL_MARKET_PROVIDER_BASE_URL:}}
+          marketScope: CN_MAINLAND
+          defaultCurrency: CNY
+          defaultRiskLevel: "3"
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
+          lookbackDays: "10"
+          timeoutSeconds: "12"
+      - code: real-market-quote-sync
+        type: REAL_MARKET_QUOTE_SYNC
+        cron: ${REAL_MARKET_QUOTE_SYNC_CRON:0 30 17 * * *}
+        enabled: ${REAL_MARKET_QUOTE_SYNC_ENABLED:true}
+        zone: Asia/Shanghai
+        parameters:
+          sourceCode: ${REAL_MARKET_SOURCE_CODE:EASTMONEY_PUBLIC}
+          providerBaseUrl: ${AKSHARE_PROVIDER_BASE_URL:${REAL_MARKET_PROVIDER_BASE_URL:}}
+          marketScope: CN_MAINLAND
+          quoteInterval: 1D
+          lookbackDays: "10"
+          timeoutSeconds: "20"
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
+      - code: real-news-sync
+        type: REAL_NEWS_SYNC
+        cron: ${REAL_NEWS_SYNC_CRON:0 0 */2 * * *}
+        enabled: ${REAL_NEWS_SYNC_ENABLED:true}
+        zone: Asia/Shanghai
+        parameters:
+          sourceCode: ${REAL_NEWS_SOURCE_CODE:EASTMONEY_NEWS}
+          providerBaseUrl: ${AKSHARE_PROVIDER_BASE_URL:${REAL_NEWS_PROVIDER_BASE_URL:${REAL_MARKET_PROVIDER_BASE_URL:}}}
+          marketScope: CN_MAINLAND
+          keywords: ${HOT_INVESTMENT_NEWS_KEYWORDS:AI,人工智能,算力,大模型,半导体,芯片,集成电路,黄金,金价,贵金属}
+          lookbackDays: "3"
+          maxItems: "100"
+          timeoutSeconds: "20"
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
+      - code: real-data-quality-snapshot
+        type: REAL_DATA_QUALITY_SNAPSHOT
+        cron: ${REAL_DATA_QUALITY_SNAPSHOT_CRON:0 10 * * * *}
+        enabled: ${REAL_DATA_QUALITY_SNAPSHOT_ENABLED:true}
+        zone: Asia/Shanghai
+        parameters:
+          marketScope: CN_MAINLAND
+          freshnessHours: "72"
+          minNewsCount: "20"
+          minRealDataQualityScore: "0.60"
+          keywords: ${HOT_INVESTMENT_NEWS_KEYWORDS:AI,人工智能,算力,大模型,半导体,芯片,集成电路,黄金,金价,贵金属}
+          themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
       - code: cn-mainland-market-momentum-scan
         type: MARKET_MOMENTUM_SCAN
-        cron: ${MARKET_MOMENTUM_CRON:0 */5 * * * *}
+        cron: ${MARKET_MOMENTUM_CRON:0 20 * * * *}
         zone: Asia/Shanghai
         parameters:
           windowMinutes: "60"
@@ -236,7 +296,7 @@ investment:
           themeMarketScopes: ${HOT_INVESTMENT_THEME_SCOPES:AI人工智能=CN_MAINLAND;半导体=CN_MAINLAND;黄金=CN_MAINLAND}
       - code: cn-mainland-hot-theme-return
         type: HOT_THEME_RETURN
-        cron: ${HOT_THEME_RETURN_CRON:30 */10 * * * *}
+        cron: ${HOT_THEME_RETURN_CRON:0 25 * * * *}
         zone: Asia/Shanghai
         parameters:
           windowMinutes: "1440"
@@ -245,7 +305,7 @@ investment:
           themeMarketScopes: ${HOT_INVESTMENT_THEME_SCOPES:AI人工智能=CN_MAINLAND;半导体=CN_MAINLAND;黄金=CN_MAINLAND}
       - code: cn-mainland-news-heat-aggregation
         type: NEWS_HEAT_AGGREGATION
-        cron: ${NEWS_HEAT_CRON:45 */10 * * * *}
+        cron: ${NEWS_HEAT_CRON:0 30 * * * *}
         zone: Asia/Shanghai
         parameters:
           windowMinutes: "1440"
@@ -255,7 +315,8 @@ investment:
           themeMarketScopes: ${HOT_INVESTMENT_THEME_SCOPES:AI人工智能=CN_MAINLAND;半导体=CN_MAINLAND;黄金=CN_MAINLAND}
       - code: auto-openai-investment-report-generation
         type: AUTO_INVESTMENT_REPORT_GENERATION
-        cron: ${AUTO_INVESTMENT_REPORT_CRON:0 5 */1 * * *}
+        cron: ${AUTO_INVESTMENT_REPORT_CRON:0 30 20 * * *}
+        enabled: ${AUTO_INVESTMENT_REPORT_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           providerCode: OPENAI_COMPATIBLE
@@ -267,6 +328,7 @@ investment:
       - code: auto-prompt-governance
         type: AUTO_PROMPT_GOVERNANCE
         cron: ${AUTO_PROMPT_GOVERNANCE_CRON:0 20 */2 * * *}
+        enabled: ${AUTO_PROMPT_GOVERNANCE_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           promptCode: investment-plan-from-report
@@ -275,7 +337,8 @@ investment:
           reportSampleSize: "20"
       - code: auto-investment-closed-loop-orchestration
         type: AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION
-        cron: ${AUTO_INVESTMENT_CLOSED_LOOP_CRON:0 40 */2 * * *}
+        cron: ${AUTO_INVESTMENT_CLOSED_LOOP_CRON:0 0 21 * * *}
+        enabled: ${AUTO_INVESTMENT_CLOSED_LOOP_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
           automationLevel: FULL_MOCK
@@ -293,7 +356,8 @@ investment:
           requireStructuredCoreData: "true"
           minStructuredNewsCount: "1"
           minStructuredQuoteCount: "1"
-          dataTaskCodes: llm-structured-core-data-collection,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation
+          minRealDataQualityScore: "0.60"
+          dataTaskCodes: real-product-universe-sync,real-market-quote-sync,real-news-sync,real-data-quality-snapshot,cn-mainland-market-momentum-scan,cn-mainland-hot-theme-return,cn-mainland-news-heat-aggregation
           reportTaskCode: auto-openai-investment-report-generation
           promptTaskCode: auto-prompt-governance
           modelCode: ${AUTO_INVESTMENT_REPORT_MODEL:openai-compatible-analysis}

@@ -7,8 +7,10 @@ import com.example.dzcom.application.dto.ai.AiModelRuntimeConfig;
 import com.example.dzcom.application.service.ai.InvestmentAnalysisProvider;
 import com.example.dzcom.application.service.task.TaskParameterParser;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
+import com.example.dzcom.domain.model.market.DataQualitySnapshot;
 import com.example.dzcom.domain.model.task.NewsArticle;
 import com.example.dzcom.domain.model.task.InvestmentThemeSnapshot;
+import com.example.dzcom.domain.repository.market.DataSourceStore;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotSearchCriteria;
 import com.example.dzcom.domain.repository.task.InvestmentThemeSnapshotStore;
 import com.example.dzcom.domain.repository.task.NewsArticleStore;
@@ -33,9 +35,12 @@ import java.util.Map;
 public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisProvider {
     private static final BigDecimal MIN_REPORT_QUALITY_SCORE = BigDecimal.valueOf(0.45);
     private static final BigDecimal MAX_FALLBACK_NEWS_RATIO = BigDecimal.valueOf(0.20);
+    private static final BigDecimal CORE_GATE_WEIGHT = new BigDecimal("0.75");
+    private static final BigDecimal THEME_SIGNAL_WEIGHT = new BigDecimal("0.25");
 
     private final InvestmentThemeSnapshotStore snapshots;
     private final NewsArticleStore articles;
+    private final DataSourceStore dataSources;
     private final IdGenerator ids;
     private final ClockProvider clock;
     private final ObjectMapper objectMapper;
@@ -147,11 +152,14 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .map(InvestmentThemeSnapshot::heatScore)
             .filter(value -> value != null)
             .toList());
-        BigDecimal dataQualityScore = average(snapshotQualityScores(themeSnapshots));
+        CoreDataGate coreDataGate = latestCoreDataGate();
+        BigDecimal themeSignalScore = average(snapshotQualityScores(themeSnapshots));
+        BigDecimal dataQualityScore = mergedDataQualityScore(coreDataGate, themeSignalScore);
         DataQualityGate qualityGate = buildQualityGate(
             themeSnapshots,
             recentNews,
-            dataQualityScore
+            dataQualityScore,
+            coreDataGate
         );
         BigDecimal initialCapital = resolveInitialCapital(command.initialCapital());
         BigDecimal allocationRate = qualityGate.passed()
@@ -174,6 +182,8 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .averageReturn(averageReturn)
             .averageMomentum(averageMomentum)
             .averageHeat(averageHeat)
+            .themeSignalScore(themeSignalScore)
+            .coreDataGate(coreDataGate)
             .dataQualityScore(dataQualityScore)
             .dataQualityLevel(resolveQualityLevel(dataQualityScore))
             .qualityGate(qualityGate)
@@ -395,14 +405,16 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
     private DataQualityGate buildQualityGate(
         List<InvestmentThemeSnapshot> themeSnapshots,
         List<NewsArticle> recentNews,
-        BigDecimal dataQualityScore
+        BigDecimal dataQualityScore,
+        CoreDataGate coreDataGate
     ) {
         BigDecimal fallbackNewsRatio = fallbackNewsRatio(recentNews);
         List<String> reasons = buildQualityReasons(
             themeSnapshots,
             recentNews,
             dataQualityScore,
-            fallbackNewsRatio
+            fallbackNewsRatio,
+            coreDataGate
         );
         boolean passed = reasons.isEmpty();
         String confidenceLevel = resolveConfidenceLevel(passed, dataQualityScore);
@@ -411,6 +423,9 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .confidenceLevel(confidenceLevel)
             .snapshotCount(themeSnapshots.size())
             .newsCount(recentNews.size())
+            .coreDataQualityScore(coreDataGate.qualityScore())
+            .coreDataReportAllowed(coreDataGate.reportAllowed())
+            .themeSignalScore(average(snapshotQualityScores(themeSnapshots)))
             .fallbackNewsRatio(fallbackNewsRatio)
             .reasons(reasons)
             .displayMessage(displayMessage(passed, reasons))
@@ -433,6 +448,9 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         gate.put("dataQualityScore", context.dataQualityScore());
         gate.put("snapshotCount", context.qualityGate().snapshotCount());
         gate.put("newsCount", context.qualityGate().newsCount());
+        gate.put("coreDataQualityScore", context.qualityGate().coreDataQualityScore());
+        gate.put("coreDataReportAllowed", context.qualityGate().coreDataReportAllowed());
+        gate.put("themeSignalScore", context.qualityGate().themeSignalScore());
         gate.put("fallbackNewsRatio", context.qualityGate().fallbackNewsRatio());
         gate.put("reasons", context.qualityGate().reasons());
         gate.put("displayMessage", context.qualityGate().displayMessage());
@@ -455,11 +473,12 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         List<InvestmentThemeSnapshot> themeSnapshots,
         List<NewsArticle> recentNews,
         BigDecimal dataQualityScore,
-        BigDecimal fallbackNewsRatio
+        BigDecimal fallbackNewsRatio,
+        CoreDataGate coreDataGate
     ) {
         Map<String, Boolean> checks = new LinkedHashMap<>();
-        checks.put("NO_THEME_SNAPSHOT", themeSnapshots.isEmpty());
-        checks.put("NO_RECENT_NEWS", recentNews.isEmpty());
+        checks.put("CORE_DATA_GATE_NOT_PASSED", !coreDataGate.reportAllowed());
+        checks.put("NO_RECENT_NEWS", recentNews.isEmpty() && !coreDataGate.reportAllowed());
         checks.put("LOW_DATA_QUALITY", dataQualityScore.compareTo(MIN_REPORT_QUALITY_SCORE) < 0);
         checks.put("FALLBACK_NEWS_RATIO_TOO_HIGH",
             fallbackNewsRatio.compareTo(MAX_FALLBACK_NEWS_RATIO) > 0);
@@ -573,6 +592,45 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .map(this::readQualityScore)
             .filter(value -> value != null)
             .toList();
+    }
+
+    /** 读取最新真实核心数据门禁。 */
+    private CoreDataGate latestCoreDataGate() {
+        return dataSources.findQualitySnapshots("REAL_DATA_GATE", "CORE_DATA_GATE", 1).stream()
+            .findFirst()
+            .map(snapshot -> CoreDataGate.builder()
+                .qualityScore(defaultZero(snapshot.qualityScore()))
+                .reportAllowed(readReportAllowed(snapshot))
+                .snapshotTime(snapshot.snapshotTime())
+                .sampleCount(snapshot.sampleCount())
+                .build())
+            .orElse(CoreDataGate.builder()
+                .qualityScore(BigDecimal.ZERO)
+                .reportAllowed(false)
+                .sampleCount(0)
+                .build());
+    }
+
+    /** 合并真实核心门禁和主题信号质量。 */
+    private BigDecimal mergedDataQualityScore(CoreDataGate coreDataGate, BigDecimal themeSignalScore) {
+        if (coreDataGate.reportAllowed()) {
+            return coreDataGate.qualityScore().multiply(CORE_GATE_WEIGHT)
+                .add(themeSignalScore.multiply(THEME_SIGNAL_WEIGHT))
+                .setScale(4, RoundingMode.HALF_UP);
+        }
+        return themeSignalScore.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /** 从质量快照 detail 判断报告是否允许。 */
+    private boolean readReportAllowed(DataQualitySnapshot snapshot) {
+        if (snapshot.detail() == null || snapshot.detail().isBlank()) {
+            return false;
+        }
+        try {
+            return objectMapper.readTree(snapshot.detail()).path("reportAllowed").asBoolean(false);
+        } catch (JsonProcessingException exception) {
+            return false;
+        }
     }
 
     /**
@@ -744,6 +802,8 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         BigDecimal averageReturn,
         BigDecimal averageMomentum,
         BigDecimal averageHeat,
+        BigDecimal themeSignalScore,
+        CoreDataGate coreDataGate,
         BigDecimal dataQualityScore,
         String dataQualityLevel,
         DataQualityGate qualityGate,
@@ -761,10 +821,23 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         String confidenceLevel,
         int snapshotCount,
         int newsCount,
+        BigDecimal coreDataQualityScore,
+        boolean coreDataReportAllowed,
+        BigDecimal themeSignalScore,
         BigDecimal fallbackNewsRatio,
         List<String> reasons,
         String displayMessage,
         List<String> allowedActions
+    ) {
+    }
+
+    /** 真实核心数据门禁摘要。 */
+    @Builder
+    private record CoreDataGate(
+        BigDecimal qualityScore,
+        boolean reportAllowed,
+        LocalDateTime snapshotTime,
+        int sampleCount
     ) {
     }
 }

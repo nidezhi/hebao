@@ -42,6 +42,10 @@ import java.util.Set;
 public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements InvestmentTaskHandler {
     private static final String TASK_TYPE = "AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION";
     private static final String STRUCTURED_DATA_COLLECTION_TASK_TYPE = "AI_STRUCTURED_DATA_COLLECTION";
+    private static final String REAL_PRODUCT_TASK_TYPE = "REAL_PRODUCT_UNIVERSE_SYNC";
+    private static final String REAL_QUOTE_TASK_TYPE = "REAL_MARKET_QUOTE_SYNC";
+    private static final String REAL_NEWS_TASK_TYPE = "REAL_NEWS_SYNC";
+    private static final String REAL_QUALITY_TASK_TYPE = "REAL_DATA_QUALITY_SNAPSHOT";
     private static final String DEFAULT_PORTFOLIO_NAME = "全自动闭环模拟组合";
     private static final String DEFAULT_MODEL_TYPE = "INVESTMENT_ANALYSIS";
     private static final DateTimeFormatter VERSION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -223,15 +227,15 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of("taskCodes", taskCodes));
             throw new ClosedLoopBlockedException(reason);
         }
-        enforceStructuredCoreData(run, parentParameters, stepCode, stepName, stepOrder, results);
+        enforceRealCoreData(run, parentParameters, stepCode, stepName, stepOrder, results);
         log.info("自动投资闭环子任务组完成: runNo={}, stepCode={}, results={}", run.runNo(), stepCode, JSON.toJSONString(results));
         closedLoops.succeedStep(run, stepCode, stepName, stepOrder,
             Map.of("taskCodes", taskCodes),
             Map.of("executions", results));
     }
 
-    /** 主闭环报告前必须有结构化真实核心数据，避免空数据继续生成低质量报告。 */
-    private void enforceStructuredCoreData(
+    /** 主闭环报告前必须有真实核心数据，避免空数据继续生成低质量报告。 */
+    private void enforceRealCoreData(
         ClosedLoopRun run,
         Map<String, String> parentParameters,
         String stepCode,
@@ -241,6 +245,45 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     ) {
         if (!"DATA_COLLECTION".equals(stepCode)
             || !TaskParameterParser.bool(parentParameters, "requireStructuredCoreData", true)) {
+            return;
+        }
+        List<RealDataSummary> realSummaries = results.stream()
+            .map(this::realDataSummary)
+            .toList();
+        int productCount = realDataCount(realSummaries, RealDataSummary::productCount);
+        int quoteCount = realDataCount(realSummaries, RealDataSummary::quoteCount);
+        int newsCount = realDataCount(realSummaries, RealDataSummary::newsCount);
+        BigDecimal qualityScore = realSummaries.stream()
+            .map(RealDataSummary::qualityScore)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::max);
+        int minProductCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredProductCount", 1);
+        int minNewsCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredNewsCount", 1);
+        int minQuoteCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredQuoteCount", 1);
+        BigDecimal minRealDataQualityScore = new BigDecimal(TaskParameterParser.string(
+            parentParameters, "minRealDataQualityScore", "0.60"));
+        boolean hasRealDataTasks = realSummaries.stream().anyMatch(RealDataSummary::realTask);
+        if (hasRealDataTasks) {
+            if (productCount < minProductCount || newsCount < minNewsCount || quoteCount < minQuoteCount
+                || qualityScore.compareTo(minRealDataQualityScore) < 0) {
+                String reason = "真实核心数据不足: productCount=" + productCount
+                    + ", newsCount=" + newsCount
+                    + ", quoteCount=" + quoteCount
+                    + ", qualityScore=" + qualityScore
+                    + ", minProductCount=" + minProductCount
+                    + ", minStructuredNewsCount=" + minNewsCount
+                    + ", minStructuredQuoteCount=" + minQuoteCount
+                    + ", minRealDataQualityScore=" + minRealDataQualityScore;
+                log.warn("自动投资闭环真实核心数据门禁阻断: runNo={}, reason={}", run.runNo(), reason);
+                closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of(
+                    "productCount", productCount,
+                    "newsCount", newsCount,
+                    "quoteCount", quoteCount,
+                    "qualityScore", qualityScore,
+                    "summaries", realSummaries.stream().map(RealDataSummary::asMap).toList()
+                ));
+                throw new ClosedLoopBlockedException(reason);
+            }
             return;
         }
         List<StructuredDataSummary> summaries = results.stream()
@@ -257,27 +300,107 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             ));
             throw new ClosedLoopBlockedException(reason);
         }
-        int newsCount = summaries.stream().mapToInt(StructuredDataSummary::newsCount).sum();
-        int productCount = summaries.stream().mapToInt(StructuredDataSummary::productCount).sum();
-        int quoteCount = summaries.stream().mapToInt(StructuredDataSummary::quoteCount).sum();
-        int minNewsCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredNewsCount", 1);
-        int minQuoteCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredQuoteCount", 1);
-        if (newsCount < minNewsCount || quoteCount < minQuoteCount) {
-            String reason = "AI结构化核心数据不足: newsCount=" + newsCount
-                + ", productCount=" + productCount
-                + ", quoteCount=" + quoteCount
-                + ", minStructuredNewsCount=" + minNewsCount
-                + ", minStructuredQuoteCount=" + minQuoteCount;
+        int aiNewsCount = summaries.stream().mapToInt(StructuredDataSummary::newsCount).sum();
+        int aiProductCount = summaries.stream().mapToInt(StructuredDataSummary::productCount).sum();
+        int aiQuoteCount = summaries.stream().mapToInt(StructuredDataSummary::quoteCount).sum();
+        int minAiNewsCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredNewsCount", 1);
+        int minAiQuoteCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredQuoteCount", 1);
+        if (aiNewsCount < minAiNewsCount || aiQuoteCount < minAiQuoteCount) {
+            String reason = "AI结构化核心数据不足: newsCount=" + aiNewsCount
+                + ", productCount=" + aiProductCount
+                + ", quoteCount=" + aiQuoteCount
+                + ", minStructuredNewsCount=" + minAiNewsCount
+                + ", minStructuredQuoteCount=" + minAiQuoteCount;
             log.warn("自动投资闭环结构化核心数据门禁阻断: runNo={}, reason={}", run.runNo(), reason);
             closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of(
                 "requiredTaskType", STRUCTURED_DATA_COLLECTION_TASK_TYPE,
-                "newsCount", newsCount,
-                "productCount", productCount,
-                "quoteCount", quoteCount,
+                "newsCount", aiNewsCount,
+                "productCount", aiProductCount,
+                "quoteCount", aiQuoteCount,
                 "summaries", summaries.stream().map(StructuredDataSummary::asMap).toList()
             ));
             throw new ClosedLoopBlockedException(reason);
         }
+    }
+
+    /** 从真实数据子任务摘要提取产品、行情、资讯和质量计数。 */
+    private RealDataSummary realDataSummary(Map<String, Object> result) {
+        String taskType = String.valueOf(result.getOrDefault("taskType", ""));
+        String summary = result.get("resultSummary") == null ? "" : String.valueOf(result.get("resultSummary"));
+        boolean realTask = Set.of(REAL_PRODUCT_TASK_TYPE, REAL_QUOTE_TASK_TYPE, REAL_NEWS_TASK_TYPE, REAL_QUALITY_TASK_TYPE)
+            .contains(taskType);
+        int productCount = REAL_PRODUCT_TASK_TYPE.equals(taskType)
+            ? extractInt(summary, "saved")
+            : REAL_QUALITY_TASK_TYPE.equals(taskType) ? extractInt(summary, "products") : 0;
+        int quoteCount = REAL_QUOTE_TASK_TYPE.equals(taskType)
+            ? extractInt(summary, "saved")
+            : REAL_QUALITY_TASK_TYPE.equals(taskType) ? extractInt(summary, "quoteReady") : 0;
+        int newsCount = REAL_NEWS_TASK_TYPE.equals(taskType)
+            ? extractInt(summary, "saved")
+            : REAL_QUALITY_TASK_TYPE.equals(taskType) ? extractInt(summary, "recentNews") : 0;
+        BigDecimal qualityScore = REAL_QUALITY_TASK_TYPE.equals(taskType)
+            ? extractDecimal(summary, "quality")
+            : null;
+        return new RealDataSummary(taskType, productCount, quoteCount, newsCount, qualityScore, realTask, summary);
+    }
+
+    /** 优先使用真实采集任务计数；只有低成本验证仅执行质量快照时，才使用质量快照内的汇总计数。 */
+    private int realDataCount(List<RealDataSummary> summaries, java.util.function.ToIntFunction<RealDataSummary> counter) {
+        int directCount = summaries.stream()
+            .filter(summary -> !REAL_QUALITY_TASK_TYPE.equals(summary.taskType()))
+            .mapToInt(counter)
+            .sum();
+        if (directCount > 0) {
+            return directCount;
+        }
+        return summaries.stream()
+            .filter(summary -> REAL_QUALITY_TASK_TYPE.equals(summary.taskType()))
+            .mapToInt(counter)
+            .sum();
+    }
+
+    /** 从“key=value”摘要中提取整数。 */
+    private int extractInt(String summary, String key) {
+        String value = extractValue(summary, key);
+        if (value.isBlank()) {
+            return 0;
+        }
+        try {
+            return new BigDecimal(value).intValue();
+        } catch (NumberFormatException exception) {
+            return 0;
+        }
+    }
+
+    /** 从“key=value”摘要中提取小数。 */
+    private BigDecimal extractDecimal(String summary, String key) {
+        String value = extractValue(summary, key);
+        if (value.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(value);
+        } catch (NumberFormatException exception) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /** 解析摘要中的 key=value 值。 */
+    private String extractValue(String summary, String key) {
+        if (summary == null || summary.isBlank()) {
+            return "";
+        }
+        String marker = key + "=";
+        int start = summary.indexOf(marker);
+        if (start < 0) {
+            return "";
+        }
+        int valueStart = start + marker.length();
+        int end = summary.indexOf(",", valueStart);
+        if (end < 0) {
+            end = summary.length();
+        }
+        return summary.substring(valueStart, end).trim();
     }
 
     /** 从子任务摘要提取结构化采集落库计数。 */
@@ -296,6 +419,15 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     /** 执行自动报告任务，并把本轮模型、市场和回看窗口参数传给报告处理器。 */
     private void runReportTask(ClosedLoopRun run, InvestmentTaskEvent parentEvent, Map<String, String> parameters) {
+        if (TaskParameterParser.bool(parameters, "skipReportTask", false)) {
+            String reason = "已配置跳过自动报告任务，复用候选窗口内最新合格报告";
+            log.info("自动投资闭环报告任务跳过: runNo={}, reason={}", run.runNo(), reason);
+            closedLoops.skippedStep(run, "REPORT_GENERATION", "自动报告生成", 30, reason, Map.of(
+                "skipReportTask", true,
+                "maxReportsForMock", TaskParameterParser.positiveInt(parameters, "maxReportsForMock", 20)
+            ));
+            return;
+        }
         String reportTaskCode = TaskParameterParser.string(parameters, "reportTaskCode", "");
         if (reportTaskCode.isBlank()) {
             String reason = "未配置自动报告任务";
@@ -787,6 +919,28 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "newsCount", newsCount,
                 "productCount", productCount,
                 "quoteCount", quoteCount
+            );
+        }
+    }
+
+    /** 确定性真实核心数据采集摘要。 */
+    private record RealDataSummary(
+        String taskType,
+        int productCount,
+        int quoteCount,
+        int newsCount,
+        BigDecimal qualityScore,
+        boolean realTask,
+        String summary
+    ) {
+        private Map<String, Object> asMap() {
+            return Map.of(
+                "taskType", taskType,
+                "productCount", productCount,
+                "quoteCount", quoteCount,
+                "newsCount", newsCount,
+                "qualityScore", qualityScore == null ? BigDecimal.ZERO : qualityScore,
+                "summary", summary == null ? "" : summary
             );
         }
     }

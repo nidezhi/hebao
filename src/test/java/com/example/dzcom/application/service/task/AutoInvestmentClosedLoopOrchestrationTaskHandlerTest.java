@@ -119,6 +119,74 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             .anyMatch(step -> "QUALITY_GATE".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
     }
 
+    /** 已有合格报告时可跳过报告生成，避免调试后半段闭环时重复消耗远端模型。 */
+    @Test
+    void shouldSkipReportTaskWhenReusableQualifiedReportExists() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(report("report-pass", new BigDecimal("0.80"), true));
+
+        String summary = fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-skip-report")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "reportTaskCode", "report-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertTrue(summary.contains("reportBizId=report-pass"));
+        assertEquals(0, fixture.reportTaskHandler.calls);
+        assertEquals(1, fixture.portfolioService.ensureCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "REPORT_GENERATION".equals(step.stepCode()) && "SKIPPED".equals(step.stepStatus())));
+    }
+
+    /** 低成本验证只跑真实质量快照时，应能使用快照摘要中的产品、行情和资讯计数通过数据门禁。 */
+    @Test
+    void shouldUseRealQualitySnapshotCountsWhenOnlyQualityTaskRuns() {
+        Fixture fixture = new Fixture();
+        fixture.definitions.save(fixture.definition("quality-task", "REAL_DATA_QUALITY_SNAPSHOT"));
+        fixture.taskHandlers.add(new SuccessfulTaskHandler(
+            "REAL_DATA_QUALITY_SNAPSHOT",
+            "真实数据质量快照完成: quality=0.8000, products=8, quoteReady=8, recentNews=4"
+        ));
+        fixture.reports.items.add(report("report-pass", new BigDecimal("0.80"), true));
+
+        String summary = fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-quality-only")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "quality-task",
+                    "skipReportTask", "true",
+                    "minStructuredProductCount", "1",
+                    "minStructuredNewsCount", "1",
+                    "minStructuredQuoteCount", "1",
+                    "minRealDataQualityScore", "0.60",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertTrue(summary.contains("reportBizId=report-pass"));
+        assertEquals(1, fixture.portfolioService.ensureCalls);
+    }
+
     /** 质量门禁阻断应作为任务 BLOCKED 记录，不应被审计为系统失败。 */
     @Test
     void shouldPersistBlockedExecutionWhenClosedLoopGateBlocks() {
@@ -126,6 +194,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         InvestmentTaskExecutionService executionService = new InvestmentTaskExecutionService(
             List.of(fixture.handler),
             fixture.executions,
+            Optional.of(fixture.definitions),
             fixture.ids,
             () -> NOW
         );
@@ -150,6 +219,84 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
 
         assertEquals("BLOCKED", execution.status());
         assertEquals("没有找到满足质量门禁的最新投资报告", execution.failureReason());
+    }
+
+    /** 历史 Kafka 定时消息命中已禁用任务时，应直接跳过，避免继续执行旧高消费参数。 */
+    @Test
+    void shouldSkipDisabledScheduledTaskEvent() {
+        Fixture fixture = new Fixture();
+        fixture.definitions.save(InvestmentTaskDefinition.builder()
+            .bizId("disabled-task-id")
+            .taskCode("disabled-ai-task")
+            .taskType("EXPENSIVE_AI_TASK")
+            .cron("0 * * * * *")
+            .zone("Asia/Shanghai")
+            .enabled(false)
+            .parameters(Map.of("dataTaskCodes", "old-expensive-task"))
+            .description("disabled")
+            .createdAt(NOW)
+            .updatedAt(NOW)
+            .build());
+        CountingTaskHandler expensiveHandler = new CountingTaskHandler("EXPENSIVE_AI_TASK");
+        InvestmentTaskExecutionService executionService = new InvestmentTaskExecutionService(
+            List.of(expensiveHandler),
+            fixture.executions,
+            Optional.of(fixture.definitions),
+            fixture.ids,
+            () -> NOW
+        );
+
+        ScheduledTaskExecution execution = executionService.executeAndReturn(
+            InvestmentTaskEvent.builder()
+                .eventId("event-disabled")
+                .taskCode("disabled-ai-task")
+                .taskType("EXPENSIVE_AI_TASK")
+                .triggerSource("SCHEDULE")
+                .parameters(Map.of("dataTaskCodes", "stale-expensive-task"))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals("SKIPPED", execution.status());
+        assertEquals(0, expensiveHandler.calls);
+    }
+
+    /** 历史手动消息早于任务定义更新时间时，也应跳过已禁用任务，防止旧Kafka积压继续烧模型。 */
+    @Test
+    void shouldSkipStaleManualEventForDisabledTask() {
+        Fixture fixture = new Fixture();
+        fixture.definitions.save(InvestmentTaskDefinition.builder()
+            .bizId("disabled-manual-task-id")
+            .taskCode("disabled-manual-ai-task")
+            .taskType("EXPENSIVE_AI_TASK")
+            .cron("0 * * * * *")
+            .zone("Asia/Shanghai")
+            .enabled(false)
+            .parameters(Map.of("dataTaskCodes", "new-real-task"))
+            .description("disabled")
+            .createdAt(NOW)
+            .updatedAt(NOW.plusMinutes(10))
+            .build());
+        CountingTaskHandler expensiveHandler = new CountingTaskHandler("EXPENSIVE_AI_TASK");
+        InvestmentTaskExecutionService executionService = new InvestmentTaskExecutionService(
+            List.of(expensiveHandler),
+            fixture.executions,
+            Optional.of(fixture.definitions),
+            fixture.ids,
+            () -> NOW
+        );
+
+        ScheduledTaskExecution execution = executionService.executeAndReturn(
+            InvestmentTaskEvent.builder()
+                .eventId("event-stale-manual")
+                .taskCode("disabled-manual-ai-task")
+                .taskType("EXPENSIVE_AI_TASK")
+                .triggerSource("MANUAL")
+                .parameters(Map.of("dataTaskCodes", "stale-expensive-task"))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals("SKIPPED", execution.status());
+        assertEquals(0, expensiveHandler.calls);
     }
 
     private static InvestmentAnalysisReport report(String bizId, BigDecimal qualityScore, boolean gatePassed) {
@@ -178,14 +325,20 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private final MemoryReportStore reports = new MemoryReportStore();
         private final CountingPortfolioService portfolioService = new CountingPortfolioService();
         private final FakeInvestmentClosedLoopService closedLoopService = new FakeInvestmentClosedLoopService();
+        private final SuccessfulTaskHandler dataTaskHandler = new SuccessfulTaskHandler("DATA_TASK");
+        private final SuccessfulTaskHandler reportTaskHandler = new SuccessfulTaskHandler("REPORT_TASK");
+        private final List<InvestmentTaskHandler> taskHandlers = new ArrayList<>();
         private final AutoInvestmentClosedLoopOrchestrationTaskHandler handler;
 
         private Fixture() {
             definitions.save(definition("data-task", "DATA_TASK"));
             definitions.save(definition("report-task", "REPORT_TASK"));
+            taskHandlers.add(dataTaskHandler);
+            taskHandlers.add(reportTaskHandler);
             InvestmentTaskExecutionService executionService = new InvestmentTaskExecutionService(
-                List.of(new SuccessfulTaskHandler("DATA_TASK"), new SuccessfulTaskHandler("REPORT_TASK")),
+                taskHandlers,
                 executions,
+                Optional.of(definitions),
                 ids,
                 () -> NOW
             );
@@ -222,7 +375,20 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
     }
 
     /** 固定成功的子任务处理器。 */
-    private record SuccessfulTaskHandler(String taskType) implements InvestmentTaskHandler {
+    private static final class SuccessfulTaskHandler implements InvestmentTaskHandler {
+        private final String taskType;
+        private final String summary;
+        private int calls;
+
+        private SuccessfulTaskHandler(String taskType) {
+            this(taskType, "ok");
+        }
+
+        private SuccessfulTaskHandler(String taskType, String summary) {
+            this.taskType = taskType;
+            this.summary = summary;
+        }
+
         @Override
         public boolean supports(String type) {
             return taskType.equals(type);
@@ -230,7 +396,29 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
 
         @Override
         public String execute(InvestmentTaskEvent event) {
-            return "ok";
+            calls++;
+            return summary;
+        }
+    }
+
+    /** 统计调用次数的任务处理器。 */
+    private static final class CountingTaskHandler implements InvestmentTaskHandler {
+        private final String taskType;
+        private int calls;
+
+        private CountingTaskHandler(String taskType) {
+            this.taskType = taskType;
+        }
+
+        @Override
+        public boolean supports(String type) {
+            return taskType.equals(type);
+        }
+
+        @Override
+        public String execute(InvestmentTaskEvent event) {
+            calls++;
+            return "executed";
         }
     }
 
