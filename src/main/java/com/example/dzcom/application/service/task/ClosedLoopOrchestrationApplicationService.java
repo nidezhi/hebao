@@ -13,6 +13,7 @@ import com.example.dzcom.domain.model.task.ClosedLoopStep;
 import com.example.dzcom.domain.repository.task.ClosedLoopRunSearchCriteria;
 import com.example.dzcom.domain.repository.task.ClosedLoopRunStore;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,9 @@ public class ClosedLoopOrchestrationApplicationService {
     private final ClosedLoopRunStore runs;
     private final IdGenerator ids;
     private final ClockProvider clock;
+
+    @Value("${ai.wealth.closed-loop.running-timeout-minutes:30}")
+    private long runningTimeoutMinutes;
 
     /**
      * 创建闭环运行记录。
@@ -136,7 +140,7 @@ public class ClosedLoopOrchestrationApplicationService {
     }
 
     /** 分页查询闭环运行。 */
-    @Transactional(readOnly = true)
+    @Transactional
     public PageResult<ClosedLoopRunView> listRuns(String taskCode, String runStatus, String automationLevel,
                                                   String marketScope, String themeCode, String mockUserBizId,
                                                   LocalDateTime startedFrom, LocalDateTime startedTo,
@@ -156,7 +160,7 @@ public class ClosedLoopOrchestrationApplicationService {
             "asc".equals(query.direction())
         ));
         return PageResult.<ClosedLoopRunView>builder()
-            .items(page.items().stream().map(run -> toRunView(run, List.of())).toList())
+            .items(page.items().stream().map(run -> toRunView(refreshStaleRunningRun(run), List.of())).toList())
             .total(page.total())
             .page(page.page())
             .size(page.size())
@@ -165,11 +169,35 @@ public class ClosedLoopOrchestrationApplicationService {
     }
 
     /** 查询闭环运行详情。 */
-    @Transactional(readOnly = true)
+    @Transactional
     public ClosedLoopRunView detail(String bizId) {
         ClosedLoopRun run = runs.findRunByBizId(normalizeText(bizId, "闭环运行ID不能为空"))
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "闭环运行不存在"));
+        run = refreshStaleRunningRun(run);
         return toRunView(run, runs.findStepsByRunBizId(run.bizId()));
+    }
+
+    /** 把明显卡死的 RUNNING 运行转成可见失败，避免驾驶舱永远停在第一步。 */
+    private ClosedLoopRun refreshStaleRunningRun(ClosedLoopRun run) {
+        if (!"RUNNING".equals(run.runStatus()) || run.startedAt() == null || runningTimeoutMinutes <= 0) {
+            return run;
+        }
+        LocalDateTime timeoutAt = run.startedAt().plusMinutes(runningTimeoutMinutes);
+        if (!clock.now().isAfter(timeoutAt)) {
+            return run;
+        }
+        String reason = "自动闭环运行超时: startedAt=" + run.startedAt()
+            + ", timeoutMinutes=" + runningTimeoutMinutes
+            + ", 当前运行可能因远程模型、Kafka消费或采集子任务未返回而卡住，请查看任务执行记录和应用日志";
+        failedStep(run, "RUNNING_TIMEOUT", "运行超时保护", 998, reason, Map.of(
+            "startedAt", run.startedAt(),
+            "timeoutMinutes", runningTimeoutMinutes
+        ));
+        return completeRun(run, "FAILED", "BLOCK", reason, Map.of(
+            "failureReason", reason,
+            "displaySeverity", "ERROR",
+            "blocking", true
+        ));
     }
 
     /** 记录终态步骤。 */

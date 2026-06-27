@@ -41,6 +41,7 @@ import java.util.Set;
 @Slf4j
 public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements InvestmentTaskHandler {
     private static final String TASK_TYPE = "AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION";
+    private static final String STRUCTURED_DATA_COLLECTION_TASK_TYPE = "AI_STRUCTURED_DATA_COLLECTION";
     private static final String DEFAULT_PORTFOLIO_NAME = "全自动闭环模拟组合";
     private static final String DEFAULT_MODEL_TYPE = "INVESTMENT_ANALYSIS";
     private static final DateTimeFormatter VERSION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -176,13 +177,22 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     /** 记录真实交易、自动启用 Prompt/模型等危险开关的保护边界。 */
     private void recordSafetyGuards(ClosedLoopRun run, Map<String, String> parameters) {
-        closedLoops.succeedStep(run, "SAFETY_GUARD", "自动化安全边界", 10,
+        closedLoops.succeedStep(run, "SAFETY_GUARD", "自动化权限确认", 10,
             Map.of(
                 "allowRealTrade", TaskParameterParser.bool(parameters, "allowRealTrade", false),
                 "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", false),
-                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", false)
+                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", false),
+                "blocking", false,
+                "displaySeverity", "INFO",
+                "userFacing", false
             ),
-            Map.of("effectivePolicy", "只允许自动 Mock、候选生成和评分；正式启用与真实交易需要人工确认或灰度开关"));
+            Map.of(
+                "policyCode", "FULL_MOCK_WITH_MANUAL_ACTIVATION",
+                "blocking", false,
+                "displaySeverity", "INFO",
+                "userFacing", false,
+                "summary", "自动闭环允许真实数据采集、报告生成、候选评分和Mock交易；Prompt/模型正式启用与真实交易仍需人工确认。"
+            ));
     }
 
     /** 按配置同步执行一组子任务。 */
@@ -213,10 +223,75 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of("taskCodes", taskCodes));
             throw new ClosedLoopBlockedException(reason);
         }
+        enforceStructuredCoreData(run, parentParameters, stepCode, stepName, stepOrder, results);
         log.info("自动投资闭环子任务组完成: runNo={}, stepCode={}, results={}", run.runNo(), stepCode, JSON.toJSONString(results));
         closedLoops.succeedStep(run, stepCode, stepName, stepOrder,
             Map.of("taskCodes", taskCodes),
             Map.of("executions", results));
+    }
+
+    /** 主闭环报告前必须有结构化真实核心数据，避免空数据继续生成低质量报告。 */
+    private void enforceStructuredCoreData(
+        ClosedLoopRun run,
+        Map<String, String> parentParameters,
+        String stepCode,
+        String stepName,
+        int stepOrder,
+        List<Map<String, Object>> results
+    ) {
+        if (!"DATA_COLLECTION".equals(stepCode)
+            || !TaskParameterParser.bool(parentParameters, "requireStructuredCoreData", true)) {
+            return;
+        }
+        List<StructuredDataSummary> summaries = results.stream()
+            .filter(result -> STRUCTURED_DATA_COLLECTION_TASK_TYPE.equals(result.get("taskType")))
+            .map(this::structuredSummary)
+            .toList();
+        if (summaries.isEmpty()) {
+            String reason = "主闭环未执行AI结构化核心数据采集任务，不能继续生成投资报告";
+            log.warn("自动投资闭环结构化核心数据门禁阻断: runNo={}, reason={}, results={}",
+                run.runNo(), reason, JSON.toJSONString(results));
+            closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of(
+                "requiredTaskType", STRUCTURED_DATA_COLLECTION_TASK_TYPE,
+                "results", results
+            ));
+            throw new ClosedLoopBlockedException(reason);
+        }
+        int newsCount = summaries.stream().mapToInt(StructuredDataSummary::newsCount).sum();
+        int productCount = summaries.stream().mapToInt(StructuredDataSummary::productCount).sum();
+        int quoteCount = summaries.stream().mapToInt(StructuredDataSummary::quoteCount).sum();
+        int minNewsCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredNewsCount", 1);
+        int minQuoteCount = TaskParameterParser.positiveInt(parentParameters, "minStructuredQuoteCount", 1);
+        if (newsCount < minNewsCount || quoteCount < minQuoteCount) {
+            String reason = "AI结构化核心数据不足: newsCount=" + newsCount
+                + ", productCount=" + productCount
+                + ", quoteCount=" + quoteCount
+                + ", minStructuredNewsCount=" + minNewsCount
+                + ", minStructuredQuoteCount=" + minQuoteCount;
+            log.warn("自动投资闭环结构化核心数据门禁阻断: runNo={}, reason={}", run.runNo(), reason);
+            closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of(
+                "requiredTaskType", STRUCTURED_DATA_COLLECTION_TASK_TYPE,
+                "newsCount", newsCount,
+                "productCount", productCount,
+                "quoteCount", quoteCount,
+                "summaries", summaries.stream().map(StructuredDataSummary::asMap).toList()
+            ));
+            throw new ClosedLoopBlockedException(reason);
+        }
+    }
+
+    /** 从子任务摘要提取结构化采集落库计数。 */
+    private StructuredDataSummary structuredSummary(Map<String, Object> result) {
+        String summary = result.get("resultSummary") == null ? "" : String.valueOf(result.get("resultSummary"));
+        if (summary.isBlank()) {
+            return new StructuredDataSummary(0, 0, 0);
+        }
+        JSONObject root = JSON.parseObject(summary);
+        return new StructuredDataSummary(
+            root.getIntValue("savedNewsCount"),
+            root.getIntValue("upsertedProductCount"),
+            root.getIntValue("savedQuoteCount")
+        );
     }
 
     /** 执行自动报告任务，并把本轮模型、市场和回看窗口参数传给报告处理器。 */
@@ -703,5 +778,16 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     /** 报告质量门禁检查结果。 */
     private record ReportGateCheck(InvestmentAnalysisReport report, boolean passed, Map<String, Object> summary) {
+    }
+
+    /** AI 结构化核心数据采集落库摘要。 */
+    private record StructuredDataSummary(int newsCount, int productCount, int quoteCount) {
+        private Map<String, Object> asMap() {
+            return Map.of(
+                "newsCount", newsCount,
+                "productCount", productCount,
+                "quoteCount", quoteCount
+            );
+        }
     }
 }

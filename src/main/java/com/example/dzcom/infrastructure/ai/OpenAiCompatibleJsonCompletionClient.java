@@ -68,7 +68,7 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         long startedAt = System.nanoTime();
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
         log.info(
-            "AI JSON模型调用开始: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, temperature={}, systemPromptLength={}, userPromptLength={}",
+            "AI JSON模型调用开始: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, systemPromptLength={}, userPromptLength={}",
             operationCode,
             modelConfig.modelCode(),
             modelConfig.modelVersion(),
@@ -78,6 +78,7 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             modelConfig.secretRef(),
             modelConfig.apiKey() != null && !modelConfig.apiKey().isBlank(),
             modelConfig.timeoutSeconds(),
+            modelConfig.maxTokens(),
             modelConfig.temperature(),
             textLength(systemPrompt),
             textLength(userPrompt)
@@ -106,11 +107,22 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
                 textLength(response.body())
             );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.error(
+                    "AI JSON模型调用远端失败: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, responseBody={}",
+                    operationCode,
+                    modelConfig.modelCode(),
+                    modelConfig.modelVersion(),
+                    modelConfig.providerCode(),
+                    endpoint,
+                    response.statusCode(),
+                    durationMs,
+                    limit(response.body(), 2000)
+                );
                 throw new BusinessException(HttpStatus.BAD_GATEWAY,
-                    operationCode + "模型调用失败: HTTP " + response.statusCode());
+                    operationCode + "模型调用失败: HTTP " + response.statusCode()
+                        + ", body=" + limit(response.body(), 500));
             }
-            String content = extractContent(response.body(), operationCode);
-            validateJsonObject(content, operationCode);
+            String content = normalizeJsonObjectContent(extractContent(response.body(), operationCode), operationCode);
             log.info(
                 "AI JSON模型调用完成: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}",
                 operationCode,
@@ -206,6 +218,9 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("model", modelConfig.remoteModel());
         payload.put("temperature", modelConfig.temperature());
+        if (modelConfig.maxTokens() > 0) {
+            payload.put("max_tokens", modelConfig.maxTokens());
+        }
         payload.put("response_format", Map.of("type", "json_object"));
         payload.put("messages", List.of(
             Map.of("role", "system", "content", systemPrompt),
@@ -234,11 +249,98 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         return content.asText();
     }
 
-    /** 校验模型输出是 JSON 对象。 */
-    private void validateJsonObject(String value, String operationCode) {
-        if (!readJson(value, operationCode).isObject()) {
-            throw new BusinessException(HttpStatus.BAD_GATEWAY, operationCode + "模型输出必须是JSON对象");
+    /** 规范化模型输出，允许从代码块或解释文本中提取第一个 JSON 对象。 */
+    private String normalizeJsonObjectContent(String value, String operationCode) {
+        String stripped = stripMarkdownFence(value);
+        if (isJsonObject(stripped)) {
+            return stripped;
         }
+        String extracted = firstJsonObject(stripped);
+        if (extracted != null && isJsonObject(extracted)) {
+            log.warn(
+                "AI JSON模型输出包含非JSON包裹文本，已提取首个JSON对象: operationCode={}, originalLength={}, extractedLength={}",
+                operationCode,
+                textLength(value),
+                textLength(extracted)
+            );
+            return extracted;
+        }
+        log.error(
+            "AI JSON模型输出JSON格式不合法: operationCode={}, contentPreview={}",
+            operationCode,
+            limit(value, 1200)
+        );
+        throw new BusinessException(HttpStatus.BAD_GATEWAY, operationCode + "模型输出JSON格式不合法");
+    }
+
+    /** 判断文本是否为 JSON 对象。 */
+    private boolean isJsonObject(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+        try {
+            return objectMapper.readTree(value).isObject();
+        } catch (JsonProcessingException exception) {
+            return false;
+        }
+    }
+
+    /** 去掉常见 Markdown 代码围栏。 */
+    private String stripMarkdownFence(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (!trimmed.startsWith("```")) {
+            return trimmed;
+        }
+        int firstLineEnd = trimmed.indexOf('\n');
+        int lastFence = trimmed.lastIndexOf("```");
+        if (firstLineEnd < 0 || lastFence <= firstLineEnd) {
+            return trimmed;
+        }
+        return trimmed.substring(firstLineEnd + 1, lastFence).trim();
+    }
+
+    /** 从文本中提取第一个括号平衡的 JSON 对象。 */
+    private String firstJsonObject(String value) {
+        if (value == null) {
+            return null;
+        }
+        int start = value.indexOf('{');
+        if (start < 0) {
+            return null;
+        }
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int index = start; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (current == '\\' && inString) {
+                escaped = true;
+                continue;
+            }
+            if (current == '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) {
+                continue;
+            }
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return value.substring(start, index + 1).trim();
+                }
+            }
+        }
+        return null;
     }
 
     /** 读取 JSON。 */
@@ -262,6 +364,14 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
     /** 计算文本长度，日志只记录长度，避免泄露完整 Prompt 和模型响应。 */
     private int textLength(String value) {
         return value == null ? 0 : value.length();
+    }
+
+    /** 截断远端错误响应，保留排查线索并避免日志过长。 */
+    private String limit(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     /** 判断文本是否为空。 */

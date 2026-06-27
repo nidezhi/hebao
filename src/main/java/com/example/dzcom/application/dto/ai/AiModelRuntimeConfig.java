@@ -31,6 +31,8 @@ public record AiModelRuntimeConfig(
     String apiKey,
     @Schema(description = "模型请求超时时间，单位秒")
     int timeoutSeconds,
+    @Schema(description = "模型最大输出 token 数；小于等于0表示不显式限制")
+    int maxTokens,
     @Schema(description = "模型生成温度参数")
     BigDecimal temperature,
     @Schema(description = "是否启用模拟调用模式")

@@ -55,6 +55,12 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 public class DataSourceGovernanceApplicationService {
+    private static final int SOURCE_CODE_MAX_LENGTH = 64;
+    private static final int SOURCE_NAME_MAX_LENGTH = 128;
+    private static final int BASE_URL_MAX_LENGTH = 512;
+    private static final int FETCH_FREQUENCY_MAX_LENGTH = 255;
+    private static final int OWNER_MAX_LENGTH = 255;
+    private static final int DESCRIPTION_MAX_LENGTH = 512;
     private static final Set<String> SOURCE_TYPES =
         Set.of("MARKET", "NEWS", "ANNOUNCEMENT", "RESEARCH", "REGULATORY", "FALLBACK");
     private static final Set<String> TRUST_LEVELS = Set.of("L1", "L2", "L3", "L4", "L5");
@@ -100,8 +106,9 @@ public class DataSourceGovernanceApplicationService {
     /**
      * 沉淀 AI 数据源发现候选。
      *
-     * <p>候选保存遵循“只沉淀、不抢跑”的原则：已存在的数据源保留原启用状态；
-     * 新发现的候选只有在任务显式开启自动启用，且模型没有要求人工审核时才会启用。</p>
+     * <p>候选保存遵循“显式开关才启用”的原则：未开启自动启用时只沉淀候选；
+     * 开启自动启用时，允许把此前处于 disabled 的同编码候选提升为 enabled，
+     * 避免闭环长期停在候选态。</p>
      *
      * @param command 数据源候选保存命令
      * @param autoEnableCandidate 是否允许自动启用新候选
@@ -114,7 +121,7 @@ public class DataSourceGovernanceApplicationService {
         CurrentOperator operator = currentOperator.required();
         String sourceCode = normalizeCode(command.sourceCode(), "数据源编码不能为空");
         DataSource existing = sources.findBySourceCode(sourceCode).orElse(null);
-        boolean enabled = existing == null ? autoEnableCandidate : existing.enabled();
+        boolean enabled = existing == null ? autoEnableCandidate : existing.enabled() || autoEnableCandidate;
         return saveInternal(command.toBuilder().sourceCode(sourceCode).enabled(enabled).build(), operator, enabled);
     }
 
@@ -128,14 +135,14 @@ public class DataSourceGovernanceApplicationService {
         DataSource source = DataSource.builder()
             .bizId(existing == null ? ids.newBizId() : existing.bizId())
             .sourceCode(sourceCode)
-            .sourceName(normalizeText(command.sourceName(), "数据源名称不能为空"))
+            .sourceName(limitText(normalizeText(command.sourceName(), "数据源名称不能为空"), SOURCE_NAME_MAX_LENGTH))
             .sourceType(sourceType)
             .trustLevel(trustLevel)
-            .baseUrl(trimToNull(command.baseUrl()))
+            .baseUrl(limitText(trimToNull(command.baseUrl()), BASE_URL_MAX_LENGTH))
             .enabled(enabled)
-            .fetchFrequency(trimToNull(command.fetchFrequency()))
-            .owner(trimToNull(command.owner()))
-            .description(trimToNull(command.description()))
+            .fetchFrequency(normalizeFetchFrequency(command.fetchFrequency()))
+            .owner(normalizeOwner(command.owner()))
+            .description(limitText(trimToNull(command.description()), DESCRIPTION_MAX_LENGTH))
             .createdAt(existing == null ? now : existing.createdAt())
             .updatedAt(now)
             .createdBy(existing == null ? operator.userBizId() : existing.createdBy())
@@ -448,7 +455,7 @@ public class DataSourceGovernanceApplicationService {
 
     /** 规范化编码。 */
     private String normalizeCode(String value, String message) {
-        return normalizeText(value, message).toUpperCase(Locale.ROOT);
+        return limitText(normalizeText(value, message).toUpperCase(Locale.ROOT), SOURCE_CODE_MAX_LENGTH);
     }
 
     /** 规范化并校验枚举字符串。 */
@@ -471,6 +478,53 @@ public class DataSourceGovernanceApplicationService {
     /** 规范化可空文本。 */
     private String trimToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /** 限制短字段长度，避免 AI 输出长说明导致数据库截断。 */
+    private String limitText(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
+    }
+
+    /** 规范化维护方字段，长说明应进入 description 或 collectionPlan。 */
+    private String normalizeOwner(String value) {
+        String owner = trimToNull(value);
+        if (owner == null) {
+            return null;
+        }
+        String compact = owner.replaceAll("\\s+", " ").trim();
+        if (compact.length() <= OWNER_MAX_LENGTH) {
+            return compact;
+        }
+        return compact.substring(0, OWNER_MAX_LENGTH);
+    }
+
+    /** 规范化采集频率，避免模型把采集计划长文本误写入短频率字段。 */
+    private String normalizeFetchFrequency(String value) {
+        String frequency = trimToNull(value);
+        if (frequency == null) {
+            return null;
+        }
+        String compact = frequency.replaceAll("\\s+", " ").trim();
+        if (compact.length() <= FETCH_FREQUENCY_MAX_LENGTH) {
+            return compact;
+        }
+        String upper = compact.toUpperCase(Locale.ROOT);
+        if (upper.contains("REALTIME") || compact.contains("实时")) {
+            return "REALTIME";
+        }
+        if (upper.contains("HOURLY") || compact.contains("每小时") || compact.contains("小时")) {
+            return "HOURLY";
+        }
+        if (upper.contains("DAILY") || compact.contains("每日") || compact.contains("每天")) {
+            return "DAILY";
+        }
+        if (upper.contains("WEEKLY") || compact.contains("每周")) {
+            return "WEEKLY";
+        }
+        return compact.substring(0, FETCH_FREQUENCY_MAX_LENGTH);
     }
 
     /** 规范化 0 到 1 之间的小数。 */
@@ -635,7 +689,7 @@ public class DataSourceGovernanceApplicationService {
             .sourceType(sourceType)
             .trustLevel(trustLevel)
             .baseUrl(trimToNull(node.getString("baseUrl")))
-            .fetchFrequency(trimToNull(node.getString("fetchFrequency")))
+            .fetchFrequency(normalizeFetchFrequency(node.getString("fetchFrequency")))
             .owner(trimToNull(node.getString("owner")))
             .description(trimToNull(node.getString("description")))
             .recommendedTaskType(defaultText(node.getString("recommendedTaskType"), "AI_DATA_SOURCE_DISCOVERY"))
@@ -764,7 +818,7 @@ public class DataSourceGovernanceApplicationService {
         return """
             skillCode=%s
             skillVersion=%s
-            skillInstruction=%s
+            skillInstruction=已通过system prompt提供，本轮user prompt不重复展开。
             你需要像数据采集专家一样，直接整理、收集并生成可执行的数据源方案。
             不要只给泛泛建议；必须输出可落库的数据源候选、采集计划、字段映射、质量规则和限制。
             输出JSON对象，顶层字段必须包含 candidates 数组。每个候选必须包含：
@@ -773,6 +827,12 @@ public class DataSourceGovernanceApplicationService {
             confidence、reasons、requiresReview。
             sourceType只能是 MARKET、NEWS、ANNOUNCEMENT、RESEARCH、REGULATORY。
             trustLevel只能是 L1、L2、L3、L4、L5。
+            sourceCode最长64字符，sourceName最长128字符，baseUrl最长512字符，owner最长255字符。
+            fetchFrequency只能填写 cron 表达式或短频率枚举/短语，例如 REALTIME、HOURLY、DAILY、WEEKLY、
+            0 0 */6 * * *；不得填写采集计划、限制说明或长段落。
+            candidates数量不得超过candidateLimit。
+            fieldMappings每个候选最多5项，reasons最多2条。
+            description、collectionPlan、qualityPolicy均控制在80个汉字以内。
             禁止把低质量媒体源或兜底数据标记为正式投资依据。
             marketScope=%s
             assetClass=%s
@@ -785,7 +845,6 @@ public class DataSourceGovernanceApplicationService {
             """.formatted(
             skill == null ? DEFAULT_DISCOVERY_SKILL : skill.skillCode(),
             skill == null ? "" : skill.skillVersion(),
-            skill == null ? "SYSTEM_BUILT_IN_DISCOVERY_POLICY" : skill.instructionContent(),
             defaultText(command.marketScope(), CN_MAINLAND),
             defaultText(command.assetClass(), "MULTI_ASSET"),
             dataTypes,

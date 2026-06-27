@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 @Slf4j
 public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfigResolver {
     private static final int DEFAULT_TIMEOUT_SECONDS = 60;
+    private static final int DEFAULT_MAX_TOKENS = 0;
     private static final BigDecimal DEFAULT_TEMPERATURE = new BigDecimal("0.2");
 
     private final ObjectMapper objectMapper;
@@ -65,11 +66,13 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
             .secretRef(secretRef)
             .apiKey(apiKey)
             .timeoutSeconds(integer(config, "timeoutSeconds", DEFAULT_TIMEOUT_SECONDS))
+            .maxTokens(integer(config, "maxTokens",
+                integer(config, "maxCompletionTokens", DEFAULT_MAX_TOKENS)))
             .temperature(decimal(config, "temperature", DEFAULT_TEMPERATURE))
             .mockEnabled(mockEnabled)
             .build();
         log.info(
-            "AI模型运行配置解析完成: modelCode={}, modelVersion={}, providerCode={}, secretRef={}, apiKeyConfigured={}, mockEnabled={}, timeoutSeconds={}, temperature={}",
+            "AI模型运行配置解析完成: modelCode={}, modelVersion={}, providerCode={}, secretRef={}, apiKeyConfigured={}, mockEnabled={}, timeoutSeconds={}, maxTokens={}, temperature={}",
             runtimeConfig.modelCode(),
             runtimeConfig.modelVersion(),
             runtimeConfig.providerCode(),
@@ -77,6 +80,7 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
             runtimeConfig.apiKey() != null && !runtimeConfig.apiKey().isBlank(),
             runtimeConfig.mockEnabled(),
             runtimeConfig.timeoutSeconds(),
+            runtimeConfig.maxTokens(),
             runtimeConfig.temperature()
         );
         return runtimeConfig;

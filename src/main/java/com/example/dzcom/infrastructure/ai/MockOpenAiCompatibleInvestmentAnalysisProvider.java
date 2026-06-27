@@ -75,6 +75,22 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             command,
             modelConfig
         );
+        if (!isLocalDataQualityGatePassed(localReport)) {
+            log.warn(
+                "投资分析模型跳过远端调用: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, marketScope={}, themeCode={}, lookbackDays={}, localQualityScore={}, localGate={}, reason=LOCAL_DATA_QUALITY_GATE_NOT_PASSED",
+                requestId,
+                modelConfig.modelCode(),
+                modelConfig.modelVersion(),
+                modelConfig.providerCode(),
+                modelConfig.remoteModel(),
+                command.marketScope(),
+                command.themeCode(),
+                command.lookbackDays(),
+                localReport.dataQualityScore(),
+                localReport.dataQualityGate()
+            );
+            return remoteSkippedDataGapReport(localReport, modelConfig);
+        }
         log.info(
             "投资分析模型准备远端调用: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, marketScope={}, themeCode={}, lookbackDays={}, localQualityScore={}, localGate={}",
             requestId,
@@ -89,6 +105,43 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             localReport.dataQualityGate()
         );
         return callRemoteModel(localReport, command, modelConfig);
+    }
+
+    /** 本地数据质量未通过时，不允许远端模型包装空数据。 */
+    private boolean isLocalDataQualityGatePassed(InvestmentAnalysisReport localReport) {
+        if (localReport.dataQualityGate() == null || localReport.dataQualityGate().isBlank()) {
+            return false;
+        }
+        return readJson(localReport.dataQualityGate()).path("passed").asBoolean(false);
+    }
+
+    /** 返回带远端模型审计信息的数据缺口报告，不触发真实模型调用。 */
+    private InvestmentAnalysisReport remoteSkippedDataGapReport(
+        InvestmentAnalysisReport localReport,
+        AiModelRuntimeConfig modelConfig
+    ) {
+        return InvestmentAnalysisReport.builder()
+            .bizId(localReport.bizId())
+            .requestId(localReport.requestId())
+            .providerCode(PROVIDER_CODE)
+            .modelCode(modelConfig.modelCode())
+            .marketScope(localReport.marketScope())
+            .themeCode(localReport.themeCode())
+            .themeName(localReport.themeName())
+            .status(localReport.status())
+            .confidenceLevel(localReport.confidenceLevel())
+            .dataQualityScore(localReport.dataQualityScore())
+            .dataQualityGate(localReport.dataQualityGate())
+            .investmentSummary(localReport.investmentSummary())
+            .trend(localReport.trend())
+            .investmentPlan(localReport.investmentPlan())
+            .simulatedReturn(localReport.simulatedReturn())
+            .chartPayload(localReport.chartPayload())
+            .promptSnapshot(localReport.promptSnapshot())
+            .failureReason("SKIPPED_REMOTE_LOW_DATA_QUALITY")
+            .generatedAt(localReport.generatedAt())
+            .createdAt(localReport.createdAt())
+            .build();
     }
 
     /**
@@ -111,7 +164,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
         String userPrompt = prompt(localReport, command);
         log.info(
-            "投资分析模型远端调用开始: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, temperature={}, userPromptLength={}",
+            "投资分析模型远端调用开始: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, userPromptLength={}",
             localReport.requestId(),
             modelConfig.modelCode(),
             modelConfig.modelVersion(),
@@ -121,6 +174,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             modelConfig.secretRef(),
             modelConfig.apiKey() != null && !modelConfig.apiKey().isBlank(),
             modelConfig.timeoutSeconds(),
+            modelConfig.maxTokens(),
             modelConfig.temperature(),
             userPrompt.length()
         );
@@ -147,7 +201,20 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
                 textLength(response.body())
             );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型调用失败: HTTP " + response.statusCode());
+                log.error(
+                    "投资分析模型远端调用失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, responseBody={}",
+                    localReport.requestId(),
+                    modelConfig.modelCode(),
+                    modelConfig.modelVersion(),
+                    modelConfig.providerCode(),
+                    endpoint,
+                    response.statusCode(),
+                    elapsedMs(startedAt),
+                    limit(response.body(), 2000)
+                );
+                throw new BusinessException(HttpStatus.BAD_GATEWAY,
+                    "OpenAI兼容模型调用失败: HTTP " + response.statusCode()
+                        + ", body=" + limit(response.body(), 500));
             }
             String content = extractContent(response.body());
             InvestmentAnalysisReport report = mergeRemoteOutput(localReport, modelConfig, content);
@@ -255,6 +322,9 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("model", modelConfig.remoteModel());
         payload.put("temperature", modelConfig.temperature());
+        if (modelConfig.maxTokens() > 0) {
+            payload.put("max_tokens", modelConfig.maxTokens());
+        }
         payload.put("response_format", Map.of("type", "json_object"));
         payload.put("messages", List.of(
             Map.of(
@@ -390,6 +460,14 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
     /** 计算文本长度，避免日志输出完整模型响应。 */
     private int textLength(String value) {
         return value == null ? 0 : value.length();
+    }
+
+    /** 截断远端错误响应，保留排查线索并避免日志过长。 */
+    private String limit(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     /** 判断文本是否为空。 */

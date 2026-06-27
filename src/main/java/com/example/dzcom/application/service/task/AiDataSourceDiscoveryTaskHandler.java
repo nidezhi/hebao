@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -98,6 +99,10 @@ public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
         summary.put("candidateCodes", candidateCodes);
         summary.put("registeredCodes", registeredCodes);
         summary.put("autoEnableCandidates", TaskParameterParser.bool(parameters, "autoEnableCandidates", false));
+        summary.put("autoEnableReviewRequiredCandidates",
+            TaskParameterParser.bool(parameters, "autoEnableReviewRequiredCandidates", false));
+        summary.put("autoEnableTrustLevels",
+            TaskParameterParser.string(parameters, "autoEnableTrustLevels", "L1,L2,L3"));
         summary.put("reviewPolicy", discovery.reviewPolicy());
         log.info(
             "AI数据源发现任务完成: taskCode={}, eventId={}, scenarioCode={}, modelCode={}, skillCode={}, skillVersion={}, candidateCount={}, registeredCount={}",
@@ -113,12 +118,16 @@ public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
         return JSON.toJSONString(summary);
     }
 
-    /** 按任务配置把模型候选沉淀到数据源池，默认不启用候选。 */
+    /** 按任务配置把模型候选沉淀到数据源池，并按信任等级和审核策略决定是否自动启用。 */
     private List<String> registerCandidates(Map<String, String> parameters, DataSourceDiscoveryView discovery) {
         if (!TaskParameterParser.bool(parameters, "autoRegisterCandidates", true)) {
             return List.of();
         }
-        boolean enabled = TaskParameterParser.bool(parameters, "autoEnableCandidates", false);
+        boolean autoEnableCandidates = TaskParameterParser.bool(parameters, "autoEnableCandidates", false);
+        boolean autoEnableReviewRequired = TaskParameterParser.bool(
+            parameters, "autoEnableReviewRequiredCandidates", false);
+        Set<String> autoEnableTrustLevels = trustLevelSet(
+            TaskParameterParser.string(parameters, "autoEnableTrustLevels", "L1,L2,L3"));
         CurrentOperator operator = new CurrentOperator(
             TaskParameterParser.string(parameters, "operatorBizId", "SYSTEM_AI_DATA_SOURCE_DISCOVERY"),
             "SYSTEM_TASK",
@@ -126,18 +135,54 @@ public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
             Set.of("INVESTMENT_TASK_WRITE", "DATA_SOURCE_WRITE")
         );
         return currentOperator.callAs(operator, () -> discovery.candidates().stream()
-            .map(candidate -> dataSources.saveDiscoveredCandidate(SaveDataSourceCommand.builder()
-                .sourceCode(candidate.sourceCode())
-                .sourceName(candidate.sourceName())
-                .sourceType(candidate.sourceType())
-                .trustLevel(candidate.trustLevel())
-                .baseUrl(candidate.baseUrl())
-                .enabled(enabled && !candidate.requiresReview())
-                .fetchFrequency(candidate.fetchFrequency())
-                .owner(candidate.owner())
-                .description(candidateDescription(discovery, candidate))
-                .build(), enabled && !candidate.requiresReview()).sourceCode())
+            .map(candidate -> {
+                boolean shouldEnable = shouldAutoEnable(
+                    candidate,
+                    autoEnableCandidates,
+                    autoEnableReviewRequired,
+                    autoEnableTrustLevels
+                );
+                return dataSources.saveDiscoveredCandidate(SaveDataSourceCommand.builder()
+                    .sourceCode(candidate.sourceCode())
+                    .sourceName(candidate.sourceName())
+                    .sourceType(candidate.sourceType())
+                    .trustLevel(candidate.trustLevel())
+                    .baseUrl(candidate.baseUrl())
+                    .enabled(shouldEnable)
+                    .fetchFrequency(candidate.fetchFrequency())
+                    .owner(candidate.owner())
+                    .description(candidateDescription(discovery, candidate))
+                    .build(), shouldEnable).sourceCode();
+            })
             .toList());
+    }
+
+    /** 判断候选数据源是否允许由任务自动启用。 */
+    private boolean shouldAutoEnable(
+        DataSourceDiscoveryCandidateView candidate,
+        boolean autoEnableCandidates,
+        boolean autoEnableReviewRequired,
+        Set<String> autoEnableTrustLevels
+    ) {
+        if (!autoEnableCandidates) {
+            return false;
+        }
+        if (!autoEnableTrustLevels.contains(candidate.trustLevel())) {
+            return false;
+        }
+        return autoEnableReviewRequired || !candidate.requiresReview();
+    }
+
+    /** 解析允许自动启用的来源等级集合。 */
+    private Set<String> trustLevelSet(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Set.of("L1", "L2", "L3");
+        }
+        return TaskParameterParser.list(Map.of("trustLevels", raw), "trustLevels")
+            .stream()
+            .map(String::trim)
+            .filter(value -> !value.isBlank())
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     /** 生成带有 Skill、采集计划和质量策略的候选数据源说明。 */

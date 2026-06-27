@@ -22,6 +22,7 @@ import com.example.dzcom.domain.repository.task.NewsArticleStore;
 import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionSearchCriteria;
 import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionStore;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +55,9 @@ public class InvestmentTaskManagementService {
     private final InvestmentThemeSnapshotStore snapshots;
     private final IdGenerator ids;
     private final ClockProvider clock;
+
+    @Value("${ai.wealth.task.running-timeout-minutes:30}")
+    private long runningTimeoutMinutes;
 
     /** 查询当前生效的投资任务配置。 */
     @Transactional(readOnly = true)
@@ -136,17 +140,45 @@ public class InvestmentTaskManagementService {
     }
 
     /** 分页查询任务执行记录。 */
-    @Transactional(readOnly = true)
+    @Transactional
     public PageResult<ScheduledTaskExecution> executions(String taskCode, String taskType, String status,
                                                          LocalDateTime startedFrom,
                                                          LocalDateTime startedTo,
                                                          PageQuery pageQuery) {
-        return executions.search(new ScheduledTaskExecutionSearchCriteria(
+        PageResult<ScheduledTaskExecution> page = executions.search(new ScheduledTaskExecutionSearchCriteria(
             taskCode, taskType, status, startedFrom, startedTo,
             pageQuery.page(), pageQuery.size(),
             pageQuery.safeSort(EXECUTION_SORTS, "startedAt"),
             "asc".equals(pageQuery.direction())
         ));
+        return PageResult.<ScheduledTaskExecution>builder()
+            .items(page.items().stream().map(this::refreshStaleRunningExecution).toList())
+            .total(page.total())
+            .page(page.page())
+            .size(page.size())
+            .totalPages(page.totalPages())
+            .build();
+    }
+
+    /** 把明显卡死的 RUNNING 执行转成失败态，方便前端和运维定位。 */
+    private ScheduledTaskExecution refreshStaleRunningExecution(ScheduledTaskExecution execution) {
+        if (!"RUNNING".equals(execution.status()) || execution.startedAt() == null || runningTimeoutMinutes <= 0) {
+            return execution;
+        }
+        LocalDateTime timeoutAt = execution.startedAt().plusMinutes(runningTimeoutMinutes);
+        if (!clock.now().isAfter(timeoutAt)) {
+            return execution;
+        }
+        String reason = "任务执行超时: taskCode=" + execution.taskCode()
+            + ", taskType=" + execution.taskType()
+            + ", startedAt=" + execution.startedAt()
+            + ", timeoutMinutes=" + runningTimeoutMinutes
+            + ", 可能是远程模型、Kafka消费或外部采集接口未返回";
+        return executions.save(execution.toBuilder()
+            .status("FAILED")
+            .failureReason(reason)
+            .completedAt(clock.now())
+            .build());
     }
 
     /** 分页查询已采集的投资资讯。 */

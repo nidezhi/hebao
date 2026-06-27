@@ -41,6 +41,7 @@ class JacksonAiModelRuntimeConfigResolverTest {
                   "model": "gpt-4.1-mini",
                   "secretRef": "OPENAI_MOCK_API_KEY",
                   "timeoutSeconds": 60,
+                  "maxTokens": 3000,
                   "temperature": 0.2,
                   "mockEnabled": false
                 }
@@ -53,6 +54,7 @@ class JacksonAiModelRuntimeConfigResolverTest {
         assertEquals("OPENAI_MOCK_API_KEY", runtimeConfig.secretRef());
         assertEquals("gpt-4.1-mini", runtimeConfig.remoteModel());
         assertEquals(60, runtimeConfig.timeoutSeconds());
+        assertEquals(3000, runtimeConfig.maxTokens());
         assertFalse(runtimeConfig.mockEnabled());
     }
 

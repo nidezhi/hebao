@@ -73,6 +73,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                     "minQualityScore", "0.45",
                     "dataTaskCodes", "data-task",
                     "reportTaskCode", "report-task",
+                    "requireStructuredCoreData", "false",
                     "allowAutoMockTrade", "true"
                 ))
                 .triggeredAt(NOW)
@@ -103,6 +104,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                     "minQualityScore", "0.45",
                     "dataTaskCodes", "data-task",
                     "reportTaskCode", "report-task",
+                    "requireStructuredCoreData", "false",
                     "allowAutoMockTrade", "true"
                 ))
                 .triggeredAt(NOW)
@@ -140,6 +142,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                     "minQualityScore", "0.45",
                     "dataTaskCodes", "data-task",
                     "reportTaskCode", "report-task",
+                    "requireStructuredCoreData", "false",
                     "allowAutoMockTrade", "true"
                 ))
                 .triggeredAt(NOW)
