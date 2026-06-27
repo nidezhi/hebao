@@ -9,7 +9,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** AI 模型运行配置和外部密钥注入测试。 */
 class JacksonAiModelRuntimeConfigResolverTest {
@@ -41,7 +42,7 @@ class JacksonAiModelRuntimeConfigResolverTest {
                   "secretRef": "OPENAI_MOCK_API_KEY",
                   "timeoutSeconds": 60,
                   "temperature": 0.2,
-                  "mockEnabled": true
+                  "mockEnabled": false
                 }
                 """)
             .build();
@@ -52,7 +53,7 @@ class JacksonAiModelRuntimeConfigResolverTest {
         assertEquals("OPENAI_MOCK_API_KEY", runtimeConfig.secretRef());
         assertEquals("gpt-4.1-mini", runtimeConfig.remoteModel());
         assertEquals(60, runtimeConfig.timeoutSeconds());
-        assertTrue(runtimeConfig.mockEnabled());
+        assertFalse(runtimeConfig.mockEnabled());
     }
 
     /**
@@ -83,7 +84,7 @@ class JacksonAiModelRuntimeConfigResolverTest {
                   "secretRef": "OPENAI_API_KEY",
                   "timeoutSeconds": 90,
                   "temperature": 0.2,
-                  "mockEnabled": true
+                  "mockEnabled": false
                 }
                 """)
             .build();
@@ -93,6 +94,39 @@ class JacksonAiModelRuntimeConfigResolverTest {
         assertEquals(mockApiKey, runtimeConfig.apiKey());
         assertEquals("OPENAI_API_KEY", runtimeConfig.secretRef());
         assertEquals(90, runtimeConfig.timeoutSeconds());
-        assertTrue(runtimeConfig.mockEnabled());
+        assertFalse(runtimeConfig.mockEnabled());
+    }
+
+    /**
+     * 真实闭环要求远程模型，mockEnabled=true 必须直接阻断。
+     *
+     * @author dz
+     * @date 2026-06-27
+     */
+    @Test
+    void shouldRejectMockEnabledModelConfig() {
+        AiSecretProperties properties = new AiSecretProperties();
+        properties.setValues(Map.of("OPENAI_MOCK_API_KEY", "mock-api-key"));
+        PropertyAiSecretResolver secretResolver = new PropertyAiSecretResolver(properties);
+        JacksonAiModelRuntimeConfigResolver resolver =
+            new JacksonAiModelRuntimeConfigResolver(
+                JsonMapper.builder().findAndAddModules().build(),
+                secretResolver
+            );
+        AiModel model = AiModel.builder()
+            .modelCode("openai-compatible-analysis")
+            .modelVersion("mock-v1")
+            .provider("OPENAI_COMPATIBLE")
+            .modelConfig("""
+                {
+                  "baseUrl": "https://api.openai.com/v1",
+                  "model": "gpt-4.1-mini",
+                  "secretRef": "OPENAI_MOCK_API_KEY",
+                  "mockEnabled": true
+                }
+                """)
+            .build();
+
+        assertThrows(RuntimeException.class, () -> resolver.resolve(model));
     }
 }

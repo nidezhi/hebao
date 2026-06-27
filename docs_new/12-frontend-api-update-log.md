@@ -1141,3 +1141,44 @@ INVESTMENT_NEWS_COLLECTION
 ```text
 V24__slim_deprecated_ai_signal_recommendation_tables.sql
 ```
+
+## 11. 2026-06-27：AI 远程调用强制化与默认模型关闭
+
+变更目标：
+
+```text
+关闭默认模型和本地兜底
+  -> 前端和定时任务必须显式传 modelCode
+  -> 模型配置必须 mockEnabled=false
+  -> baseUrl、model、secretRef、API Key 缺失直接失败
+  -> 远程模型调用失败写 error 日志并阻断闭环
+```
+
+接口变更：
+
+| 接口 | 变化 | 前端影响 |
+| --- | --- | --- |
+| `POST /api/ai/investment-analysis/generate` | `modelCode` 改为必填 | 报告生成表单必须选择模型，不再允许空值 |
+| `POST /api/investment/tasks/definitions` | `AUTO_INVESTMENT_REPORT_GENERATION.parameters.modelCode` 必填 | 任务配置页必须校验自动报告任务的模型编码 |
+| `POST /api/investment/tasks/trigger` | 触发闭环时，如果报告任务或模型配置不可远程调用会失败 | 驾驶舱展示任务失败原因和模型配置错误 |
+| `POST /api/admin/data-sources/discover` | 数据源发现不再使用本地候选兜底 | 模型不可调用或返回空时展示错误，不展示伪候选 |
+
+前端校验建议：
+
+| 字段 | 要求 |
+| --- | --- |
+| `modelCode` | 必填，必须对应 ACTIVE 模型 |
+| `modelConfig.mockEnabled` | 必须为 `false` |
+| `modelConfig.baseUrl` | 必填，例如 `https://api.openai.com/v1` |
+| `modelConfig.model` | 必填，例如 `gpt-4.1-mini` |
+| `modelConfig.secretRef` | 必填，后端本地配置中必须存在同名密钥 |
+
+错误日志关键字：
+
+```text
+AI远程模型配置不可用
+AI模型密钥解析失败
+AI JSON模型远程调用前置校验失败
+投资分析模型远程调用前置校验失败
+AI数据源发现失败
+```

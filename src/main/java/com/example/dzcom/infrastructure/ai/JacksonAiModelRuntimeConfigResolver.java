@@ -40,6 +40,8 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
         JsonNode config = readConfig(model.modelConfig());
         String secretRef = text(config, "secretRef");
         boolean mockEnabled = bool(config, "mockEnabled", false);
+        String baseUrl = text(config, "baseUrl");
+        String remoteModel = text(config, "model");
         log.info(
             "AI模型运行配置解析开始: modelCode={}, modelVersion={}, providerCode={}, secretRef={}, mockEnabled={}, baseUrlConfigured={}, remoteModel={}",
             model.modelCode(),
@@ -47,17 +49,19 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
             model.provider(),
             secretRef,
             mockEnabled,
-            !text(config, "baseUrl").isBlank(),
-            text(config, "model")
+            !baseUrl.isBlank(),
+            remoteModel
         );
+        validateRemoteConfig(model, secretRef, baseUrl, remoteModel, mockEnabled);
         String apiKey = resolveSecret(model, secretRef);
+        validateApiKey(model, secretRef, apiKey);
 
         AiModelRuntimeConfig runtimeConfig = AiModelRuntimeConfig.builder()
             .modelCode(model.modelCode())
             .modelVersion(model.modelVersion())
             .providerCode(model.provider())
-            .baseUrl(text(config, "baseUrl"))
-            .remoteModel(text(config, "model"))
+            .baseUrl(baseUrl)
+            .remoteModel(remoteModel)
             .secretRef(secretRef)
             .apiKey(apiKey)
             .timeoutSeconds(integer(config, "timeoutSeconds", DEFAULT_TIMEOUT_SECONDS))
@@ -78,6 +82,77 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
         return runtimeConfig;
     }
 
+    /**
+     * 校验远程模型调用的必要配置。
+     *
+     * <p>当前闭环已经进入真实模型联调阶段，不再允许 mock 模式、默认 baseUrl、
+     * 默认模型名或空密钥引用悄悄兜底；任一配置缺失都必须阻断并输出错误日志。</p>
+     *
+     * @param model 已启用的模型记录
+     * @param secretRef 外部密钥引用名
+     * @param baseUrl OpenAI 兼容服务基础地址
+     * @param remoteModel 供应商侧模型名称
+     * @param mockEnabled 是否启用模拟模式
+     * @throws BusinessException 当远程调用配置不完整或仍处于 mock 模式时抛出
+     * @author dz
+     * @date 2026-06-27
+     */
+    private void validateRemoteConfig(
+        AiModel model,
+        String secretRef,
+        String baseUrl,
+        String remoteModel,
+        boolean mockEnabled
+    ) {
+        if (mockEnabled) {
+            failRemoteConfig(model, "AI模型配置仍开启mockEnabled，闭环要求必须调用远程模型");
+        }
+        if (baseUrl.isBlank()) {
+            failRemoteConfig(model, "AI模型baseUrl未配置，不能调用远程模型");
+        }
+        if (remoteModel.isBlank()) {
+            failRemoteConfig(model, "AI模型远端model未配置，不能调用远程模型");
+        }
+        if (secretRef.isBlank()) {
+            failRemoteConfig(model, "AI模型secretRef未配置，不能调用远程模型");
+        }
+    }
+
+    /**
+     * 校验密钥解析结果。
+     *
+     * @param model 已启用的模型记录
+     * @param secretRef 外部密钥引用名
+     * @param apiKey 密钥解析器返回的单次调用密钥
+     * @throws BusinessException 当密钥为空时抛出
+     * @author dz
+     * @date 2026-06-27
+     */
+    private void validateApiKey(AiModel model, String secretRef, String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            log.error(
+                "AI模型密钥为空: modelCode={}, modelVersion={}, providerCode={}, secretRef={}",
+                model.modelCode(),
+                model.modelVersion(),
+                model.provider(),
+                secretRef
+            );
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "AI模型密钥为空: " + secretRef);
+        }
+    }
+
+    /** 输出远程模型配置错误并抛出业务异常。 */
+    private void failRemoteConfig(AiModel model, String reason) {
+        log.error(
+            "AI远程模型配置不可用: modelCode={}, modelVersion={}, providerCode={}, reason={}",
+            model.modelCode(),
+            model.modelVersion(),
+            model.provider(),
+            reason
+        );
+        throw new BusinessException(HttpStatus.BAD_REQUEST, reason);
+    }
+
     /** 解析外部密钥并记录失败原因，日志不输出密钥明文。 */
     private String resolveSecret(AiModel model, String secretRef) {
         if (secretRef.isBlank()) {
@@ -86,7 +161,7 @@ public class JacksonAiModelRuntimeConfigResolver implements AiModelRuntimeConfig
         try {
             return secretResolver.resolve(secretRef);
         } catch (BusinessException exception) {
-            log.warn(
+            log.error(
                 "AI模型密钥解析失败: modelCode={}, modelVersion={}, providerCode={}, secretRef={}, reason={}",
                 model.modelCode(),
                 model.modelVersion(),

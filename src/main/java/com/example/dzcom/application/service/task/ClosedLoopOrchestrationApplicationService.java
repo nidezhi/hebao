@@ -27,6 +27,8 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class ClosedLoopOrchestrationApplicationService {
+    private static final int FAILURE_REASON_MAX_LENGTH = 12_000;
+
     private static final Set<String> RUN_SORTS =
         Set.of("startedAt", "completedAt", "updatedAt", "runNo", "taskCode",
             "runStatus", "automationLevel", "qualityScore");
@@ -85,7 +87,7 @@ public class ClosedLoopOrchestrationApplicationService {
             .runStatus(status)
             .gateResult(gateResult)
             .summary(summary == null || summary.isEmpty() ? run.summary() : JSON.toJSONString(summary))
-            .failureReason(trimToNull(failureReason))
+            .failureReason(limit(trimToNull(failureReason), FAILURE_REASON_MAX_LENGTH))
             .completedAt(now)
             .updatedAt(now)
             .build());
@@ -182,7 +184,7 @@ public class ClosedLoopOrchestrationApplicationService {
             .stepOrder(stepOrder)
             .stepStatus(status)
             .inputSummary(toJson(input))
-            .failureReason(trimToNull(reason))
+            .failureReason(limit(trimToNull(reason), FAILURE_REASON_MAX_LENGTH))
             .startedAt(now)
             .completedAt(now)
             .createdAt(now)
@@ -261,6 +263,14 @@ public class ClosedLoopOrchestrationApplicationService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** 限制审计文本长度，避免极端异常信息撑爆数据库 TEXT 列。 */
+    private String limit(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     /** 生成面向前端展示的短 ID 片段。 */

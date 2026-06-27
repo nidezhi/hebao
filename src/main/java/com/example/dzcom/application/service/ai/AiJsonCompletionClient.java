@@ -21,7 +21,7 @@ public interface AiJsonCompletionClient {
      * @param systemPrompt 系统提示词
      * @param userPrompt 用户提示词
      * @param modelConfig 模型运行时配置
-     * @return 模型返回的 JSON 对象文本；mock 模式可返回空字符串让上层走本地兜底
+     * @return 模型返回的 JSON 对象文本
      * @author dz
      * @date 2026-06-27
      */

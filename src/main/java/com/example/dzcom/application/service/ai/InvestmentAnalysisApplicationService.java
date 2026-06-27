@@ -26,7 +26,6 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 public class InvestmentAnalysisApplicationService {
-    private static final String DEFAULT_MODEL_CODE = "openai-compatible-analysis";
     private static final Set<String> SORTS =
         Set.of("generatedAt", "createdAt", "providerCode", "modelCode", "themeCode",
             "status", "confidenceLevel", "dataQualityScore");
@@ -51,7 +50,7 @@ public class InvestmentAnalysisApplicationService {
      */
     @Transactional
     public InvestmentAnalysisReport generate(GenerateInvestmentAnalysisCommand command) {
-        String modelCode = resolveModelCode(command.modelCode());
+        String modelCode = requiredModelCode(command.modelCode());
         log.info(
             "投资分析报告生成开始: requestedProviderCode={}, modelCode={}, marketScope={}, themeCode={}, lookbackDays={}, initialCapital={}",
             command.providerCode(),
@@ -132,17 +131,20 @@ public class InvestmentAnalysisApplicationService {
     }
 
     /**
-     * 解析请求模型编码，空值使用本地规则默认模型。
+     * 读取必填模型编码，禁止使用默认模型掩盖配置问题。
      *
-     * @param modelCode 请求指定模型编码
+     * @param modelCode 请求或任务配置指定的模型编码
      * @return 可用于查询 ACTIVE 模型的稳定编码
+     * @throws BusinessException 当模型编码为空时抛出
      * @author dz
-     * @date 2026-06-18
+     * @date 2026-06-27
      */
-    private String resolveModelCode(String modelCode) {
-        return modelCode == null || modelCode.isBlank()
-            ? DEFAULT_MODEL_CODE
-            : modelCode;
+    private String requiredModelCode(String modelCode) {
+        if (modelCode == null || modelCode.isBlank()) {
+            log.error("投资分析报告生成失败: modelCode未配置，不能使用默认模型");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "modelCode未配置，不能使用默认模型");
+        }
+        return modelCode.trim();
     }
 
     /**

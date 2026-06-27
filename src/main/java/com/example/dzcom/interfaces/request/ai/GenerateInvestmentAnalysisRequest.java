@@ -2,6 +2,7 @@ package com.example.dzcom.interfaces.request.ai;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 
 import java.math.BigDecimal;
 
@@ -11,7 +12,8 @@ public record GenerateInvestmentAnalysisRequest(
     @Schema(description = "可选提供方校验值；实际提供方由 ACTIVE 模型配置决定",
         example = "OPENAI_COMPATIBLE")
     String providerCode,
-    @Schema(description = "模型稳定编码；为空时使用 openai-compatible-analysis",
+    @NotBlank
+    @Schema(description = "模型稳定编码；必填，后端不再提供默认模型",
         example = "openai-compatible-analysis")
     String modelCode,
     @Schema(description = "市场范围，默认仅中国大陆", example = "CN_MAINLAND")

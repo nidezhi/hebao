@@ -25,10 +25,9 @@ import java.util.Map;
 /**
  * OpenAI 兼容协议投资分析 Provider。
  *
- * <p>当前用于验证数据库模型配置、Provider 选择和 API Key 注入链路。
- * 当 {@code mockEnabled=true} 时复用本地规则生成结构化报告，不发起外部网络请求；
- * 当 {@code mockEnabled=false} 时调用 OpenAI Chat Completions 兼容接口，要求模型返回
- * 与投资分析报告字段一致的 JSON。</p>
+ * <p>当前闭环要求真实调用远程模型。Provider 会先用本地规则生成可信输入基线，
+ * 再强制调用 OpenAI Chat Completions 兼容接口；如果配置仍处于 mock 模式或远程
+ * 调用失败，会记录错误日志并阻断任务。</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -55,13 +54,13 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
     }
 
     /**
-     * 使用已注入密钥的 OpenAI 兼容模拟配置生成报告。
+     * 使用 OpenAI 兼容远程模型生成报告。
      *
      * @param requestId 单次分析请求追踪标识
      * @param command 市场范围、主题和模拟资金等业务参数
      * @param modelConfig 数据库配置与外部 API Key 组成的运行配置
      * @return 标记为 OPENAI_COMPATIBLE 模型生成的结构化报告
-     * @throws BusinessException 当模型未开启 mock 模式时抛出
+     * @throws BusinessException 当模型仍处于 mock 模式或远程调用失败时抛出
      * @author dz
      * @date 2026-06-18
      */
@@ -76,56 +75,20 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             command,
             modelConfig
         );
-        if (!modelConfig.mockEnabled()) {
-            log.info(
-                "投资分析模型准备远端调用: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, marketScope={}, themeCode={}, lookbackDays={}, localQualityScore={}, localGate={}",
-                requestId,
-                modelConfig.modelCode(),
-                modelConfig.modelVersion(),
-                modelConfig.providerCode(),
-                modelConfig.remoteModel(),
-                command.marketScope(),
-                command.themeCode(),
-                command.lookbackDays(),
-                localReport.dataQualityScore(),
-                localReport.dataQualityGate()
-            );
-            return callRemoteModel(localReport, command, modelConfig);
-        }
         log.info(
-            "投资分析模型使用本地规则: requestId={}, modelCode={}, modelVersion={}, providerCode={}, mockEnabled={}, marketScope={}, themeCode={}, qualityScore={}, confidenceLevel={}",
+            "投资分析模型准备远端调用: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, marketScope={}, themeCode={}, lookbackDays={}, localQualityScore={}, localGate={}",
             requestId,
             modelConfig.modelCode(),
             modelConfig.modelVersion(),
             modelConfig.providerCode(),
-            modelConfig.mockEnabled(),
+            modelConfig.remoteModel(),
             command.marketScope(),
             command.themeCode(),
+            command.lookbackDays(),
             localReport.dataQualityScore(),
-            localReport.confidenceLevel()
+            localReport.dataQualityGate()
         );
-        return InvestmentAnalysisReport.builder()
-            .bizId(localReport.bizId())
-            .requestId(localReport.requestId())
-            .providerCode(PROVIDER_CODE)
-            .modelCode(modelConfig.modelCode())
-            .marketScope(localReport.marketScope())
-            .themeCode(localReport.themeCode())
-            .themeName(localReport.themeName())
-            .status(localReport.status())
-            .confidenceLevel(localReport.confidenceLevel())
-            .dataQualityScore(localReport.dataQualityScore())
-            .dataQualityGate(localReport.dataQualityGate())
-            .investmentSummary(localReport.investmentSummary())
-            .trend(localReport.trend())
-            .investmentPlan(localReport.investmentPlan())
-            .simulatedReturn(localReport.simulatedReturn())
-            .chartPayload(localReport.chartPayload())
-            .promptSnapshot(localReport.promptSnapshot())
-            .failureReason(localReport.failureReason())
-            .generatedAt(localReport.generatedAt())
-            .createdAt(localReport.createdAt())
-            .build();
+        return callRemoteModel(localReport, command, modelConfig);
     }
 
     /**
@@ -143,6 +106,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         GenerateInvestmentAnalysisCommand command,
         AiModelRuntimeConfig modelConfig
     ) {
+        validateRemoteCallable(localReport.requestId(), modelConfig);
         long startedAt = System.nanoTime();
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
         String userPrompt = prompt(localReport, command);
@@ -200,7 +164,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             );
             return report;
         } catch (BusinessException exception) {
-            log.warn(
+            log.error(
                 "投资分析模型远端业务失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
                 localReport.requestId(),
                 modelConfig.modelCode(),
@@ -212,7 +176,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            log.warn(
+            log.error(
                 "投资分析模型远端调用被中断: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
                 localReport.requestId(),
                 modelConfig.modelCode(),
@@ -222,7 +186,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型调用被中断");
         } catch (Exception exception) {
-            log.warn(
+            log.error(
                 "投资分析模型远端调用异常: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
                 localReport.requestId(),
                 modelConfig.modelCode(),
@@ -234,6 +198,44 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型调用失败: " + exception.getMessage());
         }
+    }
+
+    /**
+     * 校验投资分析报告必须真实调用远程模型。
+     *
+     * @param requestId 单次分析请求追踪标识
+     * @param modelConfig 模型运行时配置
+     * @throws BusinessException 当配置不可用于远程调用时抛出
+     * @author dz
+     * @date 2026-06-27
+     */
+    private void validateRemoteCallable(String requestId, AiModelRuntimeConfig modelConfig) {
+        if (modelConfig.mockEnabled()) {
+            failRemoteCallable(requestId, modelConfig, "模型配置mockEnabled=true，禁止使用本地规则替代远程模型");
+        }
+        if (isBlank(modelConfig.baseUrl())) {
+            failRemoteCallable(requestId, modelConfig, "模型baseUrl为空，不能调用远程模型");
+        }
+        if (isBlank(modelConfig.remoteModel())) {
+            failRemoteCallable(requestId, modelConfig, "远端模型名称为空，不能调用远程模型");
+        }
+        if (isBlank(modelConfig.apiKey())) {
+            failRemoteCallable(requestId, modelConfig, "模型API Key为空，不能调用远程模型");
+        }
+    }
+
+    /** 输出投资分析远程调用前置配置错误并抛出业务异常。 */
+    private void failRemoteCallable(String requestId, AiModelRuntimeConfig modelConfig, String reason) {
+        log.error(
+            "投资分析模型远程调用前置校验失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, secretRef={}, reason={}",
+            requestId,
+            modelConfig.modelCode(),
+            modelConfig.modelVersion(),
+            modelConfig.providerCode(),
+            modelConfig.secretRef(),
+            reason
+        );
+        throw new BusinessException(HttpStatus.BAD_REQUEST, "投资分析模型远程调用失败: " + reason);
     }
 
     /**
@@ -388,6 +390,11 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
     /** 计算文本长度，避免日志输出完整模型响应。 */
     private int textLength(String value) {
         return value == null ? 0 : value.length();
+    }
+
+    /** 判断文本是否为空。 */
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /** 计算模型远端调用耗时毫秒。 */

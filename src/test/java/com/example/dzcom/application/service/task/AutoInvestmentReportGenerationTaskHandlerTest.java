@@ -67,7 +67,11 @@ class AutoInvestmentReportGenerationTaskHandlerTest {
                     .modelCode(model.modelCode())
                     .modelVersion(model.modelVersion())
                     .providerCode(model.provider())
-                    .mockEnabled(true)
+                    .baseUrl("https://api.openai.com/v1")
+                    .remoteModel("gpt-4.1-mini")
+                    .secretRef("OPENAI_MOCK_API_KEY")
+                    .apiKey("test-api-key")
+                    .mockEnabled(false)
                     .build(),
                 new CapturingReportStore(),
                 new FixedIdGenerator()

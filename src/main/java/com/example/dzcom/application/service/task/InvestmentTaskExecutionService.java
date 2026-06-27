@@ -16,6 +16,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class InvestmentTaskExecutionService {
+    private static final int FAILURE_REASON_MAX_LENGTH = 12_000;
+
     private final List<InvestmentTaskHandler> handlers;
     private final ScheduledTaskExecutionStore executions;
     private final IdGenerator ids;
@@ -72,7 +74,7 @@ public class InvestmentTaskExecutionService {
         } catch (InvestmentTaskBlockedException exception) {
             ScheduledTaskExecution blocked = executions.save(running.toBuilder()
                 .status("BLOCKED")
-                .failureReason(limit(exception.getMessage(), 2048))
+                .failureReason(limit(exception.getMessage(), FAILURE_REASON_MAX_LENGTH))
                 .completedAt(clock.now())
                 .build());
             log.warn("投资任务被业务门禁阻断: eventId={}, taskCode={}, taskType={}, reason={}",
@@ -81,7 +83,7 @@ public class InvestmentTaskExecutionService {
         } catch (Exception exception) {
             ScheduledTaskExecution failed = executions.save(running.toBuilder()
                 .status("FAILED")
-                .failureReason(limit(exception.getMessage(), 2048))
+                .failureReason(limit(exception.getMessage(), FAILURE_REASON_MAX_LENGTH))
                 .completedAt(clock.now())
                 .build());
             log.error("投资任务执行失败: eventId={}, taskCode={}, taskType={}",

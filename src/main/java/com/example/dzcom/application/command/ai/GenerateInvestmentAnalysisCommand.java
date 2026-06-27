@@ -17,7 +17,7 @@ public record GenerateInvestmentAnalysisCommand(
     @Schema(description = "可选的提供方一致性校验值；实际提供方由模型表决定",
         example = "OPENAI_COMPATIBLE")
     String providerCode,
-    @Schema(description = "AI 模型稳定编码；空值使用 openai-compatible-analysis",
+    @Schema(description = "AI 模型稳定编码；必填，后端不再提供默认模型",
         example = "openai-compatible-analysis")
     String modelCode,
     @Schema(description = "分析覆盖的市场范围，默认中国大陆",

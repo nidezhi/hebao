@@ -541,7 +541,7 @@ public class DataSourceGovernanceApplicationService {
             .toList();
     }
 
-    /** 通过大模型整理收集数据源候选，mock 模式使用本地模板兜底。 */
+    /** 通过大模型整理收集数据源候选，远程模型不可用时直接阻断。 */
     private List<DataSourceDiscoveryCandidateView> discoverByModel(
         DiscoverDataSourcesCommand command,
         AiModel model,
@@ -553,18 +553,15 @@ public class DataSourceGovernanceApplicationService {
     ) {
         var runtimeConfig = modelRuntimeConfigs.resolve(model);
         if (runtimeConfig.mockEnabled()) {
-            log.info(
-                "AI数据源发现使用本地候选: modelCode={}, modelVersion={}, providerCode={}, skillCode={}, collectionDirection={}, mockEnabled={}, dataTypes={}, limit={}",
+            log.error(
+                "AI数据源发现失败: modelCode={}, modelVersion={}, providerCode={}, skillCode={}, collectionDirection={}, reason=模型配置mockEnabled=true",
                 runtimeConfig.modelCode(),
                 runtimeConfig.modelVersion(),
                 runtimeConfig.providerCode(),
                 skill.skillCode(),
-                command.collectionDirection(),
-                runtimeConfig.mockEnabled(),
-                dataTypes,
-                limit
+                command.collectionDirection()
             );
-            return defaultDiscoveryCandidates(dataTypes);
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "数据源发现模型配置mockEnabled=true，不能调用远程模型");
         }
         AiJsonCompletionClient client = aiJsonClients.stream()
             .filter(candidate -> candidate.supports(runtimeConfig.providerCode()))
@@ -578,8 +575,8 @@ public class DataSourceGovernanceApplicationService {
             runtimeConfig
         );
         if (content == null || content.isBlank()) {
-            log.warn(
-                "AI数据源发现模型返回为空，使用本地候选兜底: modelCode={}, modelVersion={}, providerCode={}, skillCode={}, dataTypes={}, limit={}",
+            log.error(
+                "AI数据源发现失败: modelCode={}, modelVersion={}, providerCode={}, skillCode={}, dataTypes={}, limit={}, reason=模型返回为空",
                 runtimeConfig.modelCode(),
                 runtimeConfig.modelVersion(),
                 runtimeConfig.providerCode(),
@@ -587,7 +584,7 @@ public class DataSourceGovernanceApplicationService {
                 dataTypes,
                 limit
             );
-            return defaultDiscoveryCandidates(dataTypes);
+            throw new BusinessException(HttpStatus.BAD_GATEWAY, "数据源发现模型返回为空，不能使用本地候选兜底");
         }
         List<DataSourceDiscoveryCandidateView> candidates = parseModelCandidates(content, dataTypes, trustLevels, limit);
         log.info(

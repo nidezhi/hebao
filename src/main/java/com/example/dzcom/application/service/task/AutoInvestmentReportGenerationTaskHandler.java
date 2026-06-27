@@ -17,7 +17,6 @@ import java.util.List;
 @Slf4j
 public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTaskHandler {
     private static final String TASK_TYPE = "AUTO_INVESTMENT_REPORT_GENERATION";
-    private static final String DEFAULT_MODEL_CODE = "openai-compatible-analysis";
     private static final BigDecimal DEFAULT_INITIAL_CAPITAL = BigDecimal.valueOf(100000);
 
     private final InvestmentAnalysisApplicationService analysis;
@@ -51,7 +50,7 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
     @Transactional
     public String execute(InvestmentTaskEvent event) {
         String providerCode = TaskParameterParser.string(event.parameters(), "providerCode", "OPENAI_COMPATIBLE");
-        String modelCode = TaskParameterParser.string(event.parameters(), "modelCode", DEFAULT_MODEL_CODE);
+        String modelCode = requiredModelCode(event);
         String marketScope = TaskParameterParser.marketScope(event.parameters());
         int lookbackDays = TaskParameterParser.positiveInt(event.parameters(), "lookbackDays", 30);
         BigDecimal initialCapital = parseInitialCapital(event);
@@ -131,6 +130,24 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
             throw new IllegalArgumentException("initialCapital 必须大于 0");
         }
         return capital;
+    }
+
+    /**
+     * 读取必填模型编码，禁止自动报告任务使用默认模型。
+     *
+     * @param event 任务触发事件
+     * @return 任务配置中的模型编码
+     * @throws IllegalArgumentException 当任务未配置模型编码时抛出
+     * @author dz
+     * @date 2026-06-27
+     */
+    private String requiredModelCode(InvestmentTaskEvent event) {
+        String modelCode = TaskParameterParser.string(event.parameters(), "modelCode", "");
+        if (modelCode.isBlank()) {
+            log.error("自动投资报告任务失败: taskCode={}, eventId={}, reason=modelCode未配置", event.taskCode(), event.eventId());
+            throw new IllegalArgumentException("modelCode未配置，不能使用默认模型");
+        }
+        return modelCode.trim();
     }
 
     /**

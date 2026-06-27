@@ -45,14 +45,15 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
     /**
      * 调用 OpenAI 兼容接口并返回 message.content 中的 JSON 文本。
      *
-     * <p>当模型配置 {@code mockEnabled=true} 时不发起外部网络请求，返回空字符串，
-     * 由上层业务使用可审计的本地兜底结果完成链路验证。</p>
+     * <p>当前闭环要求真实调用远程模型，因此不再支持 mock 短路或空配置兜底。
+     * 如果远程模型不可调用，方法会记录错误日志并抛出业务异常。</p>
      *
      * @param operationCode 操作编码
      * @param systemPrompt 系统提示词
      * @param userPrompt 用户提示词
      * @param modelConfig 模型运行时配置
-     * @return JSON 对象文本，mock 模式返回空字符串
+     * @return JSON 对象文本
+     * @throws BusinessException 当配置仍处于 mock 模式或远程调用失败时抛出
      * @author dz
      * @date 2026-06-27
      */
@@ -63,20 +64,7 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         String userPrompt,
         AiModelRuntimeConfig modelConfig
     ) {
-        if (modelConfig.mockEnabled()) {
-            log.info(
-                "AI JSON模型调用跳过: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, mockEnabled={}, systemPromptLength={}, userPromptLength={}",
-                operationCode,
-                modelConfig.modelCode(),
-                modelConfig.modelVersion(),
-                modelConfig.providerCode(),
-                modelConfig.remoteModel(),
-                modelConfig.mockEnabled(),
-                textLength(systemPrompt),
-                textLength(userPrompt)
-            );
-            return "";
-        }
+        validateRemoteCallable(operationCode, modelConfig);
         long startedAt = System.nanoTime();
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
         log.info(
@@ -134,7 +122,7 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             );
             return content;
         } catch (BusinessException exception) {
-            log.warn(
+            log.error(
                 "AI JSON模型调用业务失败: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
                 operationCode,
                 modelConfig.modelCode(),
@@ -146,7 +134,7 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            log.warn(
+            log.error(
                 "AI JSON模型调用被中断: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
                 operationCode,
                 modelConfig.modelCode(),
@@ -156,7 +144,7 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, operationCode + "模型调用被中断");
         } catch (Exception exception) {
-            log.warn(
+            log.error(
                 "AI JSON模型调用异常: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
                 operationCode,
                 modelConfig.modelCode(),
@@ -169,6 +157,44 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             throw new BusinessException(HttpStatus.BAD_GATEWAY,
                 operationCode + "模型调用失败: " + exception.getMessage());
         }
+    }
+
+    /**
+     * 校验本次 JSON 补全必须真实调用远程模型。
+     *
+     * @param operationCode 操作编码
+     * @param modelConfig 模型运行时配置
+     * @throws BusinessException 当配置不可用于远程调用时抛出
+     * @author dz
+     * @date 2026-06-27
+     */
+    private void validateRemoteCallable(String operationCode, AiModelRuntimeConfig modelConfig) {
+        if (modelConfig.mockEnabled()) {
+            failRemoteCallable(operationCode, modelConfig, "模型配置mockEnabled=true，禁止跳过远程大模型调用");
+        }
+        if (isBlank(modelConfig.baseUrl())) {
+            failRemoteCallable(operationCode, modelConfig, "模型baseUrl为空，不能调用远程大模型");
+        }
+        if (isBlank(modelConfig.remoteModel())) {
+            failRemoteCallable(operationCode, modelConfig, "远端模型名称为空，不能调用远程大模型");
+        }
+        if (isBlank(modelConfig.apiKey())) {
+            failRemoteCallable(operationCode, modelConfig, "模型API Key为空，不能调用远程大模型");
+        }
+    }
+
+    /** 输出远程调用前置配置错误并抛出业务异常。 */
+    private void failRemoteCallable(String operationCode, AiModelRuntimeConfig modelConfig, String reason) {
+        log.error(
+            "AI JSON模型远程调用前置校验失败: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, secretRef={}, reason={}",
+            operationCode,
+            modelConfig.modelCode(),
+            modelConfig.modelVersion(),
+            modelConfig.providerCode(),
+            modelConfig.secretRef(),
+            reason
+        );
+        throw new BusinessException(HttpStatus.BAD_REQUEST, operationCode + reason);
     }
 
     /** 构造 Chat Completions 请求体。 */
@@ -236,6 +262,11 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
     /** 计算文本长度，日志只记录长度，避免泄露完整 Prompt 和模型响应。 */
     private int textLength(String value) {
         return value == null ? 0 : value.length();
+    }
+
+    /** 判断文本是否为空。 */
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /** 计算模型调用耗时毫秒。 */
