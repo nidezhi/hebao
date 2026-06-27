@@ -70,8 +70,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     /**
      * 串联真实数据采集、报告生成、Prompt/模型候选、Mock 交易、回测和反馈。
      *
-     * <p>该任务只自动执行 Mock 投资闭环。新 Prompt、新模型和真实交易均只产出候选、
-     * 评分或审计记录，不会越过人工确认和灰度开关直接正式启用。</p>
+     * <p>该任务自动执行真实数据采集、报告生成、Prompt/模型候选、Prompt/模型启用审计、
+     * Mock 交易、回测和反馈沉淀。真实交易仍然只记录闸门，不会被自动触发。</p>
      *
      * @param event 任务事件
      * @return 可写入任务执行审计的摘要
@@ -133,7 +133,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "portfolioBizId", portfolio.bizId(),
                 "backtestBizId", backtest.bizId(),
                 "modelCandidateBizId", candidate == null ? "" : candidate.bizId(),
-                "automationBoundary", "FULL_MOCK_ONLY_FORMAL_ACTIVATION_REQUIRES_REVIEW"
+                "automationBoundary", "FULL_MOCK_WITH_PROMPT_MODEL_AUTO_ACTIVATION_REAL_TRADE_DISABLED"
             ));
             log.info(
                 "自动投资闭环完成: runNo={}, taskCode={}, reportBizId={}, portfolioBizId={}, backtestBizId={}, modelCandidateBizId={}",
@@ -184,18 +184,18 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         closedLoops.succeedStep(run, "SAFETY_GUARD", "自动化权限确认", 10,
             Map.of(
                 "allowRealTrade", TaskParameterParser.bool(parameters, "allowRealTrade", false),
-                "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", false),
-                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", false),
+                "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", true),
+                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", true),
                 "blocking", false,
                 "displaySeverity", "INFO",
                 "userFacing", false
             ),
             Map.of(
-                "policyCode", "FULL_MOCK_WITH_MANUAL_ACTIVATION",
+                "policyCode", "FULL_MOCK_WITH_PROMPT_MODEL_AUTO_ACTIVATION",
                 "blocking", false,
                 "displaySeverity", "INFO",
                 "userFacing", false,
-                "summary", "自动闭环允许真实数据采集、报告生成、候选评分和Mock交易；Prompt/模型正式启用与真实交易仍需人工确认。"
+                "summary", "自动闭环允许真实数据采集、报告生成、候选评分、Prompt/模型自动启用和Mock交易；真实交易仍需人工确认。"
             ));
     }
 
@@ -556,7 +556,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             result);
     }
 
-    /** 生成 DRAFT 模型候选和评分指标，不自动启用。 */
+    /** 生成模型候选和评分指标，正式启用由后续自动化闸门决定。 */
     private AiModel saveModelCandidate(
         ClosedLoopRun run,
         Map<String, String> parameters,
@@ -573,10 +573,14 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         String providerCode = TaskParameterParser.string(parameters, "providerCode", report.providerCode());
         String version = "candidate-" + VERSION_FORMATTER.format(clock.now());
         BigDecimal score = reportScore(report);
-        Map<String, Object> modelConfig = new LinkedHashMap<>();
-        modelConfig.put("baseModelCode", report.modelCode());
-        modelConfig.put("activationPolicy", "MANUAL_REVIEW_OR_GRAY_SWITCH_REQUIRED");
+        AiModel activeBaseModel = models.activeByCode(modelCode);
+        Map<String, Object> modelConfig = new LinkedHashMap<>(JSON.parseObject(activeBaseModel.modelConfig()));
+        modelConfig.put("baseModelBizId", activeBaseModel.bizId());
+        modelConfig.put("baseModelCode", activeBaseModel.modelCode());
+        modelConfig.put("baseModelVersion", activeBaseModel.modelVersion());
+        modelConfig.put("activationPolicy", "AUTO_ACTIVATION_ALLOWED_WITH_REAL_TRADE_DISABLED");
         modelConfig.put("sourceReportBizId", report.bizId());
+        modelConfig.put("generatedBy", TASK_TYPE);
         Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("score", score);
         metrics.put("dataQualityScore", report.dataQualityScore());
@@ -588,7 +592,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             "自动闭环候选模型-" + version,
             DEFAULT_MODEL_TYPE,
             providerCode,
-            "closed-loop://" + run.bizId(),
+            activeBaseModel.artifactUri(),
             JSON.toJSONString(modelConfig),
             JSON.toJSONString(metrics),
             "DRAFT"
@@ -719,15 +723,37 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         });
     }
 
-    /** 记录正式启用边界，当前版本不自动激活 Prompt 或模型，也不执行真实交易。 */
+    /** 根据自动化开关处理 Prompt/模型正式启用；真实交易始终只记录闸门。 */
     private void recordActivationGuards(ClosedLoopRun run, Map<String, String> parameters, AiModel candidate) {
-        closedLoops.skippedStep(run, "PROMPT_ACTIVATION_GUARD", "Prompt正式启用闸门", 90,
-            "新 Prompt 正式启用需要人工确认或灰度开关，本轮只保留候选与评分",
-            Map.of("allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", false)));
-        closedLoops.skippedStep(run, "MODEL_ACTIVATION_GUARD", "模型正式启用闸门", 91,
-            "新模型正式启用需要人工确认或灰度开关，本轮只保留 DRAFT 候选",
-            Map.of("allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", false),
-                "modelCandidateBizId", candidate == null ? "" : candidate.bizId()));
+        if (TaskParameterParser.bool(parameters, "allowAutoPromptActivation", true)) {
+            closedLoops.succeedStep(run, "PROMPT_ACTIVATION_GUARD", "Prompt正式启用闸门", 90,
+                Map.of("allowAutoPromptActivation", true),
+                Map.of(
+                    "status", "ACTIVE",
+                    "activationPolicy", "AUTO_PROMPT_GOVERNANCE_BASELINE_ACTIVE",
+                    "summary", "Prompt治理任务已维护 ACTIVE 基线模板，自动闭环记录正式启用审计。"
+                ));
+        } else {
+            closedLoops.skippedStep(run, "PROMPT_ACTIVATION_GUARD", "Prompt正式启用闸门", 90,
+                "新 Prompt 正式启用开关关闭，本轮只保留候选与评分",
+                Map.of("allowAutoPromptActivation", false));
+        }
+        if (TaskParameterParser.bool(parameters, "allowAutoModelActivation", true) && candidate != null) {
+            AiModel activated = models.changeStatus(candidate.bizId(), "ACTIVE");
+            closedLoops.succeedStep(run, "MODEL_ACTIVATION_GUARD", "模型正式启用闸门", 91,
+                Map.of("allowAutoModelActivation", true, "modelCandidateBizId", candidate.bizId()),
+                Map.of(
+                    "modelBizId", activated.bizId(),
+                    "modelCode", activated.modelCode(),
+                    "modelVersion", activated.modelVersion(),
+                    "status", activated.status()
+                ));
+        } else {
+            closedLoops.skippedStep(run, "MODEL_ACTIVATION_GUARD", "模型正式启用闸门", 91,
+                "新模型正式启用开关关闭或无候选模型，本轮只保留 DRAFT 候选",
+                Map.of("allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", true),
+                    "modelCandidateBizId", candidate == null ? "" : candidate.bizId()));
+        }
         closedLoops.skippedStep(run, "REAL_TRADE_GUARD", "真实交易闸门", 92,
             "真实交易需要人工确认或专用灰度开关，自动闭环不会触发真实交易",
             Map.of("allowRealTrade", TaskParameterParser.bool(parameters, "allowRealTrade", false)));

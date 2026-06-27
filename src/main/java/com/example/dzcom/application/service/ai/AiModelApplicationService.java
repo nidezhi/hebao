@@ -103,6 +103,16 @@ public class AiModelApplicationService {
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "AI模型不存在"));
     }
 
+    /** 查询指定模型编码当前 ACTIVE 版本。 */
+    @Transactional(readOnly = true)
+    public AiModel activeByCode(String modelCode) {
+        if (modelCode == null || modelCode.isBlank()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "AI模型编码不能为空");
+        }
+        return models.findActiveByCode(modelCode.trim())
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "未找到启用的AI模型配置: " + modelCode));
+    }
+
     /**
      * 按模型编码、类型、提供方和状态分页查询模型。
      *

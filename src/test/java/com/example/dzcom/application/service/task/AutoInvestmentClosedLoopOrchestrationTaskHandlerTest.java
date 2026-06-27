@@ -117,6 +117,14 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         assertEquals(1, fixture.closedLoopService.feedbackCalls);
         assertTrue(fixture.closedLoopStore.steps.stream()
             .anyMatch(step -> "QUALITY_GATE".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "PROMPT_ACTIVATION_GUARD".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MODEL_ACTIVATION_GUARD".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "REAL_TRADE_GUARD".equals(step.stepCode()) && "SKIPPED".equals(step.stepStatus())));
+        assertTrue(fixture.modelStore.items.values().stream()
+            .anyMatch(model -> model.modelVersion().startsWith("candidate-") && "ACTIVE".equals(model.status())));
     }
 
     /** 已有合格报告时可跳过报告生成，避免调试后半段闭环时重复消耗远端模型。 */
@@ -323,6 +331,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private final MemoryExecutionStore executions = new MemoryExecutionStore();
         private final MemoryClosedLoopRunStore closedLoopStore = new MemoryClosedLoopRunStore();
         private final MemoryReportStore reports = new MemoryReportStore();
+        private final MemoryAiModelStore modelStore = new MemoryAiModelStore();
         private final CountingPortfolioService portfolioService = new CountingPortfolioService();
         private final FakeInvestmentClosedLoopService closedLoopService = new FakeInvestmentClosedLoopService();
         private final SuccessfulTaskHandler dataTaskHandler = new SuccessfulTaskHandler("DATA_TASK");
@@ -351,7 +360,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 reports,
                 portfolioService,
                 closedLoopService,
-                new AiModelApplicationService(new MemoryAiModelStore(), new MemoryAiModelSkillBindingStore(), ids, () -> NOW),
+                new AiModelApplicationService(modelStore, new MemoryAiModelSkillBindingStore(), ids, () -> NOW),
                 new PassThroughOperatorProvider(),
                 ids,
                 () -> NOW
@@ -680,34 +689,69 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
 
     /** 内存模型仓储。 */
     private static final class MemoryAiModelStore implements AiModelStore {
+        private final Map<String, AiModel> items = new LinkedHashMap<>();
+
+        private MemoryAiModelStore() {
+            save(AiModel.builder()
+                .bizId("model-active-1")
+                .modelCode("openai-compatible-analysis")
+                .modelVersion("default-v1")
+                .modelName("OpenAI Compatible Analysis")
+                .modelType("INVESTMENT_ANALYSIS")
+                .provider("OPENAI_COMPATIBLE")
+                .artifactUri("")
+                .modelConfig("""
+                    {"model":"gpt-test","baseUrl":"https://example.test/v1","secretRef":"OPENAI_API_KEY","mockEnabled":false,"temperature":0.2,"timeoutSeconds":30}
+                    """)
+                .metrics("{}")
+                .status("ACTIVE")
+                .activatedAt(NOW.minusDays(1))
+                .createdAt(NOW.minusDays(1))
+                .updatedAt(NOW.minusDays(1))
+                .build());
+        }
+
         @Override
         public Optional<AiModel> findByBizId(String bizId) {
-            return Optional.empty();
+            return Optional.ofNullable(items.get(bizId));
         }
 
         @Override
         public Optional<AiModel> findByCodeAndVersion(String modelCode, String modelVersion) {
-            return Optional.empty();
+            return items.values().stream()
+                .filter(item -> item.modelCode().equals(modelCode) && item.modelVersion().equals(modelVersion))
+                .findFirst();
         }
 
         @Override
         public Optional<AiModel> findActiveByCode(String modelCode) {
-            return Optional.empty();
+            return items.values().stream()
+                .filter(item -> item.modelCode().equals(modelCode) && "ACTIVE".equals(item.status()))
+                .reduce((left, right) -> {
+                    if (left.activatedAt() == null) {
+                        return right;
+                    }
+                    if (right.activatedAt() == null) {
+                        return left;
+                    }
+                    return right.activatedAt().isAfter(left.activatedAt()) ? right : left;
+                });
         }
 
         @Override
         public AiModel save(AiModel model) {
+            items.put(model.bizId(), model);
             return model;
         }
 
         @Override
         public PageResult<AiModel> search(AiModelSearchCriteria criteria) {
             return PageResult.<AiModel>builder()
-                .items(List.of())
-                .total(0)
+                .items(new ArrayList<>(items.values()))
+                .total(items.size())
                 .page(criteria.page())
                 .size(criteria.size())
-                .totalPages(0)
+                .totalPages(items.isEmpty() ? 0 : 1)
                 .build();
         }
     }
