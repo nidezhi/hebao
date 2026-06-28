@@ -55,8 +55,20 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
         int lookbackDays = TaskParameterParser.positiveInt(event.parameters(), "lookbackDays", 30);
         BigDecimal initialCapital = parseInitialCapital(event);
         List<String> themeCodes = resolveThemeCodes(event);
+        int maxThemeReports = TaskParameterParser.positiveInt(event.parameters(), "maxThemeReports", 1);
+        if (themeCodes.size() > maxThemeReports) {
+            log.warn(
+                "自动投资报告主题数量已按成本保护截断: taskCode={}, eventId={}, configuredThemeCount={}, maxThemeReports={}, configuredThemeCodes={}",
+                event.taskCode(),
+                event.eventId(),
+                themeCodes.size(),
+                maxThemeReports,
+                themeCodes
+            );
+            themeCodes = themeCodes.stream().limit(maxThemeReports).toList();
+        }
         log.info(
-            "自动投资报告任务开始: taskCode={}, eventId={}, providerCode={}, modelCode={}, marketScope={}, lookbackDays={}, initialCapital={}, themeCount={}, themeCodes={}",
+            "自动投资报告任务开始: taskCode={}, eventId={}, providerCode={}, modelCode={}, marketScope={}, lookbackDays={}, initialCapital={}, themeCount={}, maxThemeReports={}, themeCodes={}",
             event.taskCode(),
             event.eventId(),
             providerCode,
@@ -65,6 +77,7 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
             lookbackDays,
             initialCapital,
             themeCodes.size(),
+            maxThemeReports,
             themeCodes
         );
         if (themeCodes.isEmpty()) {
@@ -103,6 +116,9 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
      * @date 2026-06-24
      */
     private List<String> resolveThemeCodes(InvestmentTaskEvent event) {
+        if (event.parameters() != null && event.parameters().containsKey("themeCodes")) {
+            return TaskParameterParser.list(event.parameters(), "themeCodes");
+        }
         List<String> explicitThemeCodes = TaskParameterParser.list(event.parameters(), "themeCodes");
         if (!explicitThemeCodes.isEmpty()) {
             return explicitThemeCodes;

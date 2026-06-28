@@ -1,6 +1,6 @@
 package com.example.dzcom.application.service.ai;
 
-import com.alibaba.fastjson2.JSON;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.command.ai.GenerateBacktestFromPortfolioCommand;
 import com.example.dzcom.application.command.ai.SaveAiPromptEvaluationCommand;
 import com.example.dzcom.application.command.ai.SaveBacktestResultCommand;
@@ -110,9 +110,9 @@ class InvestmentClosedLoopApplicationServiceTest {
                 .parameters("{\"rebalance\":\"monthly\"}")
                 .build());
 
-        var parameters = JSON.parseObject(result.parameters());
-        assertEquals("MOCK_PORTFOLIO_VALUATION", parameters.getString("source"));
-        assertEquals("monthly", parameters.getJSONObject("clientParameters").getString("rebalance"));
+        var parameters = Jsons.readObjectOrEmpty(result.parameters());
+        assertEquals("MOCK_PORTFOLIO_VALUATION", Jsons.text(parameters, "source"));
+        assertEquals("monthly", Jsons.text(Jsons.object(parameters, "clientParameters"), "rebalance"));
     }
 
     /** 回测详情必须只允许所有者查看。 */

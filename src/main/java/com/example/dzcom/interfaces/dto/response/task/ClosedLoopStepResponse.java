@@ -1,8 +1,8 @@
 package com.example.dzcom.interfaces.dto.response.task;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.dto.task.ClosedLoopStepView;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -29,8 +29,8 @@ public record ClosedLoopStepResponse(
 ) {
     /** 将应用层视图转换为接口响应。 */
     public static ClosedLoopStepResponse from(ClosedLoopStepView view) {
-        JSONObject input = parseObject(view.inputSummary());
-        JSONObject output = parseObject(view.outputSummary());
+        ObjectNode input = parseObject(view.inputSummary());
+        ObjectNode output = parseObject(view.outputSummary());
         String severity = firstText(output, input, "displaySeverity");
         boolean blocking = firstBoolean(output, input, "blocking", isBlockingStatus(view.stepStatus()));
         boolean userFacing = firstBoolean(output, input, "userFacing", defaultUserFacing(view.stepCode(), view.stepStatus()));
@@ -53,30 +53,30 @@ public record ClosedLoopStepResponse(
     }
 
     /** 尽量解析摘要 JSON，解析失败时保持兼容。 */
-    private static JSONObject parseObject(String value) {
+    private static ObjectNode parseObject(String value) {
         if (value == null || value.isBlank()) {
-            return new JSONObject();
+            return Jsons.readObjectOrEmpty(null);
         }
         try {
-            return JSON.parseObject(value);
+            return Jsons.readObjectOrEmpty(value);
         } catch (Exception exception) {
-            return new JSONObject();
+            return Jsons.readObjectOrEmpty(null);
         }
     }
 
     /** 按输出优先、输入兜底读取文本字段。 */
-    private static String firstText(JSONObject output, JSONObject input, String key) {
-        String value = output.getString(key);
-        return value == null || value.isBlank() ? input.getString(key) : value;
+    private static String firstText(ObjectNode output, ObjectNode input, String key) {
+        String value = Jsons.text(output, key);
+        return value == null || value.isBlank() ? Jsons.text(input, key) : value;
     }
 
     /** 按输出优先、输入兜底读取布尔字段。 */
-    private static boolean firstBoolean(JSONObject output, JSONObject input, String key, boolean defaultValue) {
-        Boolean outputValue = output.getBoolean(key);
+    private static boolean firstBoolean(ObjectNode output, ObjectNode input, String key, boolean defaultValue) {
+        Boolean outputValue = Jsons.bool(output, key);
         if (outputValue != null) {
             return outputValue;
         }
-        Boolean inputValue = input.getBoolean(key);
+        Boolean inputValue = Jsons.bool(input, key);
         return inputValue == null ? defaultValue : inputValue;
     }
 
@@ -105,15 +105,15 @@ public record ClosedLoopStepResponse(
     }
 
     /** 优先返回模型/闭环给出的摘要，其次返回失败原因。 */
-    private static String displayMessage(ClosedLoopStepView view, JSONObject output) {
-        String summary = output.getString("summary");
+    private static String displayMessage(ClosedLoopStepView view, ObjectNode output) {
+        String summary = Jsons.text(output, "summary");
         if (summary != null && !summary.isBlank()) {
             return summary;
         }
         if (view.failureReason() != null && !view.failureReason().isBlank()) {
             return view.failureReason();
         }
-        String effectivePolicy = output.getString("effectivePolicy");
+        String effectivePolicy = Jsons.text(output, "effectivePolicy");
         if (effectivePolicy != null && !effectivePolicy.isBlank()) {
             return effectivePolicy;
         }

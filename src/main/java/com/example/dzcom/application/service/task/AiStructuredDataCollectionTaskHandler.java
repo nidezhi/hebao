@@ -1,9 +1,7 @@
 package com.example.dzcom.application.service.task;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.application.dto.ai.AiModelRuntimeConfig;
@@ -29,7 +27,10 @@ import com.example.dzcom.domain.repository.market.MarketQuoteStore;
 import com.example.dzcom.domain.repository.product.ProductStore;
 import com.example.dzcom.domain.repository.task.NewsArticleStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -124,7 +125,7 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
             runtimeConfig
         );
         long durationMs = java.time.Duration.ofNanos(System.nanoTime() - started).toMillis();
-        JSONObject root = parseRoot(content);
+        ObjectNode root = parseRoot(content);
         CollectionResult result = persist(root, parameters, now, maxNews, maxProducts, maxQuotes);
         saveCollectionSource(result, now, durationMs);
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -137,13 +138,14 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
         summary.put("upsertedProductCount", result.productCount());
         summary.put("savedQuoteCount", result.quoteCount());
         summary.put("rejectedCount", result.rejectedCount());
-        summary.put("dataGaps", root.getJSONArray("dataGaps") == null ? List.of() : root.getJSONArray("dataGaps"));
+        ArrayNode dataGaps = Jsons.array(root, "dataGaps");
+        summary.put("dataGaps", dataGaps.isEmpty() ? List.of() : dataGaps);
         log.info("AI结构化数据采集完成: taskCode={}, eventId={}, summary={}",
-            event.taskCode(), event.eventId(), JSON.toJSONString(summary));
+            event.taskCode(), event.eventId(), Jsons.toJson(summary));
         if (result.savedCount() == 0) {
-            throw new InvestmentTaskBlockedException("AI结构化采集没有产生可追溯真实数据: " + JSON.toJSONString(summary));
+            throw new InvestmentTaskBlockedException("AI结构化采集没有产生可追溯真实数据: " + Jsons.toJson(summary));
         }
-        return JSON.toJSONString(summary);
+        return Jsons.toJson(summary);
     }
 
     /** 生成系统提示词，优先使用数据库 Skill 指令。 */
@@ -198,13 +200,13 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
     }
 
     /** 解析模型返回根对象。 */
-    private JSONObject parseRoot(String content) {
+    private ObjectNode parseRoot(String content) {
         if (content == null || content.isBlank()) {
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "AI结构化采集模型返回为空");
         }
         try {
-            return JSON.parseObject(content);
-        } catch (RuntimeException exception) {
+            return Jsons.readObjectOrEmpty(content);
+        } catch (IllegalArgumentException exception) {
             throw new BusinessException(HttpStatus.BAD_GATEWAY,
                 "AI结构化采集模型输出JSON格式不合法: " + exception.getMessage());
         }
@@ -212,7 +214,7 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
 
     /** 持久化模型返回的三类核心数据。 */
     private CollectionResult persist(
-        JSONObject root,
+        ObjectNode root,
         Map<String, String> parameters,
         LocalDateTime now,
         int maxNews,
@@ -223,33 +225,33 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
         int newsCount = 0;
         int productCount = 0;
         int quoteCount = 0;
-        JSONArray news = root.getJSONArray("newsArticles");
-        if (news != null) {
+        ArrayNode news = Jsons.array(root, "newsArticles");
+        if (!news.isEmpty()) {
             for (int index = 0; index < Math.min(news.size(), maxNews); index++) {
-                JSONObject item = news.getJSONObject(index);
-                if (saveNews(item, parameters, now)) {
+                JsonNode item = news.get(index);
+                if (item.isObject() && saveNews((ObjectNode) item, parameters, now)) {
                     newsCount++;
                 } else {
                     rejected++;
                 }
             }
         }
-        JSONArray productArray = root.getJSONArray("products");
-        if (productArray != null) {
+        ArrayNode productArray = Jsons.array(root, "products");
+        if (!productArray.isEmpty()) {
             for (int index = 0; index < Math.min(productArray.size(), maxProducts); index++) {
-                JSONObject item = productArray.getJSONObject(index);
-                if (upsertProduct(item, now) != null) {
+                JsonNode item = productArray.get(index);
+                if (item.isObject() && upsertProduct((ObjectNode) item, now) != null) {
                     productCount++;
                 } else {
                     rejected++;
                 }
             }
         }
-        JSONArray quoteArray = root.getJSONArray("quotes");
-        if (quoteArray != null) {
+        ArrayNode quoteArray = Jsons.array(root, "quotes");
+        if (!quoteArray.isEmpty()) {
             for (int index = 0; index < Math.min(quoteArray.size(), maxQuotes); index++) {
-                JSONObject item = quoteArray.getJSONObject(index);
-                if (saveQuote(item, now)) {
+                JsonNode item = quoteArray.get(index);
+                if (item.isObject() && saveQuote((ObjectNode) item, now)) {
                     quoteCount++;
                 } else {
                     rejected++;
@@ -260,26 +262,26 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
     }
 
     /** 保存单条资讯。 */
-    private boolean saveNews(JSONObject item, Map<String, String> parameters, LocalDateTime now) {
-        String sourceCode = sourceCode(item.getString("sourceCode"));
-        String title = text(item.getString("title"));
-        String sourceUrl = text(item.getString("sourceUrl"));
-        LocalDateTime publishTime = dateTime(item.getString("publishTime"), null);
+    private boolean saveNews(ObjectNode item, Map<String, String> parameters, LocalDateTime now) {
+        String sourceCode = sourceCode(Jsons.text(item, "sourceCode"));
+        String title = text(Jsons.text(item, "title"));
+        String sourceUrl = text(Jsons.text(item, "sourceUrl"));
+        LocalDateTime publishTime = dateTime(Jsons.text(item, "publishTime"), null);
         if (sourceCode == null || title == null || !validSourceUrl(sourceUrl) || publishTime == null) {
             return false;
         }
         String topicKeywords = TaskParameterParser.string(parameters, "topicKeywords", "");
-        String summary = text(item.getString("summary"));
+        String summary = text(Jsons.text(item, "summary"));
         if (!topicKeywords.isBlank() && (summary == null || !containsAny(summary + title, topicKeywords))) {
             summary = (summary == null ? "" : summary + " ") + "主题关键词：" + topicKeywords;
         }
         articles.save(NewsArticle.builder()
             .bizId(ids.newBizId())
-            .externalId(limit(firstNonBlank(item.getString("externalId"), sourceUrl, title), 128))
-            .articleType(limit(firstNonBlank(item.getString("articleType"), "NEWS"), 32))
+            .externalId(limit(firstNonBlank(Jsons.text(item, "externalId"), sourceUrl, title), 128))
+            .articleType(limit(firstNonBlank(Jsons.text(item, "articleType"), "NEWS"), 32))
             .title(limit(title, 320))
             .summary(summary)
-            .content(text(item.getString("content")))
+            .content(text(Jsons.text(item, "content")))
             .sourceCode(sourceCode)
             .sourceUrl(limit(sourceUrl, 1024))
             .languageCode("zh-CN")
@@ -287,25 +289,25 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
             .collectedAt(now)
             .createdAt(now)
             .build());
-        ensureSource(sourceCode, firstNonBlank(item.getString("sourceName"), sourceCode),
-            firstNonBlank(item.getString("articleType"), "NEWS"), sourceUrl, now);
+        ensureSource(sourceCode, firstNonBlank(Jsons.text(item, "sourceName"), sourceCode),
+            firstNonBlank(Jsons.text(item, "articleType"), "NEWS"), sourceUrl, now);
         return true;
     }
 
     /** 新增或更新产品。 */
-    private Product upsertProduct(JSONObject item, LocalDateTime now) {
-        String productCode = normalizeProductCode(item.getString("productCode"));
-        String productName = text(item.getString("productName"));
-        String marketCode = firstNonBlank(item.getString("marketCode"), "CN_FUND").trim().toUpperCase(Locale.ROOT);
-        String sourceUrl = text(item.getString("sourceUrl"));
+    private Product upsertProduct(ObjectNode item, LocalDateTime now) {
+        String productCode = normalizeProductCode(Jsons.text(item, "productCode"));
+        String productName = text(Jsons.text(item, "productName"));
+        String marketCode = firstNonBlank(Jsons.text(item, "marketCode"), "CN_FUND").trim().toUpperCase(Locale.ROOT);
+        String sourceUrl = text(Jsons.text(item, "sourceUrl"));
         if (productCode == null || productName == null || !validSourceUrl(sourceUrl)) {
             return null;
         }
         Product existing = products.findByMarketAndCode(marketCode, productCode).orElse(null);
-        ProductType productType = productType(item.getString("productType"));
-        String currency = firstNonBlank(item.getString("currency"), "CNY").trim().toUpperCase(Locale.ROOT);
-        int riskLevel = riskLevel(item.getString("riskLevel"), existing == null ? 3 : existing.getRiskLevel());
-        String description = firstNonBlank(item.getString("description"), sourceUrl);
+        ProductType productType = productType(Jsons.text(item, "productType"));
+        String currency = firstNonBlank(Jsons.text(item, "currency"), "CNY").trim().toUpperCase(Locale.ROOT);
+        int riskLevel = riskLevel(Jsons.text(item, "riskLevel"), existing == null ? 3 : existing.getRiskLevel());
+        String description = firstNonBlank(Jsons.text(item, "description"), sourceUrl);
         Product saved;
         if (existing == null) {
             saved = Product.create(
@@ -347,21 +349,21 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
             saved = existing;
         }
         Product result = products.save(saved);
-        String sourceCode = sourceCode(item.getString("sourceCode"));
+        String sourceCode = sourceCode(Jsons.text(item, "sourceCode"));
         if (sourceCode != null) {
-            ensureSource(sourceCode, firstNonBlank(item.getString("sourceName"), sourceCode), "MARKET", sourceUrl, now);
+            ensureSource(sourceCode, firstNonBlank(Jsons.text(item, "sourceName"), sourceCode), "MARKET", sourceUrl, now);
         }
         return result;
     }
 
     /** 保存单条行情。 */
-    private boolean saveQuote(JSONObject item, LocalDateTime now) {
-        String productCode = normalizeProductCode(item.getString("productCode"));
-        String marketCode = firstNonBlank(item.getString("marketCode"), "CN_FUND").trim().toUpperCase(Locale.ROOT);
-        String sourceCode = sourceCode(item.getString("sourceCode"));
-        String sourceUrl = text(item.getString("sourceUrl"));
-        BigDecimal close = decimal(item.getString("closePrice"));
-        LocalDateTime quoteTime = dateTime(item.getString("quoteTime"), now);
+    private boolean saveQuote(ObjectNode item, LocalDateTime now) {
+        String productCode = normalizeProductCode(Jsons.text(item, "productCode"));
+        String marketCode = firstNonBlank(Jsons.text(item, "marketCode"), "CN_FUND").trim().toUpperCase(Locale.ROOT);
+        String sourceCode = sourceCode(Jsons.text(item, "sourceCode"));
+        String sourceUrl = text(Jsons.text(item, "sourceUrl"));
+        BigDecimal close = decimal(Jsons.text(item, "closePrice"));
+        LocalDateTime quoteTime = dateTime(Jsons.text(item, "quoteTime"), now);
         if (productCode == null || sourceCode == null || !validSourceUrl(sourceUrl) || close == null) {
             return false;
         }
@@ -370,27 +372,27 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
         if (product == null) {
             return false;
         }
-        BigDecimal open = defaultPrice(decimal(item.getString("openPrice")), close);
-        BigDecimal high = defaultPrice(decimal(item.getString("highPrice")), open.max(close));
-        BigDecimal low = defaultPrice(decimal(item.getString("lowPrice")), open.min(close));
+        BigDecimal open = defaultPrice(decimal(Jsons.text(item, "openPrice")), close);
+        BigDecimal high = defaultPrice(decimal(Jsons.text(item, "highPrice")), open.max(close));
+        BigDecimal low = defaultPrice(decimal(Jsons.text(item, "lowPrice")), open.min(close));
         quotes.savePoint(MarketQuote.builder()
             .bizId(ids.newBizId())
             .productBizId(product.getBizId())
             .sourceCode(sourceCode)
-            .interval(firstNonBlank(item.getString("interval"), "1D").trim().toUpperCase(Locale.ROOT))
+            .interval(firstNonBlank(Jsons.text(item, "interval"), "1D").trim().toUpperCase(Locale.ROOT))
             .quoteTime(quoteTime)
             .openPrice(open)
             .highPrice(high)
             .lowPrice(low)
             .closePrice(close)
-            .previousClosePrice(decimal(item.getString("previousClosePrice")))
-            .volume(decimal(item.getString("volume")))
-            .turnoverAmount(decimal(item.getString("turnoverAmount")))
+            .previousClosePrice(decimal(Jsons.text(item, "previousClosePrice")))
+            .volume(decimal(Jsons.text(item, "volume")))
+            .turnoverAmount(decimal(Jsons.text(item, "turnoverAmount")))
             .status(QuoteStatus.VALID)
             .receivedAt(now)
             .createdAt(now)
             .build());
-        ensureSource(sourceCode, firstNonBlank(item.getString("sourceName"), sourceCode), "MARKET", sourceUrl, now);
+        ensureSource(sourceCode, firstNonBlank(Jsons.text(item, "sourceName"), sourceCode), "MARKET", sourceUrl, now);
         return true;
     }
 

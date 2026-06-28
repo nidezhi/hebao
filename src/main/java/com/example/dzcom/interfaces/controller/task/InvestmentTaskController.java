@@ -1,6 +1,6 @@
 package com.example.dzcom.interfaces.controller.task;
 
-import com.alibaba.fastjson2.JSON;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.result.Result;
@@ -218,7 +218,7 @@ public class InvestmentTaskController {
             } else if (value instanceof Number || value instanceof Boolean) {
                 normalized.put(key, String.valueOf(value));
             } else {
-                normalized.put(key, JSON.toJSONString(value));
+                normalized.put(key, Jsons.toJson(value));
             }
         });
         return normalized;

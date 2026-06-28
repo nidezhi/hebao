@@ -1,6 +1,6 @@
 package com.example.dzcom.application.service.task;
 
-import com.alibaba.fastjson2.JSON;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
@@ -125,7 +125,7 @@ public class AutoPromptGovernanceTaskHandler implements InvestmentTaskHandler {
             .backtestBizId(null)
             .feedbackBizId(null)
             .score(score)
-            .scoreDetail(JSON.toJSONString(Map.of(
+            .scoreDetail(Jsons.toJson(Map.of(
                 "reportBizId", report.bizId(),
                 "reportStatus", blankToDefault(report.status(), "UNKNOWN"),
                 "confidenceLevel", blankToDefault(report.confidenceLevel(), "UNKNOWN"),

@@ -1,7 +1,6 @@
 package com.example.dzcom.application.service.ai;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONException;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.command.ai.SaveAiSkillCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageQuery;
@@ -237,9 +236,7 @@ public class AiSkillApplicationService {
         if (value == null || value.isBlank()) {
             return;
         }
-        try {
-            JSON.parse(value);
-        } catch (JSONException exception) {
+        if (!Jsons.isValid(value)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, message);
         }
     }

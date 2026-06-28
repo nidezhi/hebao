@@ -1,10 +1,9 @@
 package com.example.dzcom.application.service.task;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
 import com.example.dzcom.application.command.ai.GenerateBacktestFromPortfolioCommand;
 import com.example.dzcom.application.command.ai.SaveInvestmentFeedbackCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.dto.ai.BacktestResultView;
 import com.example.dzcom.application.dto.ai.InvestmentFeedbackView;
 import com.example.dzcom.application.dto.portfolio.MockOrderExecutionView;
@@ -222,13 +221,13 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             .toList();
         boolean failed = results.stream().anyMatch(result -> !"SUCCEEDED".equals(result.get("status")));
         if (failed) {
-            String reason = "子任务执行失败: " + JSON.toJSONString(results);
+            String reason = "子任务执行失败: " + Jsons.toJson(results);
             log.warn("自动投资闭环子任务组失败: runNo={}, stepCode={}, reason={}", run.runNo(), stepCode, reason);
             closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of("taskCodes", taskCodes));
             throw new ClosedLoopBlockedException(reason);
         }
         enforceRealCoreData(run, parentParameters, stepCode, stepName, stepOrder, results);
-        log.info("自动投资闭环子任务组完成: runNo={}, stepCode={}, results={}", run.runNo(), stepCode, JSON.toJSONString(results));
+        log.info("自动投资闭环子任务组完成: runNo={}, stepCode={}, results={}", run.runNo(), stepCode, Jsons.toJson(results));
         closedLoops.succeedStep(run, stepCode, stepName, stepOrder,
             Map.of("taskCodes", taskCodes),
             Map.of("executions", results));
@@ -293,7 +292,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         if (summaries.isEmpty()) {
             String reason = "主闭环未执行AI结构化核心数据采集任务，不能继续生成投资报告";
             log.warn("自动投资闭环结构化核心数据门禁阻断: runNo={}, reason={}, results={}",
-                run.runNo(), reason, JSON.toJSONString(results));
+                run.runNo(), reason, Jsons.toJson(results));
             closedLoops.blockedStep(run, stepCode, stepName, stepOrder, reason, Map.of(
                 "requiredTaskType", STRUCTURED_DATA_COLLECTION_TASK_TYPE,
                 "results", results
@@ -409,11 +408,11 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         if (summary.isBlank()) {
             return new StructuredDataSummary(0, 0, 0);
         }
-        JSONObject root = JSON.parseObject(summary);
+        var root = Jsons.readObjectOrEmpty(summary);
         return new StructuredDataSummary(
-            root.getIntValue("savedNewsCount"),
-            root.getIntValue("upsertedProductCount"),
-            root.getIntValue("savedQuoteCount")
+            Jsons.integer(root, "savedNewsCount", 0),
+            Jsons.integer(root, "upsertedProductCount", 0),
+            Jsons.integer(root, "savedQuoteCount", 0)
         );
     }
 
@@ -440,9 +439,10 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         copyIfPresent(parameters, overrides, "modelCode");
         copyIfPresent(parameters, overrides, "marketScope");
         copyIfPresent(parameters, overrides, "lookbackDays");
-        copyIfPresent(parameters, overrides, "themeCodes");
+        copyIfKeyPresent(parameters, overrides, "themeCodes");
         copyIfPresent(parameters, overrides, "themes");
         copyIfPresent(parameters, overrides, "initialCapital");
+        copyIfPresent(parameters, overrides, "maxThemeReports");
         log.info(
             "自动投资闭环报告任务开始: runNo={}, reportTaskCode={}, overrides={}",
             run.runNo(),
@@ -574,7 +574,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         String version = "candidate-" + VERSION_FORMATTER.format(clock.now());
         BigDecimal score = reportScore(report);
         AiModel activeBaseModel = models.activeByCode(modelCode);
-        Map<String, Object> modelConfig = new LinkedHashMap<>(JSON.parseObject(activeBaseModel.modelConfig()));
+        Map<String, Object> modelConfig = new LinkedHashMap<>(Jsons.readObjectMapOrEmpty(activeBaseModel.modelConfig()));
         modelConfig.put("baseModelBizId", activeBaseModel.bizId());
         modelConfig.put("baseModelCode", activeBaseModel.modelCode());
         modelConfig.put("baseModelVersion", activeBaseModel.modelVersion());
@@ -593,8 +593,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             DEFAULT_MODEL_TYPE,
             providerCode,
             activeBaseModel.artifactUri(),
-            JSON.toJSONString(modelConfig),
-            JSON.toJSONString(metrics),
+            Jsons.toJson(modelConfig),
+            Jsons.toJson(metrics),
             "DRAFT"
         );
         log.info(
@@ -691,7 +691,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                     .strategyCode("AUTO_CLOSED_LOOP_MOCK")
                     .strategyVersion(run.runNo())
                     .benchmarkCode(nullableString(parameters, "benchmarkCode"))
-                    .parameters(JSON.toJSONString(Map.of(
+                    .parameters(Jsons.toJson(Map.of(
                         "reportBizId", report.bizId(),
                         "runBizId", run.bizId(),
                         "source", "AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION"
@@ -708,7 +708,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 .feedbackAction("WATCH")
                 .reasonCode("AUTO_MOCK_EXECUTED")
                 .commentText("自动闭环已完成 Mock 交易和回测，等待人工复盘或采纳。")
-                .metadata(JSON.toJSONString(mapOfNullable(
+                .metadata(Jsons.toJson(mapOfNullable(
                     "runBizId", run.bizId(),
                     "automationLevel", run.automationLevel(),
                     "qualityScore", report.dataQualityScore()
@@ -820,6 +820,13 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         }
     }
 
+    /** 拷贝存在的参数键，允许空字符串表达“清空子任务默认值”。 */
+    private void copyIfKeyPresent(Map<String, String> source, Map<String, String> target, String key) {
+        if (source.containsKey(key)) {
+            target.put(key, source.getOrDefault(key, ""));
+        }
+    }
+
     /** 读取可为空字符串，避免空文本被当作有效参数向下游传递。 */
     private String nullableString(Map<String, String> parameters, String key) {
         String value = parameters.get(key);
@@ -876,7 +883,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         if (report.dataQualityGate() == null || report.dataQualityGate().isBlank()) {
             return false;
         }
-        return JSON.parseObject(report.dataQualityGate()).getBooleanValue("passed");
+        return Jsons.bool(Jsons.readObjectOrEmpty(report.dataQualityGate()), "passed", false);
     }
 
     /** 判断报告是否只是数据缺口报告。 */
@@ -884,8 +891,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         if (report.investmentPlan() == null || report.investmentPlan().isBlank()) {
             return true;
         }
-        JSONObject plan = JSON.parseObject(report.investmentPlan());
-        return "DATA_GAP_REPORT".equals(plan.getString("planType"));
+        var plan = Jsons.readObjectOrEmpty(report.investmentPlan());
+        return "DATA_GAP_REPORT".equals(Jsons.text(plan, "planType"));
     }
 
     /** 根据报告质量和可信等级计算候选模型评分。 */

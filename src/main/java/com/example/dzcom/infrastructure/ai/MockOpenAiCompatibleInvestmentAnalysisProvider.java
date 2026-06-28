@@ -201,8 +201,9 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
                 textLength(response.body())
             );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                String failureMessage = remoteFailureMessage(response.statusCode(), response.body());
                 log.error(
-                    "投资分析模型远端调用失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, responseBody={}",
+                    "投资分析模型远端调用失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, failureMessage={}, responseBody={}",
                     localReport.requestId(),
                     modelConfig.modelCode(),
                     modelConfig.modelVersion(),
@@ -210,11 +211,10 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
                     endpoint,
                     response.statusCode(),
                     elapsedMs(startedAt),
+                    failureMessage,
                     limit(response.body(), 2000)
                 );
-                throw new BusinessException(HttpStatus.BAD_GATEWAY,
-                    "OpenAI兼容模型调用失败: HTTP " + response.statusCode()
-                        + ", body=" + limit(response.body(), 500));
+                throw new BusinessException(HttpStatus.BAD_GATEWAY, failureMessage);
             }
             String content = extractContent(response.body());
             InvestmentAnalysisReport report = mergeRemoteOutput(localReport, modelConfig, content);
@@ -468,6 +468,21 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    /** 把常见网关错误转换成可行动的业务错误。 */
+    private String remoteFailureMessage(int httpStatus, String responseBody) {
+        if (httpStatus == 524) {
+            return "OpenAI兼容模型网关超时: HTTP 524。通常是中转或上游模型长时间未响应，请降低报告主题数量/输出token，或切换更稳定的模型通道。body="
+                + limit(responseBody, 300);
+        }
+        if (httpStatus == 429) {
+            return "OpenAI兼容模型限流: HTTP 429。请降低定时任务频率或更换模型配额。body=" + limit(responseBody, 300);
+        }
+        if (httpStatus >= 500) {
+            return "OpenAI兼容模型服务端异常: HTTP " + httpStatus + "。请稍后重试或切换模型通道。body=" + limit(responseBody, 300);
+        }
+        return "OpenAI兼容模型调用失败: HTTP " + httpStatus + ", body=" + limit(responseBody, 500);
     }
 
     /** 判断文本是否为空。 */

@@ -283,7 +283,7 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
         plan.put("planType", "REFERENCE_ALLOCATION");
         plan.put("suggestedAction", suggestedAction(context));
         plan.put("referenceAllocationRate", context.allocationRate());
-        plan.put("referenceAllocationAmount", context.simulatedPrincipal());
+        plan.put("referenceAllocationAmount", context.simulatedPrincipal().setScale(2, RoundingMode.HALF_UP));
         plan.put("dataQualityLevel", context.dataQualityLevel());
         plan.put("rebalanceRule", "仅当收益、动量和资讯热度连续两个统计窗口同向时提高仓位。");
         plan.put("riskNotice", "AI 分析仅为投资辅助信息，不构成收益承诺或自动交易指令。");

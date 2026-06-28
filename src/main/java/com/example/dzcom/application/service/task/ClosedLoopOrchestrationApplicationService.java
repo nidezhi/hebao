@@ -1,6 +1,6 @@
 package com.example.dzcom.application.service.task;
 
-import com.alibaba.fastjson2.JSON;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.page.PageResult;
@@ -90,7 +90,7 @@ public class ClosedLoopOrchestrationApplicationService {
         return runs.saveRun(run.toBuilder()
             .runStatus(status)
             .gateResult(gateResult)
-            .summary(summary == null || summary.isEmpty() ? run.summary() : JSON.toJSONString(summary))
+            .summary(summary == null || summary.isEmpty() ? run.summary() : Jsons.toJson(summary))
             .failureReason(limit(trimToNull(failureReason), FAILURE_REASON_MAX_LENGTH))
             .completedAt(now)
             .updatedAt(now)
@@ -266,7 +266,7 @@ public class ClosedLoopOrchestrationApplicationService {
 
     /** 转 JSON。 */
     private String toJson(Map<String, Object> value) {
-        return value == null || value.isEmpty() ? null : JSON.toJSONString(value);
+        return value == null || value.isEmpty() ? null : Jsons.toJson(value);
     }
 
     /** 默认文本。 */

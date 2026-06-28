@@ -1,6 +1,6 @@
 package com.example.dzcom.application.service.risk;
 
-import com.alibaba.fastjson2.JSON;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.ClockProvider;
@@ -61,7 +61,7 @@ public class RiskAuditApplicationService {
             .riskLevel(normalizeUpper(riskLevel, "HIGH"))
             .score(BigDecimal.ONE)
             .reasonCode(normalizeUpper(reasonCode, "UNKNOWN_REJECT"))
-            .detail(detail == null || detail.isEmpty() ? null : JSON.toJSONString(detail))
+            .detail(detail == null || detail.isEmpty() ? null : Jsons.toJson(detail))
             .checkedAt(now)
             .createdAt(now)
             .build());

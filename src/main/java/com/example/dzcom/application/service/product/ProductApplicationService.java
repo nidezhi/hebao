@@ -1,7 +1,6 @@
 package com.example.dzcom.application.service.product;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONException;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.assembler.product.ProductViewAssembler;
 import com.example.dzcom.application.command.product.CreateProductCommand;
 import com.example.dzcom.application.command.product.SaveProductAttributeCommand;
@@ -430,9 +429,7 @@ public class ProductApplicationService {
      * @date 2026-06-14
      */
     private void validateJson(String jsonValue) {
-        try {
-            JSON.parse(jsonValue);
-        } catch (JSONException exception) {
+        if (!Jsons.isValid(jsonValue)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "产品属性值必须是合法 JSON");
         }
     }

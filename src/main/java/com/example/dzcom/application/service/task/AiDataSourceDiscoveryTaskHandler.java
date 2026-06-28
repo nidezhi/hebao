@@ -1,6 +1,6 @@
 package com.example.dzcom.application.service.task;
 
-import com.alibaba.fastjson2.JSON;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.command.market.SaveDataSourceCommand;
 import com.example.dzcom.application.command.market.DiscoverDataSourcesCommand;
 import com.example.dzcom.application.dto.market.DataSourceDiscoveryCandidateView;
@@ -115,7 +115,7 @@ public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
             discovery.candidates().size(),
             registeredCodes.size()
         );
-        return JSON.toJSONString(summary);
+        return Jsons.toJson(summary);
     }
 
     /** 按任务配置把模型候选沉淀到数据源池，并按信任等级和审核策略决定是否自动启用。 */
@@ -196,7 +196,7 @@ public class AiDataSourceDiscoveryTaskHandler implements InvestmentTaskHandler {
         description.put("qualityPolicy", candidate.qualityPolicy());
         description.put("confidence", candidate.confidence());
         description.put("requiresReview", candidate.requiresReview());
-        return limit(JSON.toJSONString(description), 512);
+        return limit(Jsons.toJson(description), 512);
     }
 
     /** 限制写入数据源说明的长度，完整候选内容保留在任务执行摘要和发现响应中。 */

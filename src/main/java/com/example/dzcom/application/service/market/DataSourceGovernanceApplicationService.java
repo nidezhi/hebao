@@ -1,9 +1,6 @@
 package com.example.dzcom.application.service.market;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONException;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.command.market.DiscoverDataSourcesCommand;
 import com.example.dzcom.application.command.market.SaveDataQualitySnapshotCommand;
 import com.example.dzcom.application.command.market.SaveDataSourceCommand;
@@ -38,6 +35,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -331,7 +332,7 @@ public class DataSourceGovernanceApplicationService {
             .dataTypes(String.join(",", dataTypes))
             .topicKeywords(defaultText(command.topicKeywords(), ""))
             .collectionDirection(defaultText(command.collectionDirection(), "MULTI_SOURCE"))
-            .modelBindingConfig(new LinkedHashMap<>(parseObject(binding.config())))
+            .modelBindingConfig(new LinkedHashMap<>(Jsons.readObjectMapOrEmpty(binding.config())))
             .skillCode(skill.skillCode())
             .skillVersion(skill.skillVersion())
             .skillInstruction(skill.instructionContent())
@@ -541,9 +542,7 @@ public class DataSourceGovernanceApplicationService {
         if (value == null || value.isBlank()) {
             return;
         }
-        try {
-            JSON.parse(value);
-        } catch (JSONException ex) {
+        if (!Jsons.isValid(value)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "质量快照详情必须是合法JSON");
         }
     }
@@ -564,8 +563,8 @@ public class DataSourceGovernanceApplicationService {
         if (limit != null && limit > 0) {
             return Math.min(limit, 20);
         }
-        JSONObject config = parseObject(bindingConfig);
-        int configured = config.getIntValue("candidateLimit", 8);
+        ObjectNode config = parseObject(bindingConfig);
+        int configured = Jsons.integer(config, "candidateLimit", 8);
         return Math.max(1, Math.min(configured, 20));
     }
 
@@ -661,14 +660,13 @@ public class DataSourceGovernanceApplicationService {
         int limit
     ) {
         try {
-            JSONObject root = JSON.parseObject(content);
-            JSONArray candidateArray = root.getJSONArray("candidates");
-            if (candidateArray == null || candidateArray.isEmpty()) {
+            ArrayNode candidateArray = Jsons.array(Jsons.readObjectOrEmpty(content), "candidates");
+            if (candidateArray.isEmpty()) {
                 throw new BusinessException(HttpStatus.BAD_GATEWAY, "数据源发现模型输出缺少candidates数组");
             }
-            return candidateArray.stream()
-                .filter(JSONObject.class::isInstance)
-                .map(JSONObject.class::cast)
+            return java.util.stream.StreamSupport.stream(candidateArray.spliterator(), false)
+                .filter(JsonNode::isObject)
+                .map(ObjectNode.class::cast)
                 .map(this::toModelCandidate)
                 .filter(candidate -> acceptsSourceType(dataTypes, candidate.sourceType()))
                 .filter(candidate -> trustLevels.isEmpty() || trustLevels.contains(candidate.trustLevel()))
@@ -680,26 +678,26 @@ public class DataSourceGovernanceApplicationService {
     }
 
     /** 将模型输出对象转换为数据源候选视图。 */
-    private DataSourceDiscoveryCandidateView toModelCandidate(JSONObject node) {
-        String sourceType = normalizeAllowed(node.getString("sourceType"), SOURCE_TYPES, "模型输出数据源类型不合法");
-        String trustLevel = normalizeAllowed(node.getString("trustLevel"), TRUST_LEVELS, "模型输出来源等级不合法");
+    private DataSourceDiscoveryCandidateView toModelCandidate(ObjectNode node) {
+        String sourceType = normalizeAllowed(Jsons.text(node, "sourceType"), SOURCE_TYPES, "模型输出数据源类型不合法");
+        String trustLevel = normalizeAllowed(Jsons.text(node, "trustLevel"), TRUST_LEVELS, "模型输出来源等级不合法");
         return DataSourceDiscoveryCandidateView.builder()
-            .sourceCode(normalizeCode(node.getString("sourceCode"), "模型输出数据源编码不能为空"))
-            .sourceName(normalizeText(node.getString("sourceName"), "模型输出数据源名称不能为空"))
+            .sourceCode(normalizeCode(Jsons.text(node, "sourceCode"), "模型输出数据源编码不能为空"))
+            .sourceName(normalizeText(Jsons.text(node, "sourceName"), "模型输出数据源名称不能为空"))
             .sourceType(sourceType)
             .trustLevel(trustLevel)
-            .baseUrl(trimToNull(node.getString("baseUrl")))
-            .fetchFrequency(normalizeFetchFrequency(node.getString("fetchFrequency")))
-            .owner(trimToNull(node.getString("owner")))
-            .description(trimToNull(node.getString("description")))
-            .recommendedTaskType(defaultText(node.getString("recommendedTaskType"), "AI_DATA_SOURCE_DISCOVERY"))
-            .suggestedParameters(stringMap(node.getJSONObject("suggestedParameters")))
-            .fieldMappings(stringMap(node.getJSONObject("fieldMappings")))
-            .collectionPlan(trimToNull(node.getString("collectionPlan")))
-            .qualityPolicy(trimToNull(node.getString("qualityPolicy")))
-            .confidence(normalizeConfidence(node.getBigDecimal("confidence")))
-            .reasons(stringList(node.getJSONArray("reasons")))
-            .requiresReview(node.getBoolean("requiresReview") == null || Boolean.TRUE.equals(node.getBoolean("requiresReview")))
+            .baseUrl(trimToNull(Jsons.text(node, "baseUrl")))
+            .fetchFrequency(normalizeFetchFrequency(Jsons.text(node, "fetchFrequency")))
+            .owner(trimToNull(Jsons.text(node, "owner")))
+            .description(trimToNull(Jsons.text(node, "description")))
+            .recommendedTaskType(defaultText(Jsons.text(node, "recommendedTaskType"), "AI_DATA_SOURCE_DISCOVERY"))
+            .suggestedParameters(stringMap(Jsons.object(node, "suggestedParameters")))
+            .fieldMappings(stringMap(Jsons.object(node, "fieldMappings")))
+            .collectionPlan(trimToNull(Jsons.text(node, "collectionPlan")))
+            .qualityPolicy(trimToNull(Jsons.text(node, "qualityPolicy")))
+            .confidence(normalizeConfidence(Jsons.decimal(node, "confidence")))
+            .reasons(stringList(Jsons.array(node, "reasons")))
+            .requiresReview(Jsons.bool(node, "requiresReview") == null || Boolean.TRUE.equals(Jsons.bool(node, "requiresReview")))
             .build();
     }
 
@@ -909,45 +907,38 @@ public class DataSourceGovernanceApplicationService {
     }
 
     /** JSON 对象转字符串 Map。 */
-    private Map<String, String> stringMap(JSONObject object) {
+    private Map<String, String> stringMap(ObjectNode object) {
         if (object == null || object.isEmpty()) {
             return Map.of();
         }
         Map<String, String> result = new LinkedHashMap<>();
-        object.forEach((key, value) -> result.put(key, jsonValueText(value)));
+        object.fields().forEachRemaining(entry -> result.put(entry.getKey(), jsonValueText(entry.getValue())));
         return result;
     }
 
     /** JSON 数组转字符串列表。 */
-    private List<String> stringList(JSONArray array) {
+    private List<String> stringList(ArrayNode array) {
         if (array == null || array.isEmpty()) {
             return List.of();
         }
-        return array.stream().map(String::valueOf).toList();
+        return java.util.stream.StreamSupport.stream(array.spliterator(), false)
+            .map(Jsons::valueText)
+            .toList();
     }
 
     /** 将模型输出的参数值转换为稳定字符串，嵌套对象保留 JSON 文本。 */
-    private String jsonValueText(Object value) {
-        if (value == null) {
-            return "";
-        }
-        if (value instanceof String stringValue) {
-            return stringValue;
-        }
-        if (value instanceof Number || value instanceof Boolean) {
-            return String.valueOf(value);
-        }
-        return JSON.toJSONString(value);
+    private String jsonValueText(JsonNode value) {
+        return Jsons.valueText(value);
     }
 
     /** 解析 JSON 对象配置。 */
-    private JSONObject parseObject(String value) {
+    private ObjectNode parseObject(String value) {
         if (value == null || value.isBlank()) {
-            return new JSONObject();
+            return Jsons.readObjectOrEmpty(null);
         }
         try {
-            return JSON.parseObject(value);
-        } catch (JSONException exception) {
+            return Jsons.readObjectOrEmpty(value);
+        } catch (IllegalArgumentException exception) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "数据源发现模型配置JSON不合法");
         }
     }

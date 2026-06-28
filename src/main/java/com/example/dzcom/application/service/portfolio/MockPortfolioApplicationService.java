@@ -1,7 +1,6 @@
 package com.example.dzcom.application.service.portfolio;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.assembler.portfolio.MockOrderExecutionViewAssembler;
 import com.example.dzcom.application.assembler.portfolio.MockPortfolioViewAssembler;
 import com.example.dzcom.application.command.portfolio.CancelMockOrderCommand;
@@ -46,6 +45,7 @@ import com.example.dzcom.domain.repository.portfolio.PortfolioValuationStore;
 import com.example.dzcom.domain.repository.portfolio.PositionStore;
 import com.example.dzcom.domain.repository.portfolio.TradeExecutionStore;
 import com.example.dzcom.domain.repository.product.ProductInvestmentProfileStore;
+import com.example.dzcom.domain.repository.product.ProductSearchCriteria;
 import com.example.dzcom.domain.repository.product.ProductStore;
 import com.example.dzcom.domain.repository.product.ProductThemeRelationStore;
 import lombok.RequiredArgsConstructor;
@@ -421,7 +421,7 @@ public class MockPortfolioApplicationService {
             .updatedAt(now)
             .version(order.version() + 1)
             .build());
-        appendOrderEvent(cancelled, order.status(), "CANCELLED", "CANCELLED", "OPERATOR", JSON.toJSONString(Map.of(
+        appendOrderEvent(cancelled, order.status(), "CANCELLED", "CANCELLED", "OPERATOR", Jsons.toJson(Map.of(
             "reason", cancelled.rejectMessage(),
             "rejectCode", cancelled.rejectCode()
         )));
@@ -458,7 +458,8 @@ public class MockPortfolioApplicationService {
      *
      * <p>该用例把“分析报告”推进到“可验证 Mock 交易”。报告必须通过数据质量门禁，
      * 投资方案不能是数据缺口报告，且必须能解析出大于 0 的参考配置金额。产品可以由
-     * 前端指定；未指定时按报告主题反查产品主题关系并选择权重最高的产品。</p>
+     * 前端指定；未指定时优先读取报告方案中的产品标识，再按报告主题反查产品关系；
+     * 市场级报告会从可 Mock 产品池中选择一个质量合格的产品。</p>
      *
      * @param command 从报告执行模拟买入命令
      * @return 模拟订单、成交和成交后的组合详情
@@ -472,8 +473,8 @@ public class MockPortfolioApplicationService {
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "投资分析报告不存在"));
         CurrentOperator operator = currentOperator.required();
         ensureReportExecutable(report, operator.userBizId());
-        JSONObject plan = JSON.parseObject(report.investmentPlan());
-        BigDecimal amount = plan.getBigDecimal("referenceAllocationAmount");
+        var plan = Jsons.readObjectOrEmpty(report.investmentPlan());
+        BigDecimal amount = Jsons.decimal(plan, "referenceAllocationAmount");
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             rejectWithAudit(operator.userBizId(), "REPORT", report.bizId(), "REPORT_EXECUTABLE_AMOUNT",
                 "HIGH", "NO_EXECUTABLE_AMOUNT", "报告未给出可执行的参考配置金额",
@@ -725,7 +726,7 @@ public class MockPortfolioApplicationService {
      * @date 2026-06-23
      */
     private String filledEventPayload(MockOrder order, TradeExecution execution) {
-        return JSON.toJSONString(Map.of(
+        return Jsons.toJson(Map.of(
             "orderSide", order.orderSide(),
             "orderType", order.orderType(),
             "productBizId", order.productBizId(),
@@ -960,17 +961,17 @@ public class MockPortfolioApplicationService {
                 "HIGH", "LOW_DATA_QUALITY", "报告数据质量不足，不能执行Mock交易",
                 auditDetail("reportBizId", report.bizId(), "dataQualityScore", report.dataQualityScore()));
         }
-        JSONObject gate = JSON.parseObject(report.dataQualityGate());
-        if (!gate.getBooleanValue("passed")) {
+        var gate = Jsons.readObjectOrEmpty(report.dataQualityGate());
+        if (!Jsons.bool(gate, "passed", false)) {
             rejectWithAudit(userBizId, "REPORT", report.bizId(), "REPORT_DATA_GATE",
                 "HIGH", "DATA_GATE_BLOCKED", "报告数据质量门禁未通过，不能执行Mock交易",
                 Map.of("reportBizId", report.bizId(), "dataQualityGate", report.dataQualityGate()));
         }
-        JSONObject plan = JSON.parseObject(report.investmentPlan());
-        if ("DATA_GAP_REPORT".equals(plan.getString("planType"))) {
+        var plan = Jsons.readObjectOrEmpty(report.investmentPlan());
+        if ("DATA_GAP_REPORT".equals(Jsons.text(plan, "planType"))) {
             rejectWithAudit(userBizId, "REPORT", report.bizId(), "REPORT_PLAN_TYPE",
                 "HIGH", "DATA_GAP_REPORT", "数据缺口报告不能执行Mock交易",
-                Map.of("reportBizId", report.bizId(), "planType", plan.getString("planType")));
+                Map.of("reportBizId", report.bizId(), "planType", Jsons.text(plan, "planType")));
         }
     }
 
@@ -993,13 +994,60 @@ public class MockPortfolioApplicationService {
         if (requestedProductBizId != null && !requestedProductBizId.isBlank()) {
             return requestedProductBizId;
         }
-        return productThemeRelations.findByRelation("THEME", report.themeCode()).stream()
+        var plan = Jsons.readObjectOrEmpty(report.investmentPlan());
+        String planProductBizId = Jsons.text(plan, "productBizId");
+        if (planProductBizId != null && !planProductBizId.isBlank()) {
+            return planProductBizId;
+        }
+        String planProductCode = Jsons.text(plan, "productCode");
+        String planMarketCode = Jsons.text(plan, "marketCode");
+        if (planProductCode != null && !planProductCode.isBlank()
+            && planMarketCode != null && !planMarketCode.isBlank()) {
+            Product product = products.findByMarketAndCode(planMarketCode, planProductCode)
+                .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "报告方案中的产品代码未入产品池"));
+            return product.getBizId();
+        }
+        if (report.themeCode() != null && !report.themeCode().isBlank()) {
+            return productThemeRelations.findByRelation("THEME", report.themeCode()).stream()
+                .findFirst()
+                .map(ProductThemeRelation::productBizId)
+                .orElseGet(this::firstMockTradableProductBizId);
+        }
+        return firstMockTradableProductBizId();
+    }
+
+    /** 市场级报告无主题时，从产品池选择一个已通过画像质量门禁的 Mock 产品。 */
+    private String firstMockTradableProductBizId() {
+        return products.search(new ProductSearchCriteria(
+                null,
+                null,
+                ProductTradeStatus.TRADABLE,
+                null,
+                DEFAULT_CURRENCY,
+                1,
+                50,
+                "createdAt",
+                false
+            )).items().stream()
+            .filter(this::isMockTradableProduct)
             .findFirst()
-            .map(ProductThemeRelation::productBizId)
+            .map(Product::getBizId)
             .orElseThrow(() -> new BusinessException(
                 HttpStatus.BAD_REQUEST,
-                "报告主题未关联可用于Mock交易的产品"
+                "未找到可用于Mock交易的产品"
             ));
+    }
+
+    /** 判断产品交易状态、画像和质量分是否满足 Mock 交易最低要求。 */
+    private boolean isMockTradableProduct(Product product) {
+        if (product == null || product.getTradeStatus() != ProductTradeStatus.TRADABLE) {
+            return false;
+        }
+        return investmentProfiles.findByProductBizId(product.getBizId())
+            .map(profile -> profile.mockTradable()
+                && profile.dataQualityScore() != null
+                && profile.dataQualityScore().compareTo(new BigDecimal("0.45")) >= 0)
+            .orElse(false);
     }
 
     /**

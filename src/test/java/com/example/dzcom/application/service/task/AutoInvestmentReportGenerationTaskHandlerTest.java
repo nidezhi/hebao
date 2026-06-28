@@ -44,6 +44,7 @@ class AutoInvestmentReportGenerationTaskHandlerTest {
                 "marketScope", "CN_MAINLAND",
                 "lookbackDays", "30",
                 "initialCapital", "100000",
+                "maxThemeReports", "2",
                 "themes", "AI人工智能=159819;半导体=512480"
             ))
             .build());
@@ -53,6 +54,53 @@ class AutoInvestmentReportGenerationTaskHandlerTest {
         assertEquals("AI人工智能", analysis.commands.get(0).themeCode());
         assertEquals("半导体", analysis.commands.get(1).themeCode());
         assertEquals(new BigDecimal("100000"), analysis.commands.get(0).initialCapital());
+    }
+
+    /** 空 themeCodes 表示显式生成市场级报告，不应回退到默认 themes 批量烧模型。 */
+    @Test
+    void shouldGenerateMarketReportWhenThemeCodesIsExplicitlyBlank() {
+        CapturingAnalysisService analysis = new CapturingAnalysisService();
+        AutoInvestmentReportGenerationTaskHandler handler =
+            new AutoInvestmentReportGenerationTaskHandler(analysis);
+
+        String result = handler.execute(InvestmentTaskEvent.builder()
+            .taskCode("auto-openai-investment-report-generation")
+            .taskType("AUTO_INVESTMENT_REPORT_GENERATION")
+            .parameters(Map.of(
+                "providerCode", "OPENAI_COMPATIBLE",
+                "modelCode", "openai-compatible-analysis",
+                "marketScope", "CN_MAINLAND",
+                "themeCodes", "",
+                "themes", "AI人工智能=159819;半导体=512480"
+            ))
+            .build());
+
+        assertTrue(result.contains("1 份市场级自动投资分析报告"));
+        assertEquals(1, analysis.commands.size());
+        assertEquals(null, analysis.commands.get(0).themeCode());
+    }
+
+    /** 默认成本保护只生成一个主题报告；前端可显式提高 maxThemeReports。 */
+    @Test
+    void shouldLimitThemeReportsByDefault() {
+        CapturingAnalysisService analysis = new CapturingAnalysisService();
+        AutoInvestmentReportGenerationTaskHandler handler =
+            new AutoInvestmentReportGenerationTaskHandler(analysis);
+
+        String result = handler.execute(InvestmentTaskEvent.builder()
+            .taskCode("auto-openai-investment-report-generation")
+            .taskType("AUTO_INVESTMENT_REPORT_GENERATION")
+            .parameters(Map.of(
+                "providerCode", "OPENAI_COMPATIBLE",
+                "modelCode", "openai-compatible-analysis",
+                "marketScope", "CN_MAINLAND",
+                "themes", "AI人工智能=159819;半导体=512480"
+            ))
+            .build());
+
+        assertTrue(result.contains("1 份主题自动投资分析报告"));
+        assertEquals(1, analysis.commands.size());
+        assertEquals("AI人工智能", analysis.commands.get(0).themeCode());
     }
 
     /** 捕获分析命令的测试服务。 */

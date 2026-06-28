@@ -1,7 +1,6 @@
 package com.example.dzcom.application.service.ai;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONException;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.command.ai.GenerateBacktestFromPortfolioCommand;
 import com.example.dzcom.application.command.ai.SaveAiPromptEvaluationCommand;
 import com.example.dzcom.application.command.ai.SaveBacktestResultCommand;
@@ -141,10 +140,10 @@ public class InvestmentClosedLoopApplicationService {
         parameterMap.put("portfolioName", portfolio.portfolioName());
         parameterMap.put("pointCount", history.size());
         if (command.parameters() != null && !command.parameters().isBlank()) {
-            parameterMap.put("clientParameters", JSON.parse(command.parameters()));
+            parameterMap.put("clientParameters", Jsons.readTree(command.parameters()));
         }
-        String parameters = JSON.toJSONString(parameterMap);
-        String metrics = JSON.toJSONString(Map.of(
+        String parameters = Jsons.toJson(parameterMap);
+        String metrics = Jsons.toJson(Map.of(
             "totalReturnRate", totalReturn,
             "maxDrawdown", maxDrawdown,
             "volatility", volatility,
@@ -365,7 +364,7 @@ public class InvestmentClosedLoopApplicationService {
             .backtestBizId(feedback.backtestBizId())
             .feedbackBizId(feedback.bizId())
             .score(finalScore)
-            .scoreDetail(JSON.toJSONString(Map.of(
+            .scoreDetail(Jsons.toJson(Map.of(
                 "feedbackAction", feedback.feedbackAction(),
                 "feedbackScore", feedbackScore,
                 "backtestScore", backtestScore
@@ -493,9 +492,9 @@ public class InvestmentClosedLoopApplicationService {
             return new BigDecimal("0.20");
         }
         try {
-            var metrics = JSON.parseObject(result.metrics());
-            BigDecimal totalReturn = metrics.getBigDecimal("totalReturnRate");
-            BigDecimal maxDrawdown = metrics.getBigDecimal("maxDrawdown");
+            var metrics = Jsons.readObjectOrEmpty(result.metrics());
+            BigDecimal totalReturn = Jsons.decimal(metrics, "totalReturnRate");
+            BigDecimal maxDrawdown = Jsons.decimal(metrics, "maxDrawdown");
             BigDecimal base = new BigDecimal("0.50");
             if (totalReturn != null) {
                 base = base.add(totalReturn.min(new BigDecimal("0.30")).max(new BigDecimal("-0.30")));
@@ -504,7 +503,7 @@ public class InvestmentClosedLoopApplicationService {
                 base = base.subtract(maxDrawdown.min(new BigDecimal("0.30")));
             }
             return base.max(BigDecimal.ZERO).min(BigDecimal.ONE).setScale(4, RoundingMode.HALF_UP);
-        } catch (JSONException ex) {
+        } catch (IllegalArgumentException ex) {
             return new BigDecimal("0.20");
         }
     }
@@ -660,9 +659,7 @@ public class InvestmentClosedLoopApplicationService {
 
     private void validateJson(String value, String message) {
         String text = normalizeText(value, message);
-        try {
-            JSON.parse(text);
-        } catch (JSONException ex) {
+        if (!Jsons.isValid(text)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, message);
         }
     }
@@ -671,9 +668,7 @@ public class InvestmentClosedLoopApplicationService {
         if (value == null || value.isBlank()) {
             return;
         }
-        try {
-            JSON.parse(value);
-        } catch (JSONException ex) {
+        if (!Jsons.isValid(value)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, message);
         }
     }

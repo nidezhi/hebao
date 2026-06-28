@@ -1,7 +1,6 @@
 package com.example.dzcom.application.service.ai;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONException;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.command.ai.AiPromptOutputSchemaCommand;
 import com.example.dzcom.application.command.ai.AiPromptPreviewCommand;
 import com.example.dzcom.application.command.ai.AiPromptVariableCommand;
@@ -316,9 +315,7 @@ public class AiPromptApplicationService {
     /** 校验 JSON 字符串格式。 */
     private void validateJson(String value) {
         String text = normalizeText(value, "Schema JSON不能为空");
-        try {
-            JSON.parse(text);
-        } catch (JSONException ex) {
+        if (!Jsons.isValid(text)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Schema JSON格式不合法");
         }
     }

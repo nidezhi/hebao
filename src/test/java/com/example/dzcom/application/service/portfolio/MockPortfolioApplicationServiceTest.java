@@ -1,6 +1,7 @@
 package com.example.dzcom.application.service.portfolio;
 
 import com.example.dzcom.application.command.portfolio.CancelMockOrderCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockRebalanceCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockSellCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
@@ -136,6 +137,35 @@ class MockPortfolioApplicationServiceTest {
         assertEquals("TARGET_WEIGHT_EXCEEDED", fixture.riskStore.saved.get(0).reasonCode());
     }
 
+    /** 市场级报告没有主题关系时，应能从可 Mock 产品池选择合格产品继续闭环。 */
+    @Test
+    void shouldBuyFromMarketLevelReportBySelectingMockTradableProduct() {
+        Fixture fixture = new Fixture();
+        fixture.reports.save(InvestmentAnalysisReport.builder()
+            .bizId("report-market")
+            .requestId("request-market")
+            .providerCode("OPENAI_COMPATIBLE")
+            .modelCode("openai-compatible-analysis")
+            .marketScope("CN_MAINLAND")
+            .status("SUCCEEDED")
+            .confidenceLevel("MEDIUM_CONFIDENCE")
+            .dataQualityScore(new BigDecimal("0.80"))
+            .dataQualityGate("{\"passed\":true}")
+            .investmentPlan("{\"planType\":\"REFERENCE_ALLOCATION\",\"referenceAllocationAmount\":1000}")
+            .generatedAt(NOW)
+            .createdAt(NOW)
+            .build());
+
+        var execution = fixture.service.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
+            .portfolioBizId("portfolio-1")
+            .reportBizId("report-market")
+            .idempotencyKey("market-report-buy")
+            .build());
+
+        assertEquals("product-1", execution.order().productBizId());
+        assertEquals("FILLED", execution.order().status());
+    }
+
     /** 构建测试用模拟持仓。 */
     private static Position position(BigDecimal quantity, BigDecimal costAmount) {
         return Position.builder()
@@ -189,6 +219,7 @@ class MockPortfolioApplicationServiceTest {
         private final InMemoryOrderStore orders = new InMemoryOrderStore();
         private final InMemoryOrderEventStore orderEvents = new InMemoryOrderEventStore();
         private final InMemoryExecutionStore executions = new InMemoryExecutionStore();
+        private final InMemoryAnalysisReportStore reports = new InMemoryAnalysisReportStore();
         private final InMemoryRiskCheckStore riskStore = new InMemoryRiskCheckStore();
         private final RiskAuditApplicationService riskAudits = new RiskAuditApplicationService(
             riskStore,
@@ -208,7 +239,7 @@ class MockPortfolioApplicationServiceTest {
                 new InMemoryProductStore(),
                 new FixedProfileStore(),
                 new EmptyThemeRelationStore(),
-                new EmptyAnalysisReportStore(),
+                reports,
                 new FixedQuoteStore(),
                 new MockPortfolioViewAssembler(),
                 new MockOrderExecutionViewAssembler(),
@@ -439,7 +470,14 @@ class MockPortfolioApplicationServiceTest {
 
         @Override
         public PageResult<Product> search(ProductSearchCriteria criteria) {
-            throw new UnsupportedOperationException();
+            List<Product> items = List.of(findByBizId("product-1").orElseThrow());
+            return PageResult.<Product>builder()
+                .items(items)
+                .total(items.size())
+                .page(criteria.page())
+                .size(criteria.size())
+                .totalPages(1)
+                .build();
         }
     }
 
@@ -510,15 +548,18 @@ class MockPortfolioApplicationServiceTest {
     }
 
     /** 空报告仓储。 */
-    private static final class EmptyAnalysisReportStore implements InvestmentAnalysisReportStore {
+    private static final class InMemoryAnalysisReportStore implements InvestmentAnalysisReportStore {
+        private final Map<String, InvestmentAnalysisReport> reports = new HashMap<>();
+
         @Override
         public InvestmentAnalysisReport save(InvestmentAnalysisReport report) {
-            throw new UnsupportedOperationException();
+            reports.put(report.bizId(), report);
+            return report;
         }
 
         @Override
         public Optional<InvestmentAnalysisReport> findByBizId(String bizId) {
-            return Optional.empty();
+            return Optional.ofNullable(reports.get(bizId));
         }
 
         @Override
@@ -531,11 +572,11 @@ class MockPortfolioApplicationServiceTest {
         @Override
         public PageResult<InvestmentAnalysisReport> latest(int size) {
             return PageResult.<InvestmentAnalysisReport>builder()
-                .items(List.of())
-                .total(0)
+                .items(reports.values().stream().limit(size).toList())
+                .total(reports.size())
                 .page(1)
                 .size(size)
-                .totalPages(0)
+                .totalPages(reports.isEmpty() ? 0 : 1)
                 .build();
         }
     }

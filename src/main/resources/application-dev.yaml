@@ -323,6 +323,7 @@ investment:
           marketScope: CN_MAINLAND
           lookbackDays: "30"
           initialCapital: "100000"
+          maxThemeReports: "1"
           themes: ${HOT_INVESTMENT_THEMES:AI人工智能=159819,588000,515980;半导体=512480,159995,688981;黄金=518880,159934}
       - code: auto-prompt-governance
         type: AUTO_PROMPT_GOVERNANCE
@@ -364,3 +365,4 @@ investment:
           lookbackDays: "30"
           themeCodes: ""
           maxReportsForMock: "20"
+          maxThemeReports: "1"
