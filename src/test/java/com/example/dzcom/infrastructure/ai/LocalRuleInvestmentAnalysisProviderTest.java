@@ -9,6 +9,7 @@ import com.example.dzcom.domain.model.market.DataQualitySnapshot;
 import com.example.dzcom.domain.model.market.DataSource;
 import com.example.dzcom.domain.model.market.DataSourceHealth;
 import com.example.dzcom.domain.model.task.InvestmentThemeSnapshot;
+import com.example.dzcom.domain.model.task.InvestmentThemeOption;
 import com.example.dzcom.domain.model.task.NewsArticle;
 import com.example.dzcom.domain.repository.market.DataSourceSearchCriteria;
 import com.example.dzcom.domain.repository.market.DataSourceStore;
@@ -204,6 +205,17 @@ class LocalRuleInvestmentAnalysisProviderTest {
                 .total(0)
                 .page(criteria.page())
                 .size(criteria.size())
+                .totalPages(0)
+                .build();
+        }
+
+        @Override
+        public PageResult<InvestmentThemeOption> searchThemeOptions(String keyword, String marketScope, int page, int size) {
+            return PageResult.<InvestmentThemeOption>builder()
+                .items(List.of())
+                .total(0)
+                .page(page)
+                .size(size)
                 .totalPages(0)
                 .build();
         }

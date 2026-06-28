@@ -13,6 +13,7 @@ import com.example.dzcom.domain.repository.product.ProductInvestmentProfileStore
 import com.example.dzcom.domain.repository.product.ProductStore;
 import com.example.dzcom.domain.repository.product.ProductAttributeStore;
 import com.example.dzcom.domain.repository.product.ProductThemeRelationStore;
+import com.example.dzcom.domain.repository.market.MarketQuoteStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class ProductQueryService {
     private final ProductAttributeStore attributes;
     private final ProductInvestmentProfileStore investmentProfiles;
     private final ProductThemeRelationStore themeRelations;
+    private final MarketQuoteStore quotes;
     private final ProductViewAssembler assembler;
 
     /**
@@ -48,7 +50,8 @@ public class ProductQueryService {
             product,
             attributes.findByProductBizId(bizId),
             investmentProfiles.findByProductBizId(bizId),
-            themeRelations.findByProductBizId(bizId)
+            themeRelations.findByProductBizId(bizId),
+            quotes.findLatest(product.getBizId(), "1D", null)
         );
     }
 
@@ -75,7 +78,13 @@ public class ProductQueryService {
             pageQuery.page(), pageQuery.size(), sort, "asc".equals(pageQuery.direction())
         ));
         return PageResult.<ProductView>builder()
-            .items(page.items().stream().map(assembler::assembleSummary).toList())
+            .items(page.items().stream()
+                .map(product -> assembler.assembleSummary(
+                    product,
+                    investmentProfiles.findByProductBizId(product.getBizId()),
+                    quotes.findLatest(product.getBizId(), "1D", null)
+                ))
+                .toList())
             .total(page.total())
             .page(page.page())
             .size(page.size())

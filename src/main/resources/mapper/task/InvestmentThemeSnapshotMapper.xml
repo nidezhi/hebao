@@ -46,4 +46,50 @@
     <select id="count" resultType="long">
         select count(*) <include refid="searchCondition"/>
     </select>
+    <sql id="themeOptionCondition">
+        from aiw_investment_theme_snapshot s
+        where s.theme_code is not null
+          and s.theme_code != ''
+        <if test="marketScope != null and marketScope != ''">
+            and s.market_scope = #{marketScope}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (
+                s.theme_code like concat('%', #{keyword}, '%')
+                or s.theme_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+    </sql>
+    <select id="searchThemeOptions" resultType="map">
+        select
+            ranked.theme_code as themeCode,
+            ranked.theme_name as themeName,
+            ranked.market_scope as marketScope,
+            ranked.snapshot_type as latestSnapshotType,
+            ranked.snapshot_time as latestSnapshotTime,
+            ranked.sample_count as sampleCount,
+            ranked.return_rate as returnRate,
+            ranked.momentum_score as momentumScore,
+            ranked.heat_score as heatScore
+        from (
+            select
+                s.*,
+                row_number() over (
+                    partition by s.theme_code, s.market_scope
+                    order by s.snapshot_time desc, s.created_at desc
+                ) as row_no
+            <include refid="themeOptionCondition"/>
+        ) ranked
+        where ranked.row_no = 1
+        order by ranked.snapshot_time desc, ranked.theme_code asc
+        limit #{offset}, #{size}
+    </select>
+    <select id="countThemeOptions" resultType="long">
+        select count(*)
+        from (
+            select s.theme_code, s.market_scope
+            <include refid="themeOptionCondition"/>
+            group by s.theme_code, s.market_scope
+        ) grouped
+    </select>
 </mapper>

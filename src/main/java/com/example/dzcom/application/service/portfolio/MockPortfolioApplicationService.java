@@ -934,6 +934,8 @@ public class MockPortfolioApplicationService {
                 "HIGH", "PRODUCT_NOT_MOCK_TRADABLE", "产品投资画像不足或未开启Mock交易",
                 Map.of("productBizId", productBizId));
         }
+        passRiskAudit(userBizId, businessType, businessBizId, "MOCK_PRODUCT_PROFILE",
+            "LOW", "PRODUCT_MOCK_TRADABLE", Map.of("productBizId", productBizId));
     }
 
     /**
@@ -973,6 +975,13 @@ public class MockPortfolioApplicationService {
                 "HIGH", "DATA_GAP_REPORT", "数据缺口报告不能执行Mock交易",
                 Map.of("reportBizId", report.bizId(), "planType", Jsons.text(plan, "planType")));
         }
+        passRiskAudit(userBizId, "REPORT", report.bizId(), "REPORT_EXECUTION_GATE",
+            "LOW", "REPORT_EXECUTABLE", auditDetail(
+                "reportBizId", report.bizId(),
+                "status", report.status(),
+                "confidenceLevel", report.confidenceLevel(),
+                "dataQualityScore", report.dataQualityScore()
+            ));
     }
 
     /** 兼容历史报告状态 SUCCESS 和当前自动报告状态 SUCCEEDED。 */
@@ -1411,6 +1420,8 @@ public class MockPortfolioApplicationService {
                 "HIGH", "TARGET_WEIGHT_EXCEEDED", "目标权重总和不能超过1",
                 Map.of("targetWeightSum", sum));
         }
+        passRiskAudit(userBizId, "PORTFOLIO", portfolioBizId, "MOCK_REBALANCE_TARGET",
+            "LOW", "TARGET_WEIGHT_VALID", Map.of("targetCount", result.size(), "targetWeightSum", sum));
         return result;
     }
 
@@ -1454,6 +1465,14 @@ public class MockPortfolioApplicationService {
                                  String message, Map<String, Object> detail) {
         riskAudits.recordReject(userBizId, businessType, businessBizId, ruleCode, riskLevel, reasonCode, detail);
         throw new BusinessException(HttpStatus.BAD_REQUEST, message);
+    }
+
+    /** 记录风控通过样本，供审计页展示真实闭环的正向检查结果。 */
+    private void passRiskAudit(String userBizId, String businessType, String businessBizId,
+                               String ruleCode, String riskLevel, String reasonCode,
+                               Map<String, Object> detail) {
+        riskAudits.recordCheck(userBizId, businessType, businessBizId, ruleCode, "PASS",
+            riskLevel, BigDecimal.ZERO, reasonCode, detail);
     }
 
     /**

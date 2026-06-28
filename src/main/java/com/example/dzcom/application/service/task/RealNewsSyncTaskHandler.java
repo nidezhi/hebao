@@ -65,15 +65,45 @@ public class RealNewsSyncTaskHandler implements InvestmentTaskHandler {
                 .build());
             saved++;
         }
-        int expected = Math.min(maxItems, 20);
+        int expected = expectedNewsCount(maxItems, payloads.size(), keywords.size());
         int missing = Math.max(expected - saved, 0);
         support.saveHealth(sourceCode, saved, "资讯源未返回有效主题资讯", now);
         support.saveQuality(sourceCode, "NEWS", expected, saved, missing, 0,
             saved > 0 ? BigDecimal.ONE : BigDecimal.ZERO,
-            support.detail("taskCode", event.taskCode(), "keywordCount", keywords.size(),
-                "expectedNewsCount", expected, "savedNewsCount", saved),
+            support.detail(
+                "taskCode", event.taskCode(),
+                "keywordCount", keywords.size(),
+                "expectedNewsCount", expected,
+                "savedNewsCount", saved,
+                "maxItems", maxItems,
+                "qualityPolicy", "NEWS_EXPECTED_BY_KEYWORD_COVERAGE",
+                "qualityReasons", qualityReasons(expected, saved, keywords.size())
+            ),
             now);
         return "真实资讯同步完成: expected=" + expected + ", saved=" + saved + ", missing=" + missing;
+    }
+
+    /** 根据主题关键词和公开资讯源稳定返回量计算真实可达的新闻样本目标。 */
+    private int expectedNewsCount(int maxItems, int payloadCount, int keywordCount) {
+        int configuredCap = Math.max(1, Math.min(maxItems, 20));
+        if (payloadCount >= 4) {
+            return Math.min(configuredCap, payloadCount);
+        }
+        return Math.min(configuredCap, 4);
+    }
+
+    /** 生成结构化质量原因，避免前端解析自由文本。 */
+    private List<String> qualityReasons(int expected, int saved, int keywordCount) {
+        if (saved <= 0) {
+            return List.of("NO_VALID_NEWS");
+        }
+        if (saved < expected) {
+            return List.of("LOW_KEYWORD_COVERAGE");
+        }
+        if (keywordCount < 3) {
+            return List.of("LIMITED_KEYWORD_SCOPE");
+        }
+        return List.of("SAMPLE_TARGET_MET");
     }
 
     private RealMarketDataClient.MarketDataRequest request(

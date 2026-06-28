@@ -34,6 +34,14 @@ public record ProductResponse(
     ProductInvestmentProfileResponse investmentProfile,
     @Schema(description = "产品主题、行业、指数和资产类别关系集合；列表页可为空，详情页返回")
     List<ProductThemeRelationResponse> themeRelations,
+    @Schema(description = "最近 1D 行情或净值")
+    BigDecimal latestNav,
+    @Schema(description = "最近 1D 行情时间")
+    LocalDateTime latestQuoteTime,
+    @Schema(description = "最近行情数据源编码")
+    String sourceCode,
+    @Schema(description = "产品画像或行情可用性综合质量分，0-1")
+    BigDecimal dataQualityScore,
     @Schema(description = "创建时间") LocalDateTime createdAt,
     @Schema(description = "最后更新时间") LocalDateTime updatedAt
 ) {
@@ -71,6 +79,10 @@ public record ProductResponse(
             .themeRelations(source.themeRelations() == null
                 ? List.of()
                 : source.themeRelations().stream().map(ProductThemeRelationResponse::from).toList())
+            .latestNav(source.latestNav())
+            .latestQuoteTime(source.latestQuoteTime())
+            .sourceCode(source.sourceCode())
+            .dataQualityScore(source.dataQualityScore())
             .createdAt(source.createdAt())
             .updatedAt(source.updatedAt())
             .build();

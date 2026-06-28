@@ -56,6 +56,14 @@ public record ProductView(
     ProductInvestmentProfileView investmentProfile,
     @Schema(description = "产品主题、行业、指数和资产类别关系集合；列表页可为空，详情页返回")
     List<ProductThemeRelationView> themeRelations,
+    @Schema(description = "最近 1D 行情或净值")
+    BigDecimal latestNav,
+    @Schema(description = "最近 1D 行情时间")
+    LocalDateTime latestQuoteTime,
+    @Schema(description = "最近行情数据源编码")
+    String sourceCode,
+    @Schema(description = "产品画像或行情可用性综合质量分，0-1")
+    BigDecimal dataQualityScore,
     @Schema(description = "产品创建时间，北京时间")
     LocalDateTime createdAt,
     @Schema(description = "产品最后更新时间，北京时间")

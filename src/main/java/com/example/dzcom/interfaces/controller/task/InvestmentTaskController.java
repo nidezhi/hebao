@@ -9,10 +9,12 @@ import com.example.dzcom.application.service.task.InvestmentTaskManagementServic
 import com.example.dzcom.interfaces.dto.response.common.PageResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskTriggerResponse;
+import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeOptionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeSnapshotResponse;
 import com.example.dzcom.interfaces.dto.response.task.NewsArticleRelationResponse;
 import com.example.dzcom.interfaces.dto.response.task.NewsArticleResponse;
 import com.example.dzcom.interfaces.dto.response.task.ScheduledTaskExecutionResponse;
+import com.example.dzcom.interfaces.request.task.InvestmentThemeOptionListRequest;
 import com.example.dzcom.interfaces.request.task.InvestmentThemeSnapshotListRequest;
 import com.example.dzcom.interfaces.request.task.NewsArticleRelationListRequest;
 import com.example.dzcom.interfaces.request.task.NewsArticleListRequest;
@@ -294,5 +296,35 @@ public class InvestmentTaskController {
                 request.direction() == null ? "desc" : request.direction()
             )
         ), InvestmentThemeSnapshotResponse::from));
+    }
+
+    /**
+     * 查询可供报告生成和闭环筛选使用的投资主题选项。
+     *
+     * @param request 关键字、市场和分页请求
+     * @return 去重后的主题选项分页结果
+     * @author dz
+     * @date 2026-06-28
+     */
+    @PostMapping("/theme-options")
+    @Operation(summary = "查询投资主题选择器", description = "基于真实投资主题快照去重返回主题编码、展示名称、最近快照和摘要，供前端生成报告时选择主题，避免手填 themeCode。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回投资主题选项分页响应", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "分页参数不合法"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<PageResponse<InvestmentThemeOptionResponse>> themeOptions(
+        @Valid @RequestBody InvestmentThemeOptionListRequest request
+    ) {
+        return Result.success(PageResponse.from(tasks.themeOptions(
+            request.keyword(),
+            request.marketScope(),
+            new PageQuery(
+                request.page() == null ? 1 : request.page(),
+                request.size() == null ? 20 : request.size(),
+                "latestSnapshotTime",
+                "desc"
+            )
+        ), InvestmentThemeOptionResponse::from));
     }
 }

@@ -385,6 +385,9 @@ public class DataSourceGovernanceApplicationService {
         if ("L5".equals(source.trustLevel())) {
             return "DEMO_ONLY";
         }
+        if (health == null) {
+            return "PENDING_HEALTH_CHECK";
+        }
         if (quality == null) {
             return "UNKNOWN";
         }
@@ -408,6 +411,7 @@ public class DataSourceGovernanceApplicationService {
         return switch (qualityLevel) {
             case "DISABLED" -> "数据源已停用，不参与采集和投资分析。";
             case "DEMO_ONLY" -> "当前为兜底或演示数据源，只能用于链路验证，禁止进入正式投资方案。";
+            case "PENDING_HEALTH_CHECK" -> "数据源已登记但缺少健康检查结果，前端应提示先完成健康检查。";
             case "UNKNOWN" -> "缺少质量快照，前端应提示补充数据质量评估。";
             case "LOW" -> health != null && health.failureReason() != null
                 ? "数据源质量或成功率不足：" + health.failureReason()

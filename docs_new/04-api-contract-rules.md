@@ -71,6 +71,34 @@
 4. 前端页面只消费 adapter 后的展示模型。
 5. 验证后将结果写回 `00-current-handoff.md`。
 
+### 当前关键接口摘要
+
+#### Product 列表/详情摘要字段
+
+- 前端使用点：产品风险、报告工作台、模拟交易、数据质量和对象选择器相关页面。
+- 后端响应：`ProductResponse`。
+- 本轮确认字段：
+  - `bizId`：产品业务 id。
+  - `productName` / `productCode` / `displayName` 等既有展示字段按当前 DTO 为准。
+  - `latestNav`：最近 1D 行情或净值。
+  - `latestQuoteTime`：最近 1D 行情时间。
+  - `sourceCode`：最近行情数据源编码。
+  - `dataQualityScore`：产品画像或行情可用性综合质量分，范围 `0-1`。
+- 契约要求：前端不得用 mock 或硬编码补这些字段；后端从真实 `MarketQuote` 和 `ProductInvestmentProfile` 组装，缺数据时返回空值并由页面展示真实空状态。
+- 验收状态：2026-06-28 已补齐并通过后端全量测试、前端 type-check/build。
+
+#### Investment Theme 选择器
+
+- 前端使用点：报告工作台生成投资报告时选择 `themeCode`。
+- 后端接口：`POST /api/investment/tasks/theme-options`。
+- 请求字段：
+  - `keyword`：可选，匹配主题编码或主题名称。
+  - `marketScope`：可选，默认 `CN_MAINLAND`。
+  - `page/size`：分页参数。
+- 响应字段：`themeCode`、`themeName`、`displayName`、`marketScope`、`summary`、`latestSnapshotType`、`latestSnapshotTime`、`sampleCount`、`returnRate`、`momentumScore`、`heatScore`。
+- 契约要求：选择项必须来自真实 `InvestmentThemeSnapshot`，前端不得手填 `themeCode`；允许清空选择代表全市场分析。
+- 验收状态：2026-06-28 已补齐，真实数据可返回 `AI人工智能`、`半导体`、`黄金`，后端全量测试和前端 type-check/build 通过。
+
 ## 历史归档区
 
 - 旧前端接口变更见 `10-frontend-interface-changes.md`、`12-frontend-api-update-log.md`、`19-frontend-api-update-log-20260626-ai-skills.md`。

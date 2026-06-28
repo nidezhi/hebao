@@ -8,8 +8,10 @@ import com.example.dzcom.domain.model.product.Product;
 import com.example.dzcom.domain.model.product.ProductAttribute;
 import com.example.dzcom.domain.model.product.ProductInvestmentProfile;
 import com.example.dzcom.domain.model.product.ProductThemeRelation;
+import com.example.dzcom.domain.model.market.MarketQuote;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,7 +27,23 @@ public class ProductViewAssembler {
      * @date 2026-06-14
      */
     public ProductView assembleSummary(Product product) {
-        return assemble(product, List.of(), null, List.of());
+        return assemble(product, List.of(), null, List.of(), Optional.empty());
+    }
+
+    /**
+     * 组装带前端选择器和工作台摘要字段的产品列表项。
+     *
+     * @param product 产品领域对象
+     * @param investmentProfile 产品投资画像
+     * @param latestQuote 最新行情
+     * @return 产品摘要视图
+     */
+    public ProductView assembleSummary(
+        Product product,
+        Optional<ProductInvestmentProfile> investmentProfile,
+        Optional<MarketQuote> latestQuote
+    ) {
+        return assemble(product, List.of(), investmentProfile.map(this::toProfileView).orElse(null), List.of(), latestQuote);
     }
 
     /**
@@ -38,7 +56,7 @@ public class ProductViewAssembler {
      * @date 2026-06-14
      */
     public ProductView assembleDetail(Product product, List<ProductAttribute> attributes) {
-        return assemble(product, attributes.stream().map(this::toView).toList(), null, List.of());
+        return assemble(product, attributes.stream().map(this::toView).toList(), null, List.of(), Optional.empty());
     }
 
     /**
@@ -58,6 +76,26 @@ public class ProductViewAssembler {
         Optional<ProductInvestmentProfile> investmentProfile,
         List<ProductThemeRelation> themeRelations
     ) {
+        return assembleInvestmentDetail(product, attributes, investmentProfile, themeRelations, Optional.empty());
+    }
+
+    /**
+     * 组装包含投资画像、主题关系和最新行情摘要的产品详情。
+     *
+     * @param product 产品领域对象
+     * @param attributes 产品扩展属性集合
+     * @param investmentProfile 产品投资风险和交易画像
+     * @param themeRelations 产品主题、行业、指数和资产类别关系集合
+     * @param latestQuote 最近 1D 行情
+     * @return 产品详情视图
+     */
+    public ProductView assembleInvestmentDetail(
+        Product product,
+        List<ProductAttribute> attributes,
+        Optional<ProductInvestmentProfile> investmentProfile,
+        List<ProductThemeRelation> themeRelations,
+        Optional<MarketQuote> latestQuote
+    ) {
         ProductInvestmentProfileView profileView = investmentProfile
             .map(this::toProfileView)
             .orElse(null);
@@ -68,7 +106,8 @@ public class ProductViewAssembler {
             product,
             attributes.stream().map(this::toView).toList(),
             profileView,
-            relationViews
+            relationViews,
+            latestQuote
         );
     }
 
@@ -85,8 +124,10 @@ public class ProductViewAssembler {
         Product product,
         List<ProductAttributeView> attributes,
         ProductInvestmentProfileView investmentProfile,
-        List<ProductThemeRelationView> themeRelations
+        List<ProductThemeRelationView> themeRelations,
+        Optional<MarketQuote> latestQuote
     ) {
+        BigDecimal dataQualityScore = investmentProfile == null ? null : investmentProfile.dataQualityScore();
         return ProductView.builder()
             .bizId(product.getBizId())
             .productNo(product.getProductNo())
@@ -107,6 +148,10 @@ public class ProductViewAssembler {
             .attributes(attributes)
             .investmentProfile(investmentProfile)
             .themeRelations(themeRelations)
+            .latestNav(latestQuote.map(MarketQuote::closePrice).orElse(null))
+            .latestQuoteTime(latestQuote.map(MarketQuote::quoteTime).orElse(null))
+            .sourceCode(latestQuote.map(MarketQuote::sourceCode).orElse(null))
+            .dataQualityScore(dataQualityScore)
             .createdAt(product.getCreatedAt())
             .updatedAt(product.getUpdatedAt())
             .build();

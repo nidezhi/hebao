@@ -112,7 +112,7 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
     private AnalysisContext buildContext(GenerateInvestmentAnalysisCommand command) {
         LocalDateTime generatedAt = clock.now();
         String marketScope = resolveMarketScope(command.marketScope());
-        String themeCode = command.themeCode() == null ? "" : command.themeCode();
+        String themeCode = trimToNull(command.themeCode());
         int lookbackDays = resolveLookbackDays(command.lookbackDays());
         LocalDateTime analysisFrom = generatedAt.minusDays(lookbackDays);
 
@@ -120,7 +120,7 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             new InvestmentThemeSnapshotSearchCriteria(
             null,
             null,
-            command.themeCode(),
+            themeCode,
             marketScope,
                 analysisFrom,
                 generatedAt,
@@ -371,7 +371,12 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
     private String resolveMarketScope(String marketScope) {
         return marketScope == null || marketScope.isBlank()
             ? TaskParameterParser.CN_MAINLAND
-            : marketScope;
+            : marketScope.trim();
+    }
+
+    /** 将空白主题标准化为空值，避免全市场报告落库为空字符串。 */
+    private String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /** 解析回看天数，空值或非正数默认 30 天。 */

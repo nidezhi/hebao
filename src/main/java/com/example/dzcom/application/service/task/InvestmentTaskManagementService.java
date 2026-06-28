@@ -8,6 +8,7 @@ import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.application.dto.task.InvestmentTaskDefinitionView;
 import com.example.dzcom.application.dto.task.InvestmentTaskTriggerResult;
 import com.example.dzcom.domain.model.task.InvestmentTaskDefinition;
+import com.example.dzcom.domain.model.task.InvestmentThemeOption;
 import com.example.dzcom.domain.model.task.InvestmentThemeSnapshot;
 import com.example.dzcom.domain.model.task.NewsArticle;
 import com.example.dzcom.domain.model.task.NewsArticleRelation;
@@ -209,6 +210,17 @@ public class InvestmentTaskManagementService {
             pageQuery.safeSort(SNAPSHOT_SORTS, "snapshotTime"),
             "asc".equals(pageQuery.direction())
         ));
+    }
+
+    /** 查询可供前端选择的真实投资主题选项。 */
+    @Transactional(readOnly = true)
+    public PageResult<InvestmentThemeOption> themeOptions(String keyword, String marketScope, PageQuery pageQuery) {
+        return snapshots.searchThemeOptions(
+            keyword,
+            marketScope == null || marketScope.isBlank() ? TaskParameterParser.CN_MAINLAND : marketScope,
+            pageQuery.page(),
+            pageQuery.size()
+        );
     }
 
     /**

@@ -48,6 +48,29 @@ public class RiskAuditApplicationService {
     public void recordReject(String userBizId, String businessType, String businessBizId,
                              String ruleCode, String riskLevel, String reasonCode,
                              Map<String, Object> detail) {
+        recordCheck(userBizId, businessType, businessBizId, ruleCode, "REJECT",
+            riskLevel, BigDecimal.ONE, reasonCode, detail);
+    }
+
+    /**
+     * 以独立事务记录风险检查结果，覆盖 PASS/REVIEW/REJECT 等结构化样本。
+     *
+     * @param userBizId 用户业务标识
+     * @param businessType 被检查业务类型
+     * @param businessBizId 被检查业务对象标识
+     * @param ruleCode 规则编码
+     * @param checkResult 检查结论
+     * @param riskLevel 风险等级
+     * @param score 风险评分
+     * @param reasonCode 原因编码
+     * @param detail 脱敏检查详情
+     * @author dz
+     * @date 2026-06-28
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordCheck(String userBizId, String businessType, String businessBizId,
+                            String ruleCode, String checkResult, String riskLevel,
+                            BigDecimal score, String reasonCode, Map<String, Object> detail) {
         LocalDateTime now = clock.now();
         riskChecks.save(RiskCheck.builder()
             .bizId(ids.newBizId())
@@ -57,10 +80,10 @@ public class RiskAuditApplicationService {
             .userBizId(userBizId)
             .ruleCode(normalizeUpper(ruleCode, "UNSPECIFIED_RULE"))
             .ruleVersion(1)
-            .checkResult("REJECT")
+            .checkResult(normalizeUpper(checkResult, "PASS"))
             .riskLevel(normalizeUpper(riskLevel, "HIGH"))
-            .score(BigDecimal.ONE)
-            .reasonCode(normalizeUpper(reasonCode, "UNKNOWN_REJECT"))
+            .score(score == null ? BigDecimal.ZERO : score)
+            .reasonCode(normalizeUpper(reasonCode, "CHECK_PASSED"))
             .detail(detail == null || detail.isEmpty() ? null : Jsons.toJson(detail))
             .checkedAt(now)
             .createdAt(now)

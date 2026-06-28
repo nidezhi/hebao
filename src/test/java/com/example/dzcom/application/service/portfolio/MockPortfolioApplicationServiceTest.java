@@ -1,6 +1,7 @@
 package com.example.dzcom.application.service.portfolio;
 
 import com.example.dzcom.application.command.portfolio.CancelMockOrderCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockBuyCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockRebalanceCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockSellCommand;
@@ -133,8 +134,25 @@ class MockPortfolioApplicationServiceTest {
                         .build()
                 ))
                 .build()));
-        assertEquals(1, fixture.riskStore.saved.size());
-        assertEquals("TARGET_WEIGHT_EXCEEDED", fixture.riskStore.saved.get(0).reasonCode());
+        assertTrue(fixture.riskStore.saved.stream()
+            .anyMatch(check -> "TARGET_WEIGHT_EXCEEDED".equals(check.reasonCode())));
+    }
+
+    /** 模拟买入成功时也要沉淀 PASS 风控样本，支撑风控审计页闭环。 */
+    @Test
+    void shouldRecordPassRiskChecksWhenBuySucceeds() {
+        Fixture fixture = new Fixture();
+
+        fixture.service.buy(ExecuteMockBuyCommand.builder()
+            .portfolioBizId("portfolio-1")
+            .productBizId("product-1")
+            .amount(new BigDecimal("1000"))
+            .idempotencyKey("buy-pass-risk")
+            .build());
+
+        assertTrue(fixture.riskStore.saved.stream()
+            .anyMatch(check -> "PASS".equals(check.checkResult())
+                && "PRODUCT_MOCK_TRADABLE".equals(check.reasonCode())));
     }
 
     /** 市场级报告没有主题关系时，应能从可 Mock 产品池选择合格产品继续闭环。 */

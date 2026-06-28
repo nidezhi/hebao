@@ -49,6 +49,7 @@ import com.example.dzcom.interfaces.dto.response.portfolio.TradeExecutionRespons
 import com.example.dzcom.interfaces.dto.response.risk.RiskCheckResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskDefinitionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentTaskTriggerResponse;
+import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeOptionResponse;
 import com.example.dzcom.interfaces.dto.response.task.InvestmentThemeSnapshotResponse;
 import com.example.dzcom.interfaces.dto.response.task.NewsArticleRelationResponse;
 import com.example.dzcom.interfaces.dto.response.task.NewsArticleResponse;
@@ -128,6 +129,7 @@ class ControllerRequestContractTest {
         NewsArticleResponse.class,
         NewsArticleRelationResponse.class,
         InvestmentThemeSnapshotResponse.class,
+        InvestmentThemeOptionResponse.class,
         AiModelResponse.class,
         AiPromptTemplateResponse.class,
         AiPromptVariableResponse.class,
