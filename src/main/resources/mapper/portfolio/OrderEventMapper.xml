@@ -15,4 +15,14 @@
         where order_biz_id = #{orderBizId}
         order by occurred_at asc, created_at asc
     </select>
+
+    <select id="selectRecentByPortfolioBizId" resultType="com.example.dzcom.infrastructure.persistence.entity.portfolio.OrderEventEntity">
+        select e.*
+        from aiw_order_event e
+        join aiw_order o on o.biz_id = e.order_biz_id
+        where o.portfolio_biz_id = #{portfolioBizId}
+          and o.is_deleted = 0
+        order by e.occurred_at desc, e.created_at desc
+        limit #{limit}
+    </select>
 </mapper>

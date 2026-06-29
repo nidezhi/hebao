@@ -390,7 +390,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         AiModelRuntimeConfig modelConfig,
         String content
     ) {
-        JsonNode output = readJson(content);
+        JsonNode output = readModelOutputJson(content);
         return InvestmentAnalysisReport.builder()
             .bizId(localReport.bizId())
             .requestId(localReport.requestId())
@@ -447,6 +447,100 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         } catch (JsonProcessingException exception) {
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型输出JSON格式不合法");
         }
+    }
+
+    /** 读取模型输出 JSON，允许模型在 JSON 外包裹说明文本或 Markdown 围栏。 */
+    private JsonNode readModelOutputJson(String value) {
+        return readJson(normalizeJsonObjectContent(value));
+    }
+
+    /** 规范化模型输出，允许从代码块或解释文本中提取第一个 JSON 对象。 */
+    private String normalizeJsonObjectContent(String value) {
+        String stripped = stripMarkdownFence(value);
+        if (isJsonObject(stripped)) {
+            return stripped;
+        }
+        String extracted = firstJsonObject(stripped);
+        if (extracted != null && isJsonObject(extracted)) {
+            log.warn(
+                "投资分析模型输出包含非JSON包裹文本，已提取首个JSON对象: originalLength={}, extractedLength={}",
+                textLength(value),
+                textLength(extracted)
+            );
+            return extracted;
+        }
+        log.error("投资分析模型输出JSON格式不合法: contentPreview={}", limit(value, 1200));
+        throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型输出JSON格式不合法");
+    }
+
+    /** 判断文本是否为 JSON 对象。 */
+    private boolean isJsonObject(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+        try {
+            return objectMapper.readTree(value).isObject();
+        } catch (JsonProcessingException exception) {
+            return false;
+        }
+    }
+
+    /** 去掉常见 Markdown 代码围栏。 */
+    private String stripMarkdownFence(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (!trimmed.startsWith("```")) {
+            return trimmed;
+        }
+        int firstLineEnd = trimmed.indexOf('\n');
+        int lastFence = trimmed.lastIndexOf("```");
+        if (firstLineEnd < 0 || lastFence <= firstLineEnd) {
+            return trimmed;
+        }
+        return trimmed.substring(firstLineEnd + 1, lastFence).trim();
+    }
+
+    /** 从文本中提取第一个括号平衡的 JSON 对象。 */
+    private String firstJsonObject(String value) {
+        if (value == null) {
+            return null;
+        }
+        int start = value.indexOf('{');
+        if (start < 0) {
+            return null;
+        }
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int index = start; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (current == '\\' && inString) {
+                escaped = true;
+                continue;
+            }
+            if (current == '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) {
+                continue;
+            }
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return value.substring(start, index + 1).trim();
+                }
+            }
+        }
+        return null;
     }
 
     private String writeJson(Object value) {

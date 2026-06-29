@@ -45,6 +45,22 @@ public class OrderEventStoreImpl implements OrderEventStore {
             .toList();
     }
 
+    /**
+     * 查询模拟组合最近订单事件。
+     *
+     * @param portfolioBizId 组合业务唯一标识
+     * @param limit 事件数量上限
+     * @return 按发生时间倒序排列的订单事件
+     * @author dz
+     * @date 2026-06-28
+     */
+    @Override
+    public List<OrderEvent> findRecentByPortfolioBizId(String portfolioBizId, int limit) {
+        return mapper.selectRecentByPortfolioBizId(portfolioBizId, limit).stream()
+            .map(this::toDomain)
+            .toList();
+    }
+
     /** 将领域对象转换为持久化实体。 */
     private OrderEventEntity toEntity(OrderEvent event) {
         return OrderEventEntity.builder()

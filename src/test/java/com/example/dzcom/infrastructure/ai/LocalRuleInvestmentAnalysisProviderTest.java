@@ -119,6 +119,48 @@ class LocalRuleInvestmentAnalysisProviderTest {
         assertEquals(0, report.dataQualityScore().compareTo(new BigDecimal("0.6000")));
     }
 
+    /**
+     * 市场级报告允许 themeCode 为空，Provider 应按全市场窗口生成报告而不是空指针失败。
+     *
+     * @throws Exception JSON 解析失败时抛出
+     * @author dz
+     * @date 2026-06-28
+     */
+    @Test
+    void shouldGenerateMarketLevelReportWhenThemeCodeIsNull() throws Exception {
+        ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
+        LocalDateTime now = LocalDateTime.of(2026, 6, 28, 23, 20);
+        EmptyNewsArticleStore newsStore = new EmptyNewsArticleStore();
+        LocalRuleInvestmentAnalysisProvider provider = new LocalRuleInvestmentAnalysisProvider(
+            new EmptySnapshotStore(),
+            newsStore,
+            new PassingCoreDataSourceStore(now),
+            new FixedIdGenerator(),
+            () -> now,
+            objectMapper
+        );
+
+        InvestmentAnalysisReport report = provider.analyze(
+            "request-market",
+            GenerateInvestmentAnalysisCommand.builder()
+                .marketScope("CN_MAINLAND")
+                .themeCode(null)
+                .lookbackDays(30)
+                .initialCapital(BigDecimal.valueOf(100000))
+                .build(),
+            AiModelRuntimeConfig.builder()
+                .modelCode("local-rule-analysis")
+                .providerCode("LOCAL_RULE")
+                .mockEnabled(false)
+                .build()
+        );
+
+        JsonNode inputSnapshot = objectMapper.readTree(report.promptSnapshot());
+        assertEquals(null, report.themeCode());
+        assertTrue(inputSnapshot.get("themeCode").isNull());
+        assertEquals(List.of(), newsStore.lastKeywords);
+    }
+
     /** 空数据源治理仓储假实现。 */
     private static class EmptyDataSourceStore implements DataSourceStore {
         @Override
@@ -223,6 +265,8 @@ class LocalRuleInvestmentAnalysisProviderTest {
 
     /** 空资讯仓储假实现。 */
     private static final class EmptyNewsArticleStore implements NewsArticleStore {
+        private List<String> lastKeywords = List.of();
+
         @Override
         public NewsArticle save(NewsArticle article) {
             return article;
@@ -239,6 +283,7 @@ class LocalRuleInvestmentAnalysisProviderTest {
             LocalDateTime from,
             int limit
         ) {
+            lastKeywords = keywords;
             return List.of();
         }
 

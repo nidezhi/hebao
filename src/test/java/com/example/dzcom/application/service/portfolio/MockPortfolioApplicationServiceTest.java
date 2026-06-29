@@ -8,8 +8,11 @@ import com.example.dzcom.application.command.portfolio.ExecuteMockSellCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.IdGenerator;
+import com.example.dzcom.application.dto.portfolio.PortfolioOrderEventView;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.risk.RiskAuditApplicationService;
+import com.example.dzcom.application.service.system.SystemConfigReader;
+import com.example.dzcom.application.service.task.AutoInvestmentClosedLoopConfigService;
 import com.example.dzcom.domain.repository.risk.RiskCheckSearchCriteria;
 import com.example.dzcom.domain.repository.risk.RiskCheckStore;
 import com.example.dzcom.domain.enums.market.QuoteStatus;
@@ -153,6 +156,11 @@ class MockPortfolioApplicationServiceTest {
         assertTrue(fixture.riskStore.saved.stream()
             .anyMatch(check -> "PASS".equals(check.checkResult())
                 && "PRODUCT_MOCK_TRADABLE".equals(check.reasonCode())));
+        List<PortfolioOrderEventView> events = fixture.service.portfolioOrderEvents("portfolio-1", 20);
+        assertEquals(1, events.size());
+        assertEquals("product-1", events.get(0).productBizId());
+        assertEquals("FILLED", events.get(0).orderStatus());
+        assertEquals(0, new BigDecimal("1000.00000000").compareTo(events.get(0).executedAmount()));
     }
 
     /** 市场级报告没有主题关系时，应能从可 Mock 产品池选择合格产品继续闭环。 */
@@ -182,6 +190,22 @@ class MockPortfolioApplicationServiceTest {
 
         assertEquals("product-1", execution.order().productBizId());
         assertEquals("FILLED", execution.order().status());
+    }
+
+    /** 自动闭环 AI 资金池应以 10W 初始现金创建，并允许当前登录用户读取和刷新估值。 */
+    @Test
+    void shouldExposeAutomationPoolForReadAndValuationRefresh() {
+        Fixture fixture = new Fixture();
+
+        var pool = fixture.service.automationPortfolio();
+        assertEquals("全自动闭环模拟组合", pool.portfolioName());
+        assertEquals("21000000-0000-0000-0000-000000000002", pool.ownerUserBizId());
+        assertEquals(0, new BigDecimal("100000").compareTo(pool.latestValuation().totalAsset()));
+
+        var detail = fixture.service.detail(pool.bizId());
+        assertEquals(pool.bizId(), detail.bizId());
+        var refreshed = fixture.service.refreshValuation(pool.bizId());
+        assertEquals(pool.bizId(), refreshed.bizId());
     }
 
     /** 构建测试用模拟持仓。 */
@@ -248,6 +272,7 @@ class MockPortfolioApplicationServiceTest {
 
         private Fixture() {
             service = new MockPortfolioApplicationService(
+                new AutoInvestmentClosedLoopConfigService(new EmptySystemConfigReader()),
                 portfolios,
                 positions,
                 valuations,
@@ -266,6 +291,19 @@ class MockPortfolioApplicationServiceTest {
                 new IncrementalIdGenerator(),
                 () -> NOW
             );
+        }
+    }
+
+    /** 空系统配置读取器，测试默认使用代码兜底。 */
+    private static final class EmptySystemConfigReader implements SystemConfigReader {
+        @Override
+        public Optional<String> stringValue(String configGroup, String configKey) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<BigDecimal> decimalValue(String configGroup, String configKey) {
+            return Optional.empty();
         }
     }
 
@@ -291,7 +329,10 @@ class MockPortfolioApplicationServiceTest {
 
     /** 内存组合仓储。 */
     private static final class InMemoryPortfolioStore implements PortfolioStore {
-        private final Portfolio portfolio = Portfolio.builder()
+        private final Map<String, Portfolio> portfolios = new HashMap<>();
+
+        private InMemoryPortfolioStore() {
+            save(Portfolio.builder()
             .bizId("portfolio-1")
             .portfolioNo("MP1")
             .ownerUserBizId("user-1")
@@ -304,21 +345,34 @@ class MockPortfolioApplicationServiceTest {
             .createdBy("user-1")
             .updatedBy("user-1")
             .deleted(0)
-            .build();
+            .build());
+        }
 
         @Override
         public Portfolio save(Portfolio value) {
+            portfolios.put(value.bizId(), value);
             return value;
         }
 
         @Override
         public Optional<Portfolio> findByBizId(String bizId) {
-            return portfolio.bizId().equals(bizId) ? Optional.of(portfolio) : Optional.empty();
+            return Optional.ofNullable(portfolios.get(bizId));
         }
 
         @Override
         public PageResult<Portfolio> search(PortfolioSearchCriteria criteria) {
-            throw new UnsupportedOperationException();
+            List<Portfolio> items = portfolios.values().stream()
+                .filter(portfolio -> criteria.ownerUserBizId() == null || criteria.ownerUserBizId().equals(portfolio.ownerUserBizId()))
+                .filter(portfolio -> criteria.portfolioType() == null || criteria.portfolioType().equals(portfolio.portfolioType()))
+                .filter(portfolio -> criteria.status() == null || criteria.status().equals(portfolio.status()))
+                .toList();
+            return PageResult.<Portfolio>builder()
+                .items(items)
+                .total(items.size())
+                .page(criteria.page())
+                .size(criteria.size())
+                .totalPages(items.isEmpty() ? 0 : 1)
+                .build();
         }
     }
 
@@ -425,6 +479,13 @@ class MockPortfolioApplicationServiceTest {
         public List<OrderEvent> findByOrderBizId(String orderBizId) {
             return events.stream()
                 .filter(event -> orderBizId.equals(event.orderBizId()))
+                .toList();
+        }
+
+        @Override
+        public List<OrderEvent> findRecentByPortfolioBizId(String portfolioBizId, int limit) {
+            return events.stream()
+                .limit(limit)
                 .toList();
         }
     }

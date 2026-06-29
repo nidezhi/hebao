@@ -45,12 +45,11 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     private static final String REAL_QUOTE_TASK_TYPE = "REAL_MARKET_QUOTE_SYNC";
     private static final String REAL_NEWS_TASK_TYPE = "REAL_NEWS_SYNC";
     private static final String REAL_QUALITY_TASK_TYPE = "REAL_DATA_QUALITY_SNAPSHOT";
-    private static final String DEFAULT_PORTFOLIO_NAME = "全自动闭环模拟组合";
-    private static final String DEFAULT_MODEL_TYPE = "INVESTMENT_ANALYSIS";
     private static final DateTimeFormatter VERSION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final InvestmentTaskDefinitionStore definitions;
     private final ObjectProvider<InvestmentTaskExecutionService> taskExecution;
+    private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig;
     private final ClosedLoopOrchestrationApplicationService closedLoops;
     private final InvestmentAnalysisReportStore reports;
     private final MockPortfolioApplicationService portfolios;
@@ -80,9 +79,17 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     @Override
     public String execute(InvestmentTaskEvent event) {
         Map<String, String> parameters = event.parameters() == null ? Map.of() : event.parameters();
-        String automationLevel = TaskParameterParser.string(parameters, "automationLevel", "FULL_MOCK");
+        String automationLevel = TaskParameterParser.string(
+            parameters,
+            "automationLevel",
+            autoInvestmentConfig.automationLevel()
+        );
         String marketScope = TaskParameterParser.marketScope(parameters);
-        String mockUserBizId = TaskParameterParser.string(parameters, "mockUserBizId", "");
+        String mockUserBizId = TaskParameterParser.string(
+            parameters,
+            "mockUserBizId",
+            autoInvestmentConfig.mockUserBizId()
+        );
         log.info(
             "自动投资闭环开始: taskCode={}, eventId={}, triggerSource={}, automationLevel={}, marketScope={}, themeCode={}, reportTaskCode={}, dataTaskCodes={}, promptTaskCode={}, modelCode={}, providerCode={}, mockUserConfigured={}",
             event.taskCode(),
@@ -539,9 +546,17 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "未配置 Prompt 治理任务", Map.of("reportBizId", report.bizId()));
             return;
         }
+        String promptCode = TaskParameterParser.string(parameters, "promptCode", autoInvestmentConfig.promptCode());
+        String promptVersion = TaskParameterParser.string(parameters, "promptVersion", autoInvestmentConfig.promptVersion());
+        String promptScenario = TaskParameterParser.string(parameters, "promptScenario", autoInvestmentConfig.promptScenario());
         log.info("自动投资闭环Prompt候选任务开始: runNo={}, promptTaskCode={}, reportBizId={}",
             run.runNo(), promptTaskCode, report.bizId());
-        Map<String, Object> result = executeChildTask(parentEvent, promptTaskCode, Map.of());
+        Map<String, Object> result = executeChildTask(parentEvent, promptTaskCode, mapOfString(
+            "promptCode", promptCode,
+            "promptVersion", promptVersion,
+            "scenario", promptScenario,
+            "reportBizId", report.bizId()
+        ));
         if (!"SUCCEEDED".equals(result.get("status"))) {
             log.warn("自动投资闭环Prompt候选任务失败: runNo={}, promptTaskCode={}, result={}",
                 run.runNo(), promptTaskCode, result);
@@ -549,11 +564,41 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "Prompt 治理任务失败: " + result.get("failureReason"), Map.of("taskCode", promptTaskCode));
             return;
         }
+        Map<String, Object> promptSummary = readObjectMapOrEmptySafe(result.get("resultSummary"));
         log.info("自动投资闭环Prompt候选任务完成: runNo={}, promptTaskCode={}, result={}",
             run.runNo(), promptTaskCode, result);
         closedLoops.succeedStep(run, "PROMPT_CANDIDATE", "Prompt候选与评分", 50,
-            Map.of("taskCode", promptTaskCode, "reportBizId", report.bizId()),
-            result);
+            Map.of("taskCode", promptTaskCode, "reportBizId", report.bizId(), "promptCode", promptCode,
+                "promptVersion", promptVersion, "scenario", promptScenario),
+            mapOfNullable(
+                "taskCode", result.get("taskCode"),
+                "taskType", result.get("taskType"),
+                "eventId", result.get("eventId"),
+                "status", result.get("status"),
+                "resultSummary", result.get("resultSummary"),
+                "failureReason", result.get("failureReason"),
+                "reportBizId", report.bizId(),
+                "promptBizId", promptSummary.get("promptBizId"),
+                "promptCode", promptCode,
+                "promptVersion", promptVersion,
+                "scenario", promptScenario,
+                "evaluationBizId", promptSummary.get("evaluationBizId"),
+                "readyForModel", promptSummary.get("readyForModel"),
+                "missingVariables", promptSummary.get("missingVariables"),
+                "renderedPromptPreview", promptSummary.get("renderedPromptPreview"),
+                "summary", promptSummary.get("summary")
+            ));
+    }
+
+    private Map<String, Object> readObjectMapOrEmptySafe(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return Map.of();
+        }
+        try {
+            return Jsons.readObjectMapOrEmpty(String.valueOf(value));
+        } catch (IllegalArgumentException exception) {
+            return Map.of();
+        }
     }
 
     /** 生成模型候选和评分指标，正式启用由后续自动化闸门决定。 */
@@ -590,7 +635,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             modelCode,
             version,
             "自动闭环候选模型-" + version,
-            DEFAULT_MODEL_TYPE,
+            autoInvestmentConfig.modelType(),
             providerCode,
             activeBaseModel.artifactUri(),
             Jsons.toJson(modelConfig),
@@ -627,17 +672,19 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 Map.of("reportBizId", report.bizId()));
             throw new ClosedLoopBlockedException(reason);
         }
-        String mockUserBizId = TaskParameterParser.string(parameters, "mockUserBizId", "");
-        if (mockUserBizId.isBlank()) {
-            String reason = "未配置自动 Mock 用户";
-            log.warn("自动投资闭环Mock交易阻断: runNo={}, reportBizId={}, reason={}", run.runNo(), report.bizId(), reason);
-            closedLoops.blockedStep(run, "MOCK_TRADE", "自动Mock交易", 70, reason,
-                Map.of("reportBizId", report.bizId()));
-            throw new ClosedLoopBlockedException(reason);
-        }
+        String mockUserBizId = TaskParameterParser.string(
+            parameters,
+            "mockUserBizId",
+            autoInvestmentConfig.mockUserBizId()
+        );
         CurrentOperator operator = new CurrentOperator(mockUserBizId, "AUTO_CLOSED_LOOP", Set.of("USER"), Set.of());
         return currentOperator.callAs(operator, () -> {
-            BigDecimal initialCash = positiveDecimal(parameters, "initialCash", new BigDecimal("100000"));
+            BigDecimal initialCash = positiveDecimal(parameters, "initialCash", autoInvestmentConfig.initialCash());
+            String portfolioName = TaskParameterParser.string(
+                parameters,
+                "mockPortfolioName",
+                autoInvestmentConfig.mockPortfolioName()
+            );
             log.info(
                 "自动投资闭环Mock交易开始: runNo={}, reportBizId={}, mockUserBizId={}, initialCash={}, mockProductBizId={}",
                 run.runNo(),
@@ -648,7 +695,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             );
             MockPortfolioView portfolio = portfolios.ensureAutomationPortfolio(
                 mockUserBizId,
-                TaskParameterParser.string(parameters, "mockPortfolioName", DEFAULT_PORTFOLIO_NAME),
+                portfolioName,
                 initialCash
             );
             MockOrderExecutionView execution = portfolios.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
@@ -659,9 +706,17 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 .build());
             MockPortfolioView refreshed = portfolios.refreshValuation(execution.portfolio().bizId());
             closedLoops.succeedStep(run, "MOCK_TRADE", "自动Mock交易", 70,
-                Map.of("reportBizId", report.bizId(), "portfolioBizId", portfolio.bizId()),
-                Map.of("orderBizId", execution.order().bizId(), "portfolioBizId", refreshed.bizId(),
-                    "status", execution.order().status()));
+                Map.of("reportBizId", report.bizId(), "portfolioBizId", portfolio.bizId(), "mockUserBizId", mockUserBizId),
+                Map.of(
+                    "orderBizId", execution.order().bizId(),
+                    "portfolioBizId", refreshed.bizId(),
+                    "portfolioName", portfolioName,
+                    "mockUserBizId", mockUserBizId,
+                    "aiPoolInitialCash", initialCash,
+                    "latestTotalAsset", refreshed.latestValuation() == null ? BigDecimal.ZERO : refreshed.latestValuation().totalAsset(),
+                    "latestCashBalance", refreshed.latestValuation() == null ? BigDecimal.ZERO : refreshed.latestValuation().cashBalance(),
+                    "status", execution.order().status()
+                ));
             log.info(
                 "自动投资闭环Mock交易完成: runNo={}, reportBizId={}, portfolioBizId={}, orderBizId={}, orderStatus={}",
                 run.runNo(),
@@ -930,6 +985,15 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         Map<String, Object> result = new LinkedHashMap<>();
         for (int index = 0; index < values.length; index += 2) {
             result.put((String) values[index], values[index + 1]);
+        }
+        return result;
+    }
+
+    /** 构造字符串参数 Map。 */
+    private Map<String, String> mapOfString(String... values) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (int index = 0; index < values.length; index += 2) {
+            result.put(values[index], values[index + 1]);
         }
         return result;
     }

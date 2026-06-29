@@ -20,10 +20,12 @@ import com.example.dzcom.application.dto.portfolio.MockPortfolioPerformanceView;
 import com.example.dzcom.application.dto.portfolio.MockPortfolioView;
 import com.example.dzcom.application.dto.portfolio.MockRebalanceExecutionView;
 import com.example.dzcom.application.dto.portfolio.OrderEventView;
+import com.example.dzcom.application.dto.portfolio.PortfolioOrderEventView;
 import com.example.dzcom.application.dto.portfolio.PortfolioValuationView;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.risk.RiskAuditApplicationService;
+import com.example.dzcom.application.service.task.AutoInvestmentClosedLoopConfigService;
 import com.example.dzcom.domain.enums.product.ProductTradeStatus;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
 import com.example.dzcom.domain.model.market.MarketQuote;
@@ -73,6 +75,7 @@ public class MockPortfolioApplicationService {
     private static final String CHANNEL_SIMULATOR = "SIMULATOR";
     private static final Set<String> SORT_FIELDS = Set.of("createdAt", "updatedAt", "portfolioNo", "portfolioName");
 
+    private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig;
     private final PortfolioStore portfolios;
     private final PositionStore positions;
     private final PortfolioValuationStore valuations;
@@ -226,11 +229,21 @@ public class MockPortfolioApplicationService {
     @Transactional(readOnly = true)
     public MockPortfolioView detail(String portfolioBizId) {
         CurrentOperator operator = currentOperator.required();
-        Portfolio portfolio = requiredOwnedSimulationPortfolio(portfolioBizId, operator);
+        Portfolio portfolio = requiredReadableSimulationPortfolio(portfolioBizId, operator);
         return assembler.assembleDetail(
             portfolio,
             valuations.findLatestByPortfolioBizId(portfolio.bizId()),
             positions.findByPortfolioBizId(portfolio.bizId())
+        );
+    }
+
+    /** 查询或创建自动闭环 AI 模拟资金池，供前端只读追溯。 */
+    @Transactional
+    public MockPortfolioView automationPortfolio() {
+        return ensureAutomationPortfolio(
+            autoInvestmentConfig.mockUserBizId(),
+            autoInvestmentConfig.mockPortfolioName(),
+            autoInvestmentConfig.initialCash()
         );
     }
 
@@ -454,6 +467,29 @@ public class MockPortfolioApplicationService {
     }
 
     /**
+     * 查询当前用户指定模拟组合的最近订单事件。
+     *
+     * <p>该接口用于前端按组合展示订单事件流，避免前端只能先猜测订单号或把事件当作
+     * 任意 JSON 处理。查询前会校验组合归属当前用户。</p>
+     *
+     * @param portfolioBizId 组合业务唯一标识
+     * @param limit 事件数量上限
+     * @return 带订单摘要字段的事件集合
+     * @throws BusinessException 当组合不存在或不属于当前用户时抛出
+     * @author dz
+     * @date 2026-06-28
+     */
+    @Transactional(readOnly = true)
+    public List<PortfolioOrderEventView> portfolioOrderEvents(String portfolioBizId, Integer limit) {
+        CurrentOperator operator = currentOperator.required();
+        Portfolio portfolio = requiredReadableSimulationPortfolio(portfolioBizId, operator);
+        int safeLimit = limit == null ? 20 : Math.max(1, Math.min(limit, 100));
+        return orderEvents.findRecentByPortfolioBizId(portfolio.bizId(), safeLimit).stream()
+            .map(this::toPortfolioOrderEventView)
+            .toList();
+    }
+
+    /**
      * 从投资分析报告中的参考配置金额生成模拟买入。
      *
      * <p>该用例把“分析报告”推进到“可验证 Mock 交易”。报告必须通过数据质量门禁，
@@ -592,7 +628,7 @@ public class MockPortfolioApplicationService {
     @Transactional
     public MockPortfolioView refreshValuation(String portfolioBizId) {
         CurrentOperator operator = currentOperator.required();
-        Portfolio portfolio = requiredOwnedSimulationPortfolio(portfolioBizId, operator);
+        Portfolio portfolio = requiredReadableSimulationPortfolio(portfolioBizId, operator);
         PortfolioValuation latest = valuations.findLatestByPortfolioBizId(portfolio.bizId())
             .orElseGet(() -> initialValuation(portfolio, BigDecimal.ZERO, clock.now()));
         List<Position> currentPositions = positions.findByPortfolioBizId(portfolio.bizId());
@@ -639,7 +675,7 @@ public class MockPortfolioApplicationService {
     @Transactional(readOnly = true)
     public MockPortfolioPerformanceView performance(String portfolioBizId, Integer limit) {
         CurrentOperator operator = currentOperator.required();
-        Portfolio portfolio = requiredOwnedSimulationPortfolio(portfolioBizId, operator);
+        Portfolio portfolio = requiredReadableSimulationPortfolio(portfolioBizId, operator);
         int safeLimit = normalizeCurveLimit(limit);
         List<PortfolioValuation> history = valuations.findHistoryByPortfolioBizId(portfolio.bizId(), safeLimit);
         return MockPortfolioPerformanceView.builder()
@@ -757,6 +793,31 @@ public class MockPortfolioApplicationService {
             .eventSource(event.eventSource())
             .operatorBizId(event.operatorBizId())
             .eventPayload(event.eventPayload())
+            .occurredAt(event.occurredAt())
+            .build();
+    }
+
+    /** 转换组合订单事件视图。 */
+    private PortfolioOrderEventView toPortfolioOrderEventView(OrderEvent event) {
+        MockOrderView order = orders.findByBizId(event.orderBizId())
+            .map(executionAssembler::assembleOrder)
+            .orElse(null);
+        return PortfolioOrderEventView.builder()
+            .bizId(event.bizId())
+            .orderBizId(event.orderBizId())
+            .orderNo(order == null ? null : order.orderNo())
+            .portfolioBizId(order == null ? null : order.portfolioBizId())
+            .productBizId(order == null ? null : order.productBizId())
+            .orderSide(order == null ? null : order.orderSide())
+            .orderStatus(order == null ? event.toStatus() : order.status())
+            .eventType(event.eventType())
+            .fromStatus(event.fromStatus())
+            .toStatus(event.toStatus())
+            .eventSource(event.eventSource())
+            .requestedAmount(order == null ? null : order.requestedAmount())
+            .requestedQuantity(order == null ? null : order.requestedQuantity())
+            .executedAmount(order == null ? null : order.executedAmount())
+            .executedQuantity(order == null ? null : order.executedQuantity())
             .occurredAt(event.occurredAt())
             .build();
     }
@@ -897,6 +958,25 @@ public class MockPortfolioApplicationService {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "当前接口只支持模拟组合");
         }
         return portfolio;
+    }
+
+    /** 获取当前用户可读的模拟组合；自动闭环 AI 资金池允许登录用户只读查看和刷新估值。 */
+    private Portfolio requiredReadableSimulationPortfolio(String portfolioBizId, CurrentOperator operator) {
+        Portfolio portfolio = portfolios.findByBizId(portfolioBizId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "模拟组合不存在"));
+        if (!PORTFOLIO_TYPE_SIMULATION.equals(portfolio.portfolioType())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "当前接口只支持模拟组合");
+        }
+        if (operator.userBizId().equals(portfolio.ownerUserBizId()) || isAutomationPortfolio(portfolio)) {
+            return portfolio;
+        }
+        throw new BusinessException(HttpStatus.FORBIDDEN, "无权查看该模拟组合");
+    }
+
+    /** 判断是否为系统自动闭环 AI 模拟资金池。 */
+    private boolean isAutomationPortfolio(Portfolio portfolio) {
+        return autoInvestmentConfig.mockUserBizId().equals(portfolio.ownerUserBizId())
+            && autoInvestmentConfig.mockPortfolioName().equals(portfolio.portfolioName());
     }
 
     /**

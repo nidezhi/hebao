@@ -14,4 +14,8 @@ public interface OrderEventMapper {
 
     /** 查询订单事件。 */
     List<OrderEventEntity> selectByOrderBizId(@Param("orderBizId") String orderBizId);
+
+    /** 查询组合最近订单事件。 */
+    List<OrderEventEntity> selectRecentByPortfolioBizId(@Param("portfolioBizId") String portfolioBizId,
+                                                        @Param("limit") int limit);
 }

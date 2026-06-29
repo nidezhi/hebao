@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dzcom.infrastructure.persistence.mapper.system.SystemConfigMapper">
+    <sql id="searchCondition">
+        from aiw_system_config c
+        where 1 = 1
+        <if test="criteria.configGroup != null and criteria.configGroup != ''">
+            and c.config_group = #{criteria.configGroup}
+        </if>
+        <if test="criteria.keyword != null and criteria.keyword != ''">
+            and (
+                c.config_key like concat('%', #{criteria.keyword}, '%')
+                or c.description like concat('%', #{criteria.keyword}, '%')
+            )
+        </if>
+        <if test="criteria.environment != null and criteria.environment != ''">
+            and c.environment = #{criteria.environment}
+        </if>
+        <if test="criteria.status != null and criteria.status != ''">
+            and c.status = #{criteria.status}
+        </if>
+    </sql>
+
+    <insert id="save">
+        insert into aiw_system_config
+        (biz_id, config_group, config_key, environment, value_type, config_value,
+         description, status, version, created_at, updated_at)
+        values
+        (#{bizId}, #{configGroup}, #{configKey}, #{environment}, #{valueType}, #{configValue},
+         #{description}, #{status}, #{version}, #{createdAt}, #{updatedAt})
+        on duplicate key update
+        value_type = values(value_type),
+        config_value = values(config_value),
+        description = values(description),
+        status = values(status),
+        version = values(version),
+        updated_at = values(updated_at)
+    </insert>
+
+    <select id="selectEnabled"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.system.SystemConfigEntity">
+        select *
+        from aiw_system_config
+        where config_group = #{configGroup}
+          and config_key = #{configKey}
+          and environment = #{environment}
+          and status = 'ENABLED'
+        limit 1
+    </select>
+
+    <select id="selectByKey"
+            resultType="com.example.dzcom.infrastructure.persistence.entity.system.SystemConfigEntity">
+        select *
+        from aiw_system_config
+        where config_group = #{configGroup}
+          and config_key = #{configKey}
+          and environment = #{environment}
+        limit 1
+    </select>
+
+    <select id="search" resultType="com.example.dzcom.infrastructure.persistence.entity.system.SystemConfigEntity">
+        select c.* <include refid="searchCondition"/>
+        order by ${sortColumn}
+        <choose>
+            <when test="criteria.ascending">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>
+        limit #{offset}, #{criteria.size}
+    </select>
+
+    <select id="count" resultType="long">
+        select count(*) <include refid="searchCondition"/>
+    </select>
+</mapper>

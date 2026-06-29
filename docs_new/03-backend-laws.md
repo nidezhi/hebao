@@ -34,6 +34,14 @@
 - 权限边界必须在后端校验，前端展示不能替代后端授权。
 - 高风险业务必须保留审计字段、操作人、操作时间、拒绝原因或失败上下文。
 
+### Mapper 与 SQL 生成
+
+- Mapper 层非必要不得新增手写 SQL、XML SQL 或生成重复 CRUD SQL；优先使用 MyBatis-Plus 的 `BaseMapper`、Service、LambdaQueryWrapper、分页和规范代码生成方式。
+- 新增实体、Mapper、Service 时应遵循 MyBatis-Plus 代码生成规范，保持 Entity/Mapper/Repository/Service 分层一致，不为简单增删改查额外写 XML。
+- 允许手写 SQL 的场景必须有明确理由：复杂聚合、跨表报表查询、批量 upsert、数据库特性、性能瓶颈、锁语义或 MyBatis-Plus 难以表达的查询。
+- 手写 SQL 必须局部化在 Mapper/XML 层，方法名表达业务语义，参数/返回 DTO 明确，并补服务测试或 mapper 相关验证；不能把裸 `Map`、拼接 SQL 或前端展示字段漂移带到上层。
+- Flyway migration 只负责 schema、索引、种子数据和必要数据修复；不得把可由 MyBatis-Plus 运行时代码完成的普通业务写入长期 SQL 脚本。
+
 ### 测试与验证
 
 - 后端变更必须补对应服务测试、Controller 契约测试或关键链路测试。
@@ -46,3 +54,4 @@
 - 旧技术架构见 `03-technical-architecture.md`。
 - 旧数据库说明见 `04-initial-database-design.md`。
 - 后续默认只读本文最新结论区，除非任务明确要求回溯历史架构。
+- 2026-06-29 补充 Mapper 层铁律：非必要不生成 SQL，优先 MyBatis-Plus 规范代码和运行时查询能力。

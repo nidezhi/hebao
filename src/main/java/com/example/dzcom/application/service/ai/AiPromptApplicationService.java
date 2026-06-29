@@ -338,8 +338,50 @@ public class AiPromptApplicationService {
             .sourcePath(variable.sourcePath())
             .required(variable.required())
             .description(variable.description())
+            .previewValueType(resolvePreviewValueType(variable))
+            .previewDefaultValue(resolvePreviewDefaultValue(variable))
+            .previewExampleValue(resolvePreviewExampleValue(variable))
             .createdAt(variable.createdAt())
             .build();
+    }
+
+    /** 根据变量来源推导前端预览输入类型。 */
+    private String resolvePreviewValueType(AiPromptVariable variable) {
+        String sourcePath = variable.sourcePath() == null ? "" : variable.sourcePath().toLowerCase(Locale.ROOT);
+        String variableName = variable.variableName().toLowerCase(Locale.ROOT);
+        if (sourcePath.contains("json") || variableName.contains("report") || variableName.contains("schema")
+            || variableName.contains("gate") || variableName.contains("boundary")) {
+            return "json";
+        }
+        return "textarea";
+    }
+
+    /** 根据变量来源推导前端预览默认值。 */
+    private String resolvePreviewDefaultValue(AiPromptVariable variable) {
+        return switch (resolvePreviewValueType(variable)) {
+            case "json" -> "{}";
+            default -> "";
+        };
+    }
+
+    /** 根据常见变量名推导前端预览示例值。 */
+    private String resolvePreviewExampleValue(AiPromptVariable variable) {
+        String name = variable.variableName();
+        return switch (name) {
+            case "investmentReport" -> """
+                {"reportBizId":"report-demo","themeName":"示例主题","summary":"用于本地预览的报告摘要"}
+                """.strip();
+            case "dataQualityGate" -> """
+                {"reportAllowed":true,"qualityScore":0.875,"blockedReasons":[]}
+                """.strip();
+            case "riskBoundary" -> """
+                {"riskLevel":"BALANCED","maxSinglePositionRate":0.2,"rejectReasons":[]}
+                """.strip();
+            case "outputSchema" -> """
+                {"type":"object","required":["summary","actions","riskNotice"]}
+                """.strip();
+            default -> "";
+        };
     }
 
     /** 将输出 Schema 领域对象转换为应用层视图。 */

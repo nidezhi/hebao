@@ -25,4 +25,15 @@ public interface OrderEventStore {
      * @date 2026-06-23
      */
     List<OrderEvent> findByOrderBizId(String orderBizId);
+
+    /**
+     * 查询模拟组合最近订单事件。
+     *
+     * @param portfolioBizId 组合业务唯一标识
+     * @param limit 事件数量上限
+     * @return 按发生时间倒序排列的订单事件
+     * @author dz
+     * @date 2026-06-28
+     */
+    List<OrderEvent> findRecentByPortfolioBizId(String portfolioBizId, int limit);
 }

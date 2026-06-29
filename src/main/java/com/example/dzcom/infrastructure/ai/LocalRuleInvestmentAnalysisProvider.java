@@ -130,7 +130,7 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             false
             )
         ).items();
-        List<String> newsKeywords = themeCode.isBlank() ? List.of() : List.of(themeCode);
+        List<String> newsKeywords = themeCode == null ? List.of() : List.of(themeCode);
         List<NewsArticle> recentNews = articles.findRecentByKeywords(
             newsKeywords,
             analysisFrom,

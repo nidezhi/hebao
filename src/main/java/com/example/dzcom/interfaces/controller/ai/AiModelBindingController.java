@@ -66,6 +66,11 @@ public class AiModelBindingController {
      */
     @PostMapping("/list")
     @Operation(summary = "分页查询AI模型挂靠配置", description = "按场景、模型、提供方、环境和启用状态查询模型挂靠配置。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查询成功，返回模型挂靠配置分页响应", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "分页、排序或筛选参数不合法"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
     public Result<PageResponse<AiModelBindingResponse>> list(@Valid @RequestBody AiModelBindingListRequest request) {
         return Result.success(PageResponse.from(bindings.list(
             request.scenarioCode(),
@@ -92,6 +97,11 @@ public class AiModelBindingController {
      */
     @PostMapping("/detail")
     @Operation(summary = "查询AI模型挂靠配置详情", description = "根据场景编码和环境查询模型挂靠配置。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查询成功，返回模型挂靠配置详情", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "404", description = "模型挂靠配置不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
     public Result<AiModelBindingResponse> detail(@Valid @RequestBody AiModelBindingDetailRequest request) {
         return Result.success(AiModelBindingResponse.from(bindings.detail(
             request.scenarioCode(),

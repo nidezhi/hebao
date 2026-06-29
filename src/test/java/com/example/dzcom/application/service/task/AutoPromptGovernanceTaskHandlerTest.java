@@ -3,6 +3,7 @@ package com.example.dzcom.application.service.task;
 import com.example.dzcom.application.common.page.PageResult;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
+import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.domain.model.ai.AiPromptEvaluation;
 import com.example.dzcom.domain.model.ai.AiPromptOutputSchema;
 import com.example.dzcom.domain.model.ai.AiPromptTemplate;
@@ -54,7 +55,9 @@ class AutoPromptGovernanceTaskHandlerTest {
             ))
             .build());
 
-        assertTrue(result.contains("暂无真实报告"));
+        var summary = Jsons.readObjectOrEmpty(result);
+        assertEquals("INITIALIZED", Jsons.text(summary, "status"));
+        assertTrue(Jsons.text(summary, "summary").contains("暂无真实报告"));
         assertEquals(1, prompts.templates.size());
         assertEquals(4, prompts.variables.size());
         assertEquals(1, prompts.schemas.size());
@@ -80,10 +83,15 @@ class AutoPromptGovernanceTaskHandlerTest {
             .parameters(Map.of())
             .build());
 
-        assertTrue(result.contains("1 份真实报告"));
+        var summary = Jsons.readObjectOrEmpty(result);
+        assertEquals("SUCCEEDED", Jsons.text(summary, "status"));
+        assertEquals("report-1", Jsons.text(summary, "reportBizId"));
+        assertEquals("test-id-7", Jsons.text(summary, "evaluationBizId"));
+        assertTrue(Jsons.text(summary, "renderedPromptPreview").contains("report-1"));
         assertEquals(1, evaluations.items.size());
         assertEquals("investment-plan-from-report", evaluations.items.get(0).promptCode());
         assertEquals("REPORT_PROMPT_GOVERNANCE", evaluations.items.get(0).scenario());
+        assertTrue(evaluations.items.get(0).scoreDetail().contains("renderedPromptPreview"));
     }
 
     /** 内存 Prompt 仓储。 */
@@ -218,6 +226,11 @@ class AutoPromptGovernanceTaskHandlerTest {
                     .status("SUCCEEDED")
                     .confidenceLevel("HIGH_CONFIDENCE")
                     .dataQualityScore(new BigDecimal("0.90"))
+                    .dataQualityGate("{\"passed\":true}")
+                    .investmentSummary("{\"sampleCount\":8}")
+                    .trend("{\"direction\":\"UP\"}")
+                    .investmentPlan("{\"planType\":\"REFERENCE_ALLOCATION\",\"referenceAllocationAmount\":1000}")
+                    .simulatedReturn("{\"estimatedProfit\":120}")
                     .themeCode("AI")
                     .generatedAt(NOW)
                     .createdAt(NOW)

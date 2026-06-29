@@ -2,6 +2,7 @@ package com.example.dzcom.interfaces.controller.account;
 
 import com.example.dzcom.application.common.result.Result;
 import com.example.dzcom.application.service.account.RoleApplicationService;
+import com.example.dzcom.interfaces.dto.response.account.PermissionCatalogResponse;
 import com.example.dzcom.interfaces.dto.response.account.RoleResponse;
 import com.example.dzcom.interfaces.dto.response.account.UserResponse;
 import com.example.dzcom.interfaces.request.account.ConfigureRolePermissionsRequest;
@@ -42,6 +43,21 @@ public class AdminRoleController {
     })
     public Result<List<RoleResponse>> list() {
         return Result.success(roles.list().stream().map(RoleResponse::from).toList());
+    }
+
+    /** 查询权限目录。 */
+    @PostMapping("/permissions/catalog")
+    @Operation(summary = "权限目录", description = "返回系统注册表中的结构化权限目录，用于前端权限树或分组勾选，不允许前端手填权限编码。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "成功，返回权限目录响应数组", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无角色查看权限"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<List<PermissionCatalogResponse>> permissionCatalog() {
+        return Result.success(roles.permissionCatalog().stream()
+            .map(PermissionCatalogResponse::from)
+            .toList());
     }
 
     /** 创建自定义角色。 */

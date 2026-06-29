@@ -44,6 +44,13 @@ public class RoleApplicationService {
         return roles.findAll().stream().map(this::toView).toList();
     }
 
+    /** 查询权限目录，用于前端结构化权限选择器。 */
+    @Transactional(readOnly = true)
+    public List<PermissionCodes.PermissionDescriptor> permissionCatalog() {
+        authorization.require(PermissionCodes.ACCOUNT_ROLE_READ);
+        return PermissionCodes.catalog();
+    }
+
     /** 创建自定义角色。 */
     @Transactional
     public RoleView create(String roleCode, String roleName, String description) {

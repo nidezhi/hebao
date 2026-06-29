@@ -17,6 +17,7 @@ import com.example.dzcom.interfaces.dto.response.portfolio.MockPortfolioPerforma
 import com.example.dzcom.interfaces.dto.response.portfolio.MockPortfolioResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.MockRebalanceExecutionResponse;
 import com.example.dzcom.interfaces.dto.response.portfolio.OrderEventResponse;
+import com.example.dzcom.interfaces.dto.response.portfolio.PortfolioOrderEventResponse;
 import com.example.dzcom.interfaces.request.portfolio.CancelMockOrderRequest;
 import com.example.dzcom.interfaces.request.portfolio.CreateMockPortfolioRequest;
 import com.example.dzcom.interfaces.request.portfolio.ExecuteMockBuyRequest;
@@ -26,6 +27,7 @@ import com.example.dzcom.interfaces.request.portfolio.ExecuteMockSellRequest;
 import com.example.dzcom.interfaces.request.portfolio.MockPortfolioDetailRequest;
 import com.example.dzcom.interfaces.request.portfolio.MockOrderEventsRequest;
 import com.example.dzcom.interfaces.request.portfolio.MockPortfolioListRequest;
+import com.example.dzcom.interfaces.request.portfolio.MockPortfolioOrderEventsRequest;
 import com.example.dzcom.interfaces.request.portfolio.MockPortfolioPerformanceRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -131,6 +133,27 @@ public class MockPortfolioController {
     })
     public Result<MockPortfolioResponse> detail(@Valid @RequestBody MockPortfolioDetailRequest request) {
         return Result.success(MockPortfolioResponse.from(portfolios.detail(request.portfolioBizId())));
+    }
+
+    /**
+     * 查询自动闭环 AI 模拟资金池。
+     *
+     * @return 自动闭环 AI 资金池组合
+     * @author dz
+     * @date 2026-06-29
+     */
+    @PostMapping("/automation-pool")
+    @Operation(
+        summary = "查询自动闭环AI模拟资金池",
+        description = "返回系统自动闭环专用的10W模拟资金池；如果不存在会创建初始现金组合，供前端追溯自动Mock交易结果。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查询成功，返回自动闭环模拟资金池", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<MockPortfolioResponse> automationPool() {
+        return Result.success(MockPortfolioResponse.from(portfolios.automationPortfolio()));
     }
 
     /**
@@ -259,6 +282,36 @@ public class MockPortfolioController {
     ) {
         return Result.success(portfolios.orderEvents(request.orderBizId()).stream()
             .map(OrderEventResponse::from)
+            .toList());
+    }
+
+    /**
+     * 查询模拟组合最近订单事件。
+     *
+     * @param request 查询模拟组合订单事件请求
+     * @return 带订单摘要字段的组合订单事件集合
+     * @throws BusinessException 当组合不存在或不属于当前用户时抛出
+     * @author dz
+     * @date 2026-06-28
+     */
+    @PostMapping("/orders/events/by-portfolio")
+    @Operation(
+        summary = "查询模拟组合最近订单事件",
+        description = "按当前用户自己的模拟组合查询最近订单事件，并返回订单状态、产品、方向、金额和数量等结构化摘要字段。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查询成功，返回组合订单事件集合", useReturnTypeSchema = true),
+        @ApiResponse(responseCode = "400", description = "参数不合法"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无权查看该模拟组合订单事件"),
+        @ApiResponse(responseCode = "404", description = "模拟组合不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<java.util.List<PortfolioOrderEventResponse>> portfolioOrderEvents(
+        @Valid @RequestBody MockPortfolioOrderEventsRequest request
+    ) {
+        return Result.success(portfolios.portfolioOrderEvents(request.portfolioBizId(), request.limit()).stream()
+            .map(PortfolioOrderEventResponse::from)
             .toList());
     }
 

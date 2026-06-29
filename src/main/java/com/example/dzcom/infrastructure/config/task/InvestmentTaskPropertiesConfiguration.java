@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Configuration;
 
 /** 投资任务配置属性注册。 */
 @Configuration
-@EnableConfigurationProperties(InvestmentTaskProperties.class)
+@EnableConfigurationProperties({
+    InvestmentTaskProperties.class
+})
 public class InvestmentTaskPropertiesConfiguration {
 }

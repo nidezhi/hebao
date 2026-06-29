@@ -22,6 +22,12 @@ public record AiPromptVariableResponse(
     boolean required,
     @Schema(description = "变量说明")
     String description,
+    @Schema(description = "预览输入类型：text/textarea/json")
+    String previewValueType,
+    @Schema(description = "预览默认值")
+    String previewDefaultValue,
+    @Schema(description = "预览示例值")
+    String previewExampleValue,
     @Schema(description = "创建时间")
     LocalDateTime createdAt
 ) {
@@ -34,6 +40,9 @@ public record AiPromptVariableResponse(
             .sourcePath(view.sourcePath())
             .required(view.required())
             .description(view.description())
+            .previewValueType(view.previewValueType())
+            .previewDefaultValue(view.previewDefaultValue())
+            .previewExampleValue(view.previewExampleValue())
             .createdAt(view.createdAt())
             .build();
     }

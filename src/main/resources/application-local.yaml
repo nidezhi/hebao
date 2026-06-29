@@ -342,11 +342,7 @@ investment:
         enabled: ${AUTO_INVESTMENT_CLOSED_LOOP_ENABLED:false}
         zone: Asia/Shanghai
         parameters:
-          automationLevel: FULL_MOCK
           marketScope: CN_MAINLAND
-          mockUserBizId: ${AUTO_INVESTMENT_MOCK_USER_BIZ_ID:21000000-0000-0000-0000-000000000002}
-          mockPortfolioName: 全自动闭环模拟组合
-          initialCash: "100000"
           minQualityScore: "0.45"
           allowAutoMockTrade: "true"
           allowPromptCandidate: "true"

@@ -15,6 +15,7 @@ import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.ai.AiModelApplicationService;
 import com.example.dzcom.application.service.ai.InvestmentClosedLoopApplicationService;
+import com.example.dzcom.application.service.system.SystemConfigReader;
 import com.example.dzcom.domain.model.ai.AiModel;
 import com.example.dzcom.domain.model.ai.AiModelSkillBinding;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
@@ -159,6 +160,46 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             .anyMatch(step -> "REPORT_GENERATION".equals(step.stepCode()) && "SKIPPED".equals(step.stepStatus())));
     }
 
+    /** Prompt 候选节点应写入可被前端追溯到 Prompt 配置页的字段。 */
+    @Test
+    void shouldPersistPromptTraceFieldsWhenPromptCandidateRuns() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(report("report-pass", new BigDecimal("0.80"), true));
+
+        fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-prompt-candidate")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.ofEntries(
+                    Map.entry("automationLevel", "FULL_MOCK"),
+                    Map.entry("mockUserBizId", "user-1"),
+                    Map.entry("minQualityScore", "0.45"),
+                    Map.entry("dataTaskCodes", "data-task"),
+                    Map.entry("skipReportTask", "true"),
+                    Map.entry("promptTaskCode", "prompt-task"),
+                    Map.entry("promptCode", "investment-plan-from-report"),
+                    Map.entry("promptVersion", "auto-v1"),
+                    Map.entry("promptScenario", "INVESTMENT_PLAN"),
+                    Map.entry("requireStructuredCoreData", "false"),
+                    Map.entry("allowAutoMockTrade", "true")
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        ClosedLoopStep promptStep = fixture.closedLoopStore.steps.stream()
+            .filter(step -> "PROMPT_CANDIDATE".equals(step.stepCode()))
+            .findFirst()
+            .orElseThrow();
+        assertEquals("SUCCEEDED", promptStep.stepStatus());
+        assertTrue(promptStep.outputSummary().contains("\"reportBizId\":\"report-pass\""));
+        assertTrue(promptStep.outputSummary().contains("\"promptCode\":\"investment-plan-from-report\""));
+        assertTrue(promptStep.outputSummary().contains("\"promptVersion\":\"auto-v1\""));
+        assertTrue(promptStep.outputSummary().contains("\"scenario\":\"INVESTMENT_PLAN\""));
+        assertEquals("investment-plan-from-report", fixture.promptTaskHandler.lastParameters.get("promptCode"));
+    }
+
     /** 低成本验证只跑真实质量快照时，应能使用快照摘要中的产品、行情和资讯计数通过数据门禁。 */
     @Test
     void shouldUseRealQualitySnapshotCountsWhenOnlyQualityTaskRuns() {
@@ -193,6 +234,37 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
 
         assertTrue(summary.contains("reportBizId=report-pass"));
         assertEquals(1, fixture.portfolioService.ensureCalls);
+    }
+
+    /** 未在任务参数中指定 mockUserBizId 时，应使用可配置的自动闭环默认值。 */
+    @Test
+    void shouldUseConfiguredMockUserWhenTaskParameterIsMissing() {
+        Fixture fixture = new Fixture();
+        fixture.systemConfigs.putString("mockUserBizId", "configured-auto-user");
+        fixture.systemConfigs.putString("mockPortfolioName", "配置化闭环组合");
+        fixture.systemConfigs.putDecimal("initialCash", new BigDecimal("200000"));
+        fixture.reports.items.add(report("report-pass", new BigDecimal("0.80"), true));
+
+        fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-config-default")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals("configured-auto-user", fixture.portfolioService.lastUserBizId);
+        assertEquals("配置化闭环组合", fixture.portfolioService.lastPortfolioName);
+        assertEquals(0, new BigDecimal("200000").compareTo(fixture.portfolioService.lastInitialCash));
     }
 
     /** 质量门禁阻断应作为任务 BLOCKED 记录，不应被审计为系统失败。 */
@@ -333,17 +405,23 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private final MemoryReportStore reports = new MemoryReportStore();
         private final MemoryAiModelStore modelStore = new MemoryAiModelStore();
         private final CountingPortfolioService portfolioService = new CountingPortfolioService();
+        private final MemorySystemConfigReader systemConfigs = new MemorySystemConfigReader();
+        private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig =
+            new AutoInvestmentClosedLoopConfigService(systemConfigs);
         private final FakeInvestmentClosedLoopService closedLoopService = new FakeInvestmentClosedLoopService();
         private final SuccessfulTaskHandler dataTaskHandler = new SuccessfulTaskHandler("DATA_TASK");
         private final SuccessfulTaskHandler reportTaskHandler = new SuccessfulTaskHandler("REPORT_TASK");
+        private final SuccessfulTaskHandler promptTaskHandler = new SuccessfulTaskHandler("PROMPT_TASK");
         private final List<InvestmentTaskHandler> taskHandlers = new ArrayList<>();
         private final AutoInvestmentClosedLoopOrchestrationTaskHandler handler;
 
         private Fixture() {
             definitions.save(definition("data-task", "DATA_TASK"));
             definitions.save(definition("report-task", "REPORT_TASK"));
+            definitions.save(definition("prompt-task", "PROMPT_TASK"));
             taskHandlers.add(dataTaskHandler);
             taskHandlers.add(reportTaskHandler);
+            taskHandlers.add(promptTaskHandler);
             InvestmentTaskExecutionService executionService = new InvestmentTaskExecutionService(
                 taskHandlers,
                 executions,
@@ -356,6 +434,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             handler = new AutoInvestmentClosedLoopOrchestrationTaskHandler(
                 definitions,
                 new FixedObjectProvider<>(executionService),
+                autoInvestmentConfig,
                 closedLoops,
                 reports,
                 portfolioService,
@@ -387,6 +466,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
     private static final class SuccessfulTaskHandler implements InvestmentTaskHandler {
         private final String taskType;
         private final String summary;
+        private Map<String, String> lastParameters = Map.of();
         private int calls;
 
         private SuccessfulTaskHandler(String taskType) {
@@ -406,6 +486,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         @Override
         public String execute(InvestmentTaskEvent event) {
             calls++;
+            lastParameters = event.parameters() == null ? Map.of() : event.parameters();
             return summary;
         }
     }
@@ -476,15 +557,22 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
     private static final class CountingPortfolioService extends com.example.dzcom.application.service.portfolio.MockPortfolioApplicationService {
         private int ensureCalls;
         private String lastReportBizId;
+        private String lastUserBizId;
+        private String lastPortfolioName;
+        private BigDecimal lastInitialCash;
 
         private CountingPortfolioService() {
-            super(null, null, null, null, null, null, null, null, null, null, null,
+            super(new AutoInvestmentClosedLoopConfigService(new MemorySystemConfigReader()),
+                null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null);
         }
 
         @Override
         public MockPortfolioView ensureAutomationPortfolio(String userBizId, String portfolioName, BigDecimal initialCash) {
             ensureCalls++;
+            lastUserBizId = userBizId;
+            lastPortfolioName = portfolioName;
+            lastInitialCash = initialCash;
             return portfolio(userBizId);
         }
 
@@ -516,6 +604,30 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .createdAt(NOW)
                 .updatedAt(NOW)
                 .build();
+        }
+    }
+
+    /** 内存系统配置读取器。 */
+    private static final class MemorySystemConfigReader implements SystemConfigReader {
+        private final Map<String, String> stringValues = new LinkedHashMap<>();
+        private final Map<String, BigDecimal> decimalValues = new LinkedHashMap<>();
+
+        private void putString(String key, String value) {
+            stringValues.put("AUTO_INVESTMENT_CLOSED_LOOP:" + key, value);
+        }
+
+        private void putDecimal(String key, BigDecimal value) {
+            decimalValues.put("AUTO_INVESTMENT_CLOSED_LOOP:" + key, value);
+        }
+
+        @Override
+        public Optional<String> stringValue(String configGroup, String configKey) {
+            return Optional.ofNullable(stringValues.get(configGroup + ":" + configKey));
+        }
+
+        @Override
+        public Optional<BigDecimal> decimalValue(String configGroup, String configKey) {
+            return Optional.ofNullable(decimalValues.get(configGroup + ":" + configKey));
         }
     }
 
