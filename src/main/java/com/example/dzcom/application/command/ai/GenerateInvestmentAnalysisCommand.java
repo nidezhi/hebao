@@ -31,6 +31,8 @@ public record GenerateInvestmentAnalysisCommand(
     Integer lookbackDays,
     @Schema(description = "模拟收益使用的初始资金；空值默认 100000",
         example = "100000")
-    BigDecimal initialCapital
+    BigDecimal initialCapital,
+    @Schema(description = "可选 Mock 组合上下文 JSON，包含现金、估值、持仓和运行来源")
+    String portfolioContext
 ) {
 }

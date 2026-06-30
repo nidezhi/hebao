@@ -6,11 +6,14 @@ import com.example.dzcom.application.common.service.IdGenerator;
 import com.example.dzcom.application.command.ai.GenerateBacktestFromPortfolioCommand;
 import com.example.dzcom.application.command.ai.SaveInvestmentFeedbackCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockRebalanceCommand;
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.dto.ai.BacktestResultView;
 import com.example.dzcom.application.dto.ai.InvestmentFeedbackView;
 import com.example.dzcom.application.dto.portfolio.MockOrderExecutionView;
 import com.example.dzcom.application.dto.portfolio.MockOrderView;
 import com.example.dzcom.application.dto.portfolio.MockPortfolioView;
+import com.example.dzcom.application.dto.portfolio.MockRebalanceExecutionView;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.ai.AiModelApplicationService;
@@ -36,6 +39,7 @@ import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionSearchCrit
 import com.example.dzcom.domain.repository.task.ScheduledTaskExecutionStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -80,7 +84,8 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .triggeredAt(NOW)
                 .build()));
 
-        assertEquals(0, fixture.portfolioService.ensureCalls);
+        assertEquals(0, fixture.portfolioService.buyFromReportCalls);
+        assertEquals(0, fixture.portfolioService.rebalanceCalls);
         assertEquals("BLOCKED", fixture.closedLoopStore.runs.get(fixture.closedLoopStore.runs.size() - 1).runStatus());
         assertTrue(fixture.closedLoopStore.steps.stream()
             .anyMatch(step -> "QUALITY_GATE".equals(step.stepCode()) && "BLOCKED".equals(step.stepStatus())));
@@ -112,8 +117,9 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .build());
 
         assertTrue(summary.contains("reportBizId=report-pass"));
-        assertEquals(1, fixture.portfolioService.ensureCalls);
+        assertEquals(1, fixture.portfolioService.buyFromReportCalls);
         assertEquals("report-pass", fixture.portfolioService.lastReportBizId);
+        assertTrue(fixture.reportTaskHandler.lastParameters.get("portfolioContext").contains("\"portfolioBizId\""));
         assertEquals(1, fixture.closedLoopService.backtestCalls);
         assertEquals(1, fixture.closedLoopService.feedbackCalls);
         assertTrue(fixture.closedLoopStore.steps.stream()
@@ -126,6 +132,115 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             .anyMatch(step -> "REAL_TRADE_GUARD".equals(step.stepCode()) && "SKIPPED".equals(step.stepStatus())));
         assertTrue(fixture.modelStore.items.values().stream()
             .anyMatch(model -> model.modelVersion().startsWith("candidate-") && "ACTIVE".equals(model.status())));
+    }
+
+    /** 报告给出目标权重时，自动闭环应按组合上下文执行再平衡而不是固定买入。 */
+    @Test
+    void shouldRebalanceWhenReportProvidesTargetWeights() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(reportWithPlan("report-rebalance", new BigDecimal("0.80"), true, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"REBALANCE","targetWeights":[{"productBizId":"product-a","targetWeight":0.35}]}
+            """));
+
+        fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-rebalance")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals(1, fixture.portfolioService.rebalanceCalls);
+        assertEquals(0, fixture.portfolioService.buyFromReportCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_TRADE".equals(step.stepCode())
+                && step.outputSummary().contains("\"executionMode\":\"REBALANCE\"")));
+    }
+
+    /** 买入现金不足应记录为 Mock 决策阻断，不应落入 UNEXPECTED_FAILURE。 */
+    @Test
+    void shouldBlockMockTradeGracefullyWhenBuyPlanHasNoCash() {
+        Fixture fixture = new Fixture();
+        fixture.portfolioService.failBuyFromReport = true;
+        fixture.reports.items.add(reportWithPlan("report-buy", new BigDecimal("0.80"), true, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","referenceAllocationAmount":1000000}
+            """));
+
+        assertThrows(RuntimeException.class, () -> fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-no-cash")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build()));
+
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_TRADE".equals(step.stepCode())
+                && "BLOCKED".equals(step.stepStatus())
+                && step.failureReason().contains("Mock 计划无法执行")));
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .noneMatch(step -> "UNEXPECTED_FAILURE".equals(step.stepCode())));
+    }
+
+    /** 报告明确建议持有时，自动闭环应跳过下单但继续沉淀估值和反馈。 */
+    @Test
+    void shouldSkipOrderWhenReportSuggestsHold() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(reportWithPlan("report-hold", new BigDecimal("0.80"), true, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"HOLD","decisionReason":"现金不足，等待更好机会"}
+            """));
+
+        String summary = fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-hold")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertTrue(summary.contains("reportBizId=report-hold"));
+        assertEquals(0, fixture.portfolioService.buyFromReportCalls);
+        assertEquals(0, fixture.portfolioService.rebalanceCalls);
+        assertEquals(1, fixture.closedLoopService.backtestCalls);
+        assertEquals(1, fixture.closedLoopService.feedbackCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_TRADE_NOOP".equals(step.stepCode())
+                && "SKIPPED".equals(step.stepStatus())
+                && step.failureReason().contains("HOLD")));
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_TRADE".equals(step.stepCode())
+                && step.outputSummary() != null
+                && step.outputSummary().contains("\"executionMode\":\"HOLD\"")));
     }
 
     /** 已有合格报告时可跳过报告生成，避免调试后半段闭环时重复消耗远端模型。 */
@@ -155,7 +270,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
 
         assertTrue(summary.contains("reportBizId=report-pass"));
         assertEquals(0, fixture.reportTaskHandler.calls);
-        assertEquals(1, fixture.portfolioService.ensureCalls);
+        assertEquals(1, fixture.portfolioService.buyFromReportCalls);
         assertTrue(fixture.closedLoopStore.steps.stream()
             .anyMatch(step -> "REPORT_GENERATION".equals(step.stepCode()) && "SKIPPED".equals(step.stepStatus())));
     }
@@ -233,7 +348,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .build());
 
         assertTrue(summary.contains("reportBizId=report-pass"));
-        assertEquals(1, fixture.portfolioService.ensureCalls);
+        assertEquals(1, fixture.portfolioService.buyFromReportCalls);
     }
 
     /** 未在任务参数中指定 mockUserBizId 时，应使用可配置的自动闭环默认值。 */
@@ -267,6 +382,44 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         assertEquals(0, new BigDecimal("200000").compareTo(fixture.portfolioService.lastInitialCash));
     }
 
+    /** 配置了具体 Mock 组合时，应优先使用该组合而不是按用户和名称创建资金池。 */
+    @Test
+    void shouldUseConfiguredMockPortfolioWhenPresent() {
+        Fixture fixture = new Fixture();
+        fixture.systemConfigs.putString("mockUserBizId", "configured-auto-user");
+        fixture.systemConfigs.putString("mockPortfolioBizId", "configured-portfolio");
+        fixture.portfolioService.configuredPortfolio = MockPortfolioView.builder()
+            .bizId("configured-portfolio")
+            .ownerUserBizId("portfolio-owner")
+            .portfolioName("策略 A 专用资金池")
+            .status(1)
+            .createdAt(NOW)
+            .updatedAt(NOW)
+            .build();
+        fixture.reports.items.add(report("report-pass", new BigDecimal("0.80"), true));
+
+        fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-config-portfolio")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals(0, fixture.portfolioService.ensureCalls);
+        assertEquals("configured-portfolio", fixture.portfolioService.lastPortfolioBizId);
+        assertTrue(fixture.operatorProvider.runAsUserBizIds.contains("portfolio-owner"));
+    }
+
     /** 质量门禁阻断应作为任务 BLOCKED 记录，不应被审计为系统失败。 */
     @Test
     void shouldPersistBlockedExecutionWhenClosedLoopGateBlocks() {
@@ -275,6 +428,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             List.of(fixture.handler),
             fixture.executions,
             Optional.of(fixture.definitions),
+            Optional.empty(),
             fixture.ids,
             () -> NOW
         );
@@ -322,6 +476,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             List.of(expensiveHandler),
             fixture.executions,
             Optional.of(fixture.definitions),
+            Optional.empty(),
             fixture.ids,
             () -> NOW
         );
@@ -361,6 +516,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             List.of(expensiveHandler),
             fixture.executions,
             Optional.of(fixture.definitions),
+            Optional.empty(),
             fixture.ids,
             () -> NOW
         );
@@ -380,6 +536,15 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
     }
 
     private static InvestmentAnalysisReport report(String bizId, BigDecimal qualityScore, boolean gatePassed) {
+        return reportWithPlan(bizId, qualityScore, gatePassed, "{\"planType\":\"REFERENCE_ALLOCATION\"}");
+    }
+
+    private static InvestmentAnalysisReport reportWithPlan(
+        String bizId,
+        BigDecimal qualityScore,
+        boolean gatePassed,
+        String investmentPlan
+    ) {
         return InvestmentAnalysisReport.builder()
             .bizId(bizId)
             .requestId("request-" + bizId)
@@ -390,7 +555,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             .confidenceLevel("MEDIUM_CONFIDENCE")
             .dataQualityScore(qualityScore)
             .dataQualityGate("{\"passed\":" + gatePassed + "}")
-            .investmentPlan("{\"planType\":\"REFERENCE_ALLOCATION\"}")
+            .investmentPlan(investmentPlan)
             .generatedAt(NOW)
             .createdAt(NOW)
             .build();
@@ -413,6 +578,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private final SuccessfulTaskHandler reportTaskHandler = new SuccessfulTaskHandler("REPORT_TASK");
         private final SuccessfulTaskHandler promptTaskHandler = new SuccessfulTaskHandler("PROMPT_TASK");
         private final List<InvestmentTaskHandler> taskHandlers = new ArrayList<>();
+        private final PassThroughOperatorProvider operatorProvider = new PassThroughOperatorProvider();
         private final AutoInvestmentClosedLoopOrchestrationTaskHandler handler;
 
         private Fixture() {
@@ -426,6 +592,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 taskHandlers,
                 executions,
                 Optional.of(definitions),
+                Optional.empty(),
                 ids,
                 () -> NOW
             );
@@ -440,7 +607,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 portfolioService,
                 closedLoopService,
                 new AiModelApplicationService(modelStore, new MemoryAiModelSkillBindingStore(), ids, () -> NOW),
-                new PassThroughOperatorProvider(),
+                operatorProvider,
                 ids,
                 () -> NOW
             );
@@ -542,6 +709,8 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
 
     /** 透传操作者上下文。 */
     private static final class PassThroughOperatorProvider implements CurrentOperatorProvider {
+        private final List<String> runAsUserBizIds = new ArrayList<>();
+
         @Override
         public CurrentOperator required() {
             return new CurrentOperator("user-1", "test", java.util.Set.of("USER"), java.util.Set.of());
@@ -549,6 +718,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
 
         @Override
         public <T> T callAs(CurrentOperator operator, java.util.function.Supplier<T> action) {
+            runAsUserBizIds.add(operator.userBizId());
             return action.get();
         }
     }
@@ -558,8 +728,13 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private int ensureCalls;
         private String lastReportBizId;
         private String lastUserBizId;
+        private String lastPortfolioBizId;
         private String lastPortfolioName;
         private BigDecimal lastInitialCash;
+        private MockPortfolioView configuredPortfolio;
+        private int buyFromReportCalls;
+        private int rebalanceCalls;
+        private boolean failBuyFromReport;
 
         private CountingPortfolioService() {
             super(new AutoInvestmentClosedLoopConfigService(new MemorySystemConfigReader()),
@@ -577,9 +752,22 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         }
 
         @Override
+        public java.util.Optional<MockPortfolioView> configuredAutomationPortfolio(String portfolioBizId) {
+            if (configuredPortfolio == null || portfolioBizId == null || portfolioBizId.isBlank()) {
+                return java.util.Optional.empty();
+            }
+            lastPortfolioBizId = portfolioBizId;
+            return java.util.Optional.of(configuredPortfolio);
+        }
+
+        @Override
         public MockOrderExecutionView buyFromReport(ExecuteMockPlanFromReportCommand command) {
+            buyFromReportCalls++;
             lastReportBizId = command.reportBizId();
-            MockPortfolioView portfolio = portfolio("user-1");
+            if (failBuyFromReport) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "模拟组合现金不足");
+            }
+            MockPortfolioView portfolio = configuredPortfolio == null ? portfolio("user-1") : configuredPortfolio;
             return MockOrderExecutionView.builder()
                 .portfolio(portfolio)
                 .order(MockOrderView.builder()
@@ -587,6 +775,24 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                     .portfolioBizId(portfolio.bizId())
                     .status("FILLED")
                     .build())
+                .build();
+        }
+
+        @Override
+        public MockRebalanceExecutionView rebalance(ExecuteMockRebalanceCommand command) {
+            rebalanceCalls++;
+            MockPortfolioView portfolio = configuredPortfolio == null ? portfolio("user-1") : configuredPortfolio;
+            MockOrderExecutionView execution = MockOrderExecutionView.builder()
+                .portfolio(portfolio)
+                .order(MockOrderView.builder()
+                    .bizId("rebalance-order-1")
+                    .portfolioBizId(portfolio.bizId())
+                    .status("FILLED")
+                    .build())
+                .build();
+            return MockRebalanceExecutionView.builder()
+                .executions(List.of(execution))
+                .portfolio(portfolio)
                 .build();
         }
 
@@ -600,6 +806,19 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .bizId("portfolio-1")
                 .ownerUserBizId(userBizId)
                 .portfolioName("全自动闭环模拟组合")
+                .baseCurrency("CNY")
+                .latestValuation(com.example.dzcom.application.dto.portfolio.PortfolioValuationView.builder()
+                    .baseCurrency("CNY")
+                    .totalAsset(new BigDecimal("100000"))
+                    .cashBalance(new BigDecimal("100000"))
+                    .positionValue(BigDecimal.ZERO)
+                    .totalCost(BigDecimal.ZERO)
+                    .unrealizedProfit(BigDecimal.ZERO)
+                    .realizedProfit(BigDecimal.ZERO)
+                    .totalReturnRate(BigDecimal.ZERO)
+                    .sourceCode("TEST")
+                    .build())
+                .positions(List.of())
                 .status(1)
                 .createdAt(NOW)
                 .updatedAt(NOW)

@@ -26,6 +26,7 @@ public class InvestmentTaskExecutionService {
     private final List<InvestmentTaskHandler> handlers;
     private final ScheduledTaskExecutionStore executions;
     private final Optional<InvestmentTaskDefinitionStore> definitions;
+    private final Optional<InvestmentTaskManagementService> taskManagementService;
     private final IdGenerator ids;
     private final ClockProvider clock;
 
@@ -143,14 +144,25 @@ public class InvestmentTaskExecutionService {
             && event.triggeredAt().isBefore(definition.updatedAt());
     }
 
-    /** 按当前任务定义重建事件，只保留事件ID、触发来源和触发时间用于审计。 */
+    /**
+     * 按当前任务定义重建事件，只保留事件ID、触发来源和触发时间用于审计。
+     *
+     * @param event 原始任务事件
+     * @param definition 当前任务定义
+     * @return 重建后的有效任务事件
+     * @author dz
+     * @date 2026-06-30
+     */
     private InvestmentTaskEvent rebuildFromDefinition(InvestmentTaskEvent event, InvestmentTaskDefinition definition) {
+        Map<String, String> parameters = taskManagementService
+            .map(service -> service.effectiveScheduledParameters(definition))
+            .orElseGet(() -> new LinkedHashMap<>(definition.parameters() == null ? Map.of() : definition.parameters()));
         return InvestmentTaskEvent.builder()
             .eventId(event.eventId())
             .taskCode(event.taskCode())
             .taskType(definition.taskType())
             .triggerSource(event.triggerSource())
-            .parameters(new LinkedHashMap<>(definition.parameters() == null ? Map.of() : definition.parameters()))
+            .parameters(parameters)
             .triggeredAt(event.triggeredAt())
             .build();
     }

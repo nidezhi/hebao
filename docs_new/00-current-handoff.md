@@ -61,31 +61,33 @@
 ### 当前完成状态
 
 - 统一协作机制已建立：共享文档以 `dzcom/docs_new` 为准，前端仓库不再保存 md 事实源；后续按 contract -> backend -> frontend -> smoke -> handoff 推进。
-- 首轮联调基线已完成：后端主闭环、前端主页面和真实数据基线均可支撑当前产品闭环；详细页面审计见 `23-frontend-page-audit-20260628.md`。
-- 近期关键闭环已完成：权限 catalog、Review Loop metadata、Prompt Lab 变量 schema、运行模型绑定、Simulation 订单事件、Product Risk 行情契约、Overview 闭环追溯、Prompt 候选产物、AI 模拟资金池、报告结构化展示。
-- 自动闭环默认项已迁移到 `aiw_system_config`，配置分组 `AUTO_INVESTMENT_CLOSED_LOOP`；前端 `/config-center/system-configs` 提供结构化配置页，用户和 Prompt 使用真实选择器。
+- 首轮联调基线已完成，后端主闭环、前端主页面和真实数据均可支撑当前产品闭环；详细页面审计见 `23-frontend-page-audit-20260628.md`，剩余问题看 `06-backend-gap-list.md`。
+- 自动闭环配置当前口径：系统默认项在 `AUTO_INVESTMENT_CLOSED_LOOP`，方案列表在 `AUTO_INVESTMENT_CLOSED_LOOP_PROFILE`，定时任务以 `scheduledConfigProfileCode` 为权威方案；前端入口为 `/config-center/system-configs` 和 `/config-center/tasks`。
+- 自动闭环方案已支持结构化高级配置：类型、风险、运行模式、数据任务、质量门禁、安全阀、Mock、Prompt、回测；后端兼容嵌套 JSON 并在运行中沉淀 `PROFILE_SNAPSHOT`。
+- 自动闭环方案下拉空白问题已修复：后端在方案种子缺失时对 `default-auto-mock` 提供只读兜底，执行侧同样可展开默认方案；前端系统配置页和任务触发弹窗会合并真实方案与当前默认方案，方案列表可独立筛选查看。
+- 自动闭环方案新增/编辑边界已修复：系统配置页点“新增方案”不再默认带出 `default-auto-mock`，新增模式下若方案编码已存在会提示从列表编辑，避免误覆盖默认方案。
+- 系统配置页信息架构已优化：页面改为左侧“配置树”父子导航，自动投资闭环下挂默认配置、生效概览、配置项列表、配置方案；右侧只展示当前节点内容，避免默认配置与列表/方案列表上下堆叠混乱。
+- 自动闭环定时任务已改为每天三次：`09:30、13:30、20:30`（Asia/Shanghai，cron=`0 30 9,13,20 * * *`）；默认 Mock 资金组合已重置为 10W CNY 现金、0 持仓、0 订单。
+- 自动闭环 Mock 执行已从“固定报告买入”升级为“组合上下文感知”：报告生成前会把 Mock 组合现金、估值、持仓和单笔上限传入模型上下文；执行时优先按 `investmentPlan.targetWeights` 再平衡，`HOLD/SKIP` 会记录无动作并继续估值/反馈，只有旧报告或明确 `BUY` 才按现金和上限收敛为单笔买入；现金不足会记录为 `MOCK_TRADE` 业务阻断，不再落入系统异常。
+- Overview 投资驾驶舱已升级为运行态 UI：指标区下方新增 LIVE RUNTIME 控制条，默认每 5 秒静默刷新，支持暂停/立即刷新；刷新时保留当前选中闭环实例，避免运行时间线跳回最新实例。
+- 本轮页面反馈已收口：Mock 组合支持删除但保护自动化 AI 资金池；Simulation 资产曲线空数据会明确提示估值历史缺失；Report Studio 左侧列表可滚动，新增 Mock 闭环上下文提醒，并展示真实 `promptSnapshot/chatSnapshot`；Overview 节点抽屉展示模型输入输出、Mock 动作、订单数、原因和组合结果等证据。
+- 报告 `chat_snapshot` 本地库错位已修复：V47 迁移改为幂等补列，当前 `dz_database.aiw_investment_analysis_report` 已存在 `chat_snapshot JSON`，自动报告 insert 不应再因 Unknown column 阻断。
 - 开发铁律已补充：Mapper 层非必要不得新增手写 SQL/XML SQL，优先 MyBatis-Plus `BaseMapper`、Service、LambdaQueryWrapper、分页和规范代码生成；见 `03-backend-laws.md`。
 - Handoff 自身瘦身规则已生效：本文只做默认入口和当前状态索引，超过阈值先压缩再追加；详细规则见 `99-context-slimming-rules.md`。
 
-### 首轮联调基线（2026-06-28）
-
-- 后端业务主链路已具备：产品/行情/数据源治理/投资任务/报告/Prompt/Skill/模型治理/模拟组合/模拟交易/回测反馈/风控审计/闭环运行。
-- 前端主页面已覆盖：总览、数据质量、数据采集、产品风险、报告工作台、Prompt Lab、模拟交易、复盘闭环、风控审计、配置中心。
-- 真实数据基线：报告 `17` 条且均成功；产品 `8` 个；行情 `80` 条；新闻 `10` 条；数据质量快照 `47` 条。
-- 最新真实数据质量门禁：`REAL_DATA_GATE` 质量分 `0.8750`，`reportAllowed=true`。
-- 运行模型基线：`openai-compatible-analysis@default-v1`，`mockEnabled=false`，远程模型 `gpt-5.5`，LLM discovery 任务保持禁用。
-- 已发现并修正：启用的 `aiw_ai_model_skill_binding` 曾指向旧 `mock-v1`；V38 应用后 `drift_count=0`。
-- 已发现并修正：前端产品工作台依赖产品行情/质量摘要字段，后端 `ProductResponse` 原先缺失；现列表和详情均返回真实最新 1D 行情与画像质量分。
-- 已发现并修正：报告工作台曾手填 `themeCode`；现后端提供真实主题选择器 `POST /api/investment/tasks/theme-options`，前端生成报告改为可搜索下拉。
-- 前端实现基线：核心路由和 API client/type/adapter 已存在；本轮未调整 UI。
-- 剩余 gap 已写入 `06-backend-gap-list.md`，后续按具体功能逐项处理，不在对话中保留完整过程上下文。
-
-### 本轮验证结果
+### 最近验证结果
 
 - 后端最近全量基线：`./mvnw -q test` 通过。
 - 前端最近全量基线：`node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；`node node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
-- 核心数据治理基线：NEWS 质量、数据源健康覆盖、风控样本已通过 V40 治理；复查脚本为 `scripts/local/audit-core-data-gaps.sql`。
-- 自动闭环配置基线：`V41__seed_auto_investment_closed_loop_system_config.sql` 已写入默认配置；后端目标测试和全量测试通过。
+- 自动闭环配置/方案最近目标验证：`./mvnw -q -Dtest=InvestmentTaskManagementServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,MockPortfolioApplicationServiceTest,SystemConfigApplicationServiceTest test` 通过；前端 `vue-tsc -b`、`vite build` 通过。
+- 自动闭环方案下拉修复验证：`./mvnw -q -Dtest=SystemConfigApplicationServiceTest,InvestmentTaskManagementServiceTest test` 通过；`node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；`node node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
+- 自动闭环方案新增弹窗修复验证：`/Users/daniel/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；同 Node 路径执行 `node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
+- 系统配置页父子导航优化验证：`/Users/daniel/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；同 Node 路径执行 `node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning；本地浏览器视觉冒烟确认配置树和四个子节点可见。
+- 自动闭环三次定时与默认资金池重置验证：`./mvnw -q -DskipTests compile` 通过；`./mvnw -q -Dtest=InvestmentTaskManagementServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；当前库复查 cron 为 `0 30 9,13,20 * * *`，默认组合 `0e826d40-d827-46c9-b08f-5a9576b76616` 为 100000 CNY 现金、0 持仓、0 订单。
+- 自动闭环 Mock 组合上下文、调仓执行与 `HOLD` 无动作验证：`./mvnw -q -Dtest=AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,AutoInvestmentReportGenerationTaskHandlerTest,MockPortfolioApplicationServiceTest test` 通过；最近全量 `./mvnw -q test` 仍以前次基线为准。
+- Overview 运行态 UI 验证：`node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；`node node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning；本地 `/overview` 冒烟确认 LIVE RUNTIME、5 秒倒计时、暂停/立即刷新控件可见。
+- 本轮 Mock/报告/复盘/Overview 页面反馈验证：`./mvnw -q -Dtest=MockOpenAiCompatibleInvestmentAnalysisProviderTest,MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；`./mvnw -q -DskipTests compile` 通过；前端 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning。
+- 报告 `chat_snapshot` 库表修复验证：执行 `V47__add_report_chat_snapshot.sql` 到当前 `dz_database` 成功；`information_schema.columns` 确认 `chat_snapshot/json` 存在；`./mvnw -q -DskipTests compile` 通过。
 - 真实浏览器/API 冒烟依赖用户在 IDEA 启动后端服务；未启动服务时不把路由/API 冒烟写成通过。
 
 ### 下一步默认动作
@@ -206,3 +208,15 @@
 ### 2026-06-29 自动闭环通用配置表
 
 响应“YAML 太难维护”的要求，自动闭环默认配置不再放在 `application-local.yaml` / `application-dev.yaml`。后端复用既有通用表 `aiw_system_config`，新增系统配置读模型、仓储和读取服务，配置分组为 `AUTO_INVESTMENT_CLOSED_LOOP`；任务参数仍可临时覆盖，系统级维护以表数据为准，代码常量只作为兜底防崩。`V41__seed_auto_investment_closed_loop_system_config.sql` 种子写入默认配置，并从自动闭环任务定义 `parameters` 中移除默认型字段。验证：目标测试和后端全量测试通过。
+
+### 2026-06-29 自动闭环配置方案
+
+完成“配置、Mock、闭环流程”第一阶段边界拆分。后端在 `aiw_system_config` 增加 `AUTO_INVESTMENT_CLOSED_LOOP_PROFILE` 方案分组，任务触发时按“任务定义参数 -> 方案参数 -> 手动参数”合并，并把方案快照写入运行事件；前端 `/config-center/system-configs` 增加方案列表/结构化编辑，`/config-center/tasks` 触发自动闭环时必须选择方案。验证：后端目标测试、前端 type-check/build 通过。
+
+### 2026-06-29 自动闭环定时默认方案
+
+补齐定时任务口径：手工触发可选方案，Cron/SCHEDULE 触发固定读取 `AUTO_INVESTMENT_CLOSED_LOOP.scheduledConfigProfileCode` 作为最权威方案，并把方案快照写入事件；前端系统配置页新增“定时任务权威方案”下拉，任务页手工触发只提交所选 `configProfileCode`。新增 `V44__add_scheduled_auto_closed_loop_profile_config.sql`，验证：后端目标测试、前端 type-check/build 通过。
+
+### 2026-06-30 自动闭环方案高级化
+
+方案从扁平参数升级为结构化策略：基础、执行、门禁、Mock、安全阀、Prompt/回测分组编辑；后端配置服务兼容旧扁平 JSON 和新嵌套 JSON，并在闭环运行中新增 `PROFILE_SNAPSHOT` 步骤保存方案证据。新增 `V45__upgrade_auto_closed_loop_default_profile.sql`，验证：后端目标测试、前端 type-check/build 通过。

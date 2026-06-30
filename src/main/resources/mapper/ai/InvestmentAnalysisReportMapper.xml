@@ -21,12 +21,12 @@
         insert into aiw_investment_analysis_report
         (biz_id, request_id, provider_code, model_code, market_scope, theme_code, theme_name, status,
          confidence_level, data_quality_score, data_quality_gate, investment_summary, trend,
-         investment_plan, simulated_return, chart_payload, prompt_snapshot, failure_reason,
+         investment_plan, simulated_return, chart_payload, prompt_snapshot, chat_snapshot, failure_reason,
          generated_at, created_at)
         values
         (#{bizId}, #{requestId}, #{providerCode}, #{modelCode}, #{marketScope}, #{themeCode}, #{themeName},
          #{status}, #{confidenceLevel}, #{dataQualityScore}, #{dataQualityGate}, #{investmentSummary},
-         #{trend}, #{investmentPlan}, #{simulatedReturn}, #{chartPayload}, #{promptSnapshot},
+         #{trend}, #{investmentPlan}, #{simulatedReturn}, #{chartPayload}, #{promptSnapshot}, #{chatSnapshot},
          #{failureReason}, #{generatedAt}, #{createdAt})
     </insert>
     <select id="selectByBizId"

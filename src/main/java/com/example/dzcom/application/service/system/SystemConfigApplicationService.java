@@ -20,8 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -31,6 +33,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class SystemConfigApplicationService implements SystemConfigReader {
     private static final String DEFAULT_ENVIRONMENT = "DEFAULT";
+    private static final String AUTO_CLOSED_LOOP_PROFILE_GROUP = "AUTO_INVESTMENT_CLOSED_LOOP_PROFILE";
+    private static final String DEFAULT_AUTO_CLOSED_LOOP_PROFILE_KEY = "default-auto-mock";
     private static final Set<String> VALUE_TYPES = Set.of("STRING", "NUMBER", "BOOLEAN", "JSON");
     private static final Set<String> STATUSES = Set.of("ENABLED", "DISABLED");
     private static final Set<String> SORTS = Set.of(
@@ -79,12 +83,57 @@ public class SystemConfigApplicationService implements SystemConfigReader {
             query.safeSort(SORTS, "updatedAt"),
             "asc".equalsIgnoreCase(query.direction())
         ));
+        List<SystemConfig> items = withAutoClosedLoopProfileFallback(
+            trimToNull(configGroup) == null ? null : normalizeCode(configGroup, "配置分组不能为空"),
+            trimToNull(configEnvironment) == null ? null : normalizeEnvironment(configEnvironment),
+            trimToNull(status) == null ? null : normalizeStatus(status),
+            page.items());
+        long total = page.total() == 0 && !items.isEmpty() ? items.size() : page.total();
+        int totalPages = page.totalPages() == 0 && total > 0 ? 1 : page.totalPages();
         return PageResult.<SystemConfigView>builder()
-            .items(page.items().stream().map(this::toView).toList())
-            .total(page.total())
+            .items(items.stream().map(this::toView).toList())
+            .total(total)
             .page(page.page())
             .size(page.size())
-            .totalPages(page.totalPages())
+            .totalPages(totalPages)
+            .build();
+    }
+
+    /**
+     * 方案种子未落库时返回默认闭环方案，保证前端选择器仍能按权威默认方案继续运行。
+     */
+    private List<SystemConfig> withAutoClosedLoopProfileFallback(
+        String configGroup,
+        String configEnvironment,
+        String status,
+        List<SystemConfig> items
+    ) {
+        if (!AUTO_CLOSED_LOOP_PROFILE_GROUP.equals(configGroup)
+            || (configEnvironment != null && !DEFAULT_ENVIRONMENT.equals(configEnvironment))
+            || (status != null && !"ENABLED".equals(status))
+            || !items.isEmpty()) {
+            return items;
+        }
+        return new ArrayList<>(List.of(defaultAutoClosedLoopProfile()));
+    }
+
+    /** 构造自动闭环默认方案的只读兜底视图，数据库配置存在时不会使用。 */
+    private SystemConfig defaultAutoClosedLoopProfile() {
+        LocalDateTime now = clock.now();
+        return SystemConfig.builder()
+            .bizId("41000000-0000-0000-0000-000000000010")
+            .configGroup(AUTO_CLOSED_LOOP_PROFILE_GROUP)
+            .configKey(DEFAULT_AUTO_CLOSED_LOOP_PROFILE_KEY)
+            .environment(DEFAULT_ENVIRONMENT)
+            .valueType("JSON")
+            .configValue("""
+                {"profileCode":"default-auto-mock","profileName":"默认 AI Mock 闭环方案","profileType":"SCHEDULED_BASELINE","riskLevel":"LOW","strategyNote":"默认定时闭环方案：采集、报告、候选、Mock交易、回测反馈全链路执行；真实交易保持关闭。","automationLevel":"FULL_MOCK","mockPortfolioBizId":"","mockUserBizId":"21000000-0000-0000-0000-000000000002","mockPortfolioName":"全自动闭环模拟组合","initialCash":"100000","promptCode":"investment-plan-from-report","promptVersion":"auto-v1","promptScenario":"INVESTMENT_PLAN","modelType":"INVESTMENT_ANALYSIS","execution":{"runMode":"FULL_PIPELINE","marketScope":"CN_MAINLAND","dataTaskCodes":["real-data-quality-snapshot"],"reportTaskCode":"auto-openai-investment-report-generation","promptTaskCode":"","skipReportTask":false,"allowPromptCandidate":true,"allowModelCandidate":true},"qualityGate":{"requireStructuredCoreData":false,"minQualityScore":"0.45","maxReportsForMock":"20"},"safety":{"allowAutoMockTrade":true,"allowAutoPromptActivation":true,"allowAutoModelActivation":true,"allowRealTrade":false,"maxSingleTradeAmount":"10000"},"backtest":{"benchmarkCode":"","valuationPointLimit":"100"}}
+                """.trim())
+            .description("自动投资闭环默认配置方案兜底；请优先通过数据库配置表维护正式方案。")
+            .status("ENABLED")
+            .version(0)
+            .createdAt(now)
+            .updatedAt(now)
             .build();
     }
 

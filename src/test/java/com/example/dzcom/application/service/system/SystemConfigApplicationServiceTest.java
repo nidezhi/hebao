@@ -99,6 +99,23 @@ class SystemConfigApplicationServiceTest {
         assertTrue(page.items().get(0).toString().contains("automationLevel"));
     }
 
+    @Test
+    void listAutoClosedLoopProfilesReturnsDefaultFallbackWhenDatabaseSeedMissing() {
+        InMemorySystemConfigStore store = new InMemorySystemConfigStore();
+        SystemConfigApplicationService service = new SystemConfigApplicationService(
+            store,
+            new FixedEnvironment(),
+            new FixedIdGenerator(),
+            () -> NOW
+        );
+
+        PageResult<?> page = service.list("AUTO_INVESTMENT_CLOSED_LOOP_PROFILE", null, "DEFAULT", "ENABLED",
+            new com.example.dzcom.application.common.page.PageQuery(1, 20, "configKey", "asc"));
+
+        assertEquals(1, page.total());
+        assertTrue(page.items().get(0).toString().contains("default-auto-mock"));
+    }
+
     private record FixedEnvironment(String... profiles) implements Environment {
         @Override
         public String[] getActiveProfiles() {

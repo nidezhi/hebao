@@ -50,6 +50,7 @@ public class InvestmentTaskManagementService {
 
     private final InvestmentTaskDefinitionStore definitions;
     private final InvestmentTaskTriggerPort triggerPort;
+    private final AutoInvestmentClosedLoopConfigService autoClosedLoopConfigs;
     private final ScheduledTaskExecutionStore executions;
     private final NewsArticleStore articles;
     private final NewsArticleRelationStore relations;
@@ -118,7 +119,11 @@ public class InvestmentTaskManagementService {
                                                String triggerSource) {
         InvestmentTaskDefinition definition = requiredDefinition(taskCode);
         LocalDateTime now = clock.now();
-        Map<String, String> parameters = new LinkedHashMap<>(definition.parameters());
+        Map<String, String> parameters = scheduledParameters(definition, triggerSource);
+        if (isAutoClosedLoop(definition)) {
+            String profileCode = resolveProfileCode(parameters, overrides, triggerSource);
+            parameters = autoClosedLoopConfigs.applyAutoClosedLoopProfile(parameters, profileCode);
+        }
         if (overrides != null) {
             parameters.putAll(overrides);
         }
@@ -138,6 +143,105 @@ public class InvestmentTaskManagementService {
             .triggerSource(event.triggerSource())
             .triggeredAt(event.triggeredAt())
             .build();
+    }
+
+    /**
+     * 判断任务定义是否为自动投资闭环总编排。
+     *
+     * @param definition 投资任务定义
+     * @return true 表示自动闭环总编排任务
+     * @author dz
+     * @date 2026-06-30
+     */
+    private boolean isAutoClosedLoop(InvestmentTaskDefinition definition) {
+        return "AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION".equals(definition.taskType());
+    }
+
+    /**
+     * 计算定时触发时最终生效的任务参数。
+     *
+     * @param definition 投资任务定义
+     * @return 已合并定时权威方案的参数
+     * @author dz
+     * @date 2026-06-30
+     */
+    public Map<String, String> effectiveScheduledParameters(InvestmentTaskDefinition definition) {
+        Map<String, String> parameters = scheduledParameters(definition, "SCHEDULE");
+        if (!isAutoClosedLoop(definition)) {
+            return parameters;
+        }
+        String profileCode = resolveProfileCode(parameters, null, "SCHEDULE");
+        return autoClosedLoopConfigs.applyAutoClosedLoopProfile(parameters, profileCode);
+    }
+
+    /**
+     * 构造调度触发基础参数。
+     *
+     * @param definition 投资任务定义
+     * @param triggerSource 触发来源
+     * @return 基础参数；定时闭环会写入权威方案编码
+     * @author dz
+     * @date 2026-06-30
+     */
+    private Map<String, String> scheduledParameters(InvestmentTaskDefinition definition, String triggerSource) {
+        Map<String, String> parameters = new LinkedHashMap<>(definition.parameters() == null ? Map.of() : definition.parameters());
+        if (isAutoClosedLoop(definition) && isScheduleTrigger(triggerSource)) {
+            parameters.put("configProfileCode", autoClosedLoopConfigs.scheduledConfigProfileCode());
+        }
+        return parameters;
+    }
+
+    /**
+     * 解析本次自动闭环应使用的配置方案编码。
+     *
+     * @param parameters 基础任务参数
+     * @param overrides 手工触发覆盖参数
+     * @param triggerSource 触发来源
+     * @return 配置方案编码；未选择时返回 null
+     * @author dz
+     * @date 2026-06-30
+     */
+    private String resolveProfileCode(Map<String, String> parameters, Map<String, String> overrides, String triggerSource) {
+        if (isScheduleTrigger(triggerSource)) {
+            return autoClosedLoopConfigs.scheduledConfigProfileCode();
+        }
+        String manualProfileCode = overrides == null ? null : textValue(overrides.get("configProfileCode"));
+        if (manualProfileCode != null) {
+            return manualProfileCode;
+        }
+        String configuredProfileCode = textValue(parameters.get("configProfileCode"));
+        if (configuredProfileCode != null) {
+            return configuredProfileCode;
+        }
+        return null;
+    }
+
+    /**
+     * 判断触发来源是否为定时调度。
+     *
+     * @param triggerSource 触发来源
+     * @return true 表示定时调度触发
+     * @author dz
+     * @date 2026-06-30
+     */
+    private boolean isScheduleTrigger(String triggerSource) {
+        return triggerSource != null && "SCHEDULE".equalsIgnoreCase(triggerSource);
+    }
+
+    /**
+     * 将任意值规整为空安全字符串。
+     *
+     * @param value 原始值
+     * @return 去空格字符串；空值返回 null
+     * @author dz
+     * @date 2026-06-30
+     */
+    private String textValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isBlank() ? null : text;
     }
 
     /** 分页查询任务执行记录。 */

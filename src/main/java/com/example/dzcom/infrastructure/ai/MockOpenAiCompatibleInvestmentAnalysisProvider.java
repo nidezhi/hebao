@@ -138,6 +138,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             .simulatedReturn(localReport.simulatedReturn())
             .chartPayload(localReport.chartPayload())
             .promptSnapshot(localReport.promptSnapshot())
+            .chatSnapshot(null)
             .failureReason("SKIPPED_REMOTE_LOW_DATA_QUALITY")
             .generatedAt(localReport.generatedAt())
             .createdAt(localReport.createdAt())
@@ -163,6 +164,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         long startedAt = System.nanoTime();
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
         String userPrompt = prompt(localReport, command);
+        Map<String, Object> payload = requestPayload(userPrompt, modelConfig);
         log.info(
             "投资分析模型远端调用开始: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, userPromptLength={}",
             localReport.requestId(),
@@ -184,7 +186,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
                 .timeout(Duration.ofSeconds(modelConfig.timeoutSeconds()))
                 .header("Authorization", "Bearer " + modelConfig.apiKey())
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(writeJson(requestPayload(userPrompt, modelConfig))))
+                .POST(HttpRequest.BodyPublishers.ofString(writeJson(payload)))
                 .build();
             HttpResponse<String> response = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(modelConfig.timeoutSeconds()))
@@ -217,7 +219,12 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
                 throw new BusinessException(HttpStatus.BAD_GATEWAY, failureMessage);
             }
             String content = extractContent(response.body());
-            InvestmentAnalysisReport report = mergeRemoteOutput(localReport, modelConfig, content);
+            InvestmentAnalysisReport report = mergeRemoteOutput(
+                localReport,
+                modelConfig,
+                content,
+                buildChatSnapshot(payload, content, endpoint, response.statusCode(), elapsedMs(startedAt))
+            );
             log.info(
                 "投资分析模型远端调用完成: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}, qualityScore={}, confidenceLevel={}",
                 localReport.requestId(),
@@ -353,9 +360,13 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             请基于以下本地规则报告生成结构化投资分析 JSON。
             必须输出字段：investmentSummary、trend、investmentPlan、simulatedReturn、chartPayload、promptSnapshot。
             每个字段必须是 JSON 对象；不得输出 Markdown；不得编造缺失数据。
+            如果 portfolioContext 不为空，investmentPlan 必须显式考虑当前 Mock 组合现金、总资产和持仓，
+            actionType 只能是 BUY/SELL/REBALANCE/HOLD/SKIP 之一；现金不足时不得强行 BUY，应输出 HOLD、SELL、REBALANCE 或 SKIP，并解释原因。
+            若建议调仓，请在 investmentPlan.targetWeights 输出数组，元素包含 productBizId 和 targetWeight，targetWeight 总和不得超过 1。
             marketScope=%s
             themeCode=%s
             lookbackDays=%s
+            portfolioContext=%s
             localDataQualityGate=%s
             localInvestmentSummary=%s
             localTrend=%s
@@ -366,6 +377,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             localReport.marketScope(),
             command.themeCode(),
             command.lookbackDays(),
+            command.portfolioContext(),
             localReport.dataQualityGate(),
             localReport.investmentSummary(),
             localReport.trend(),
@@ -381,6 +393,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
      * @param localReport 本地规则报告
      * @param modelConfig 模型配置
      * @param content 模型返回 JSON 文本
+     * @param chatSnapshot 脱敏后的模型对话快照
      * @return 可落库报告
      * @author dz
      * @date 2026-06-24
@@ -388,7 +401,8 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
     private InvestmentAnalysisReport mergeRemoteOutput(
         InvestmentAnalysisReport localReport,
         AiModelRuntimeConfig modelConfig,
-        String content
+        String content,
+        String chatSnapshot
     ) {
         JsonNode output = readModelOutputJson(content);
         return InvestmentAnalysisReport.builder()
@@ -409,10 +423,65 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             .simulatedReturn(requiredObject(output, "simulatedReturn"))
             .chartPayload(requiredObject(output, "chartPayload"))
             .promptSnapshot(requiredObject(output, "promptSnapshot"))
+            .chatSnapshot(chatSnapshot)
             .failureReason(null)
             .generatedAt(localReport.generatedAt())
             .createdAt(localReport.createdAt())
             .build();
+    }
+
+    /** 构建脱敏模型对话快照，供报告页展示真实输入输出证据。 */
+    private String buildChatSnapshot(
+        Map<String, Object> payload,
+        String responseContent,
+        String endpoint,
+        int httpStatus,
+        long durationMs
+    ) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("providerCode", PROVIDER_CODE);
+        snapshot.put("modelCode", String.valueOf(payload.getOrDefault("model", "")));
+        snapshot.put("endpointHost", endpointHost(endpoint));
+        snapshot.put("httpStatus", httpStatus);
+        snapshot.put("durationMs", durationMs);
+        snapshot.put("temperature", payload.get("temperature"));
+        snapshot.put("maxTokens", payload.get("max_tokens"));
+        snapshot.put("requestMessages", safeMessages(payload.get("messages")));
+        snapshot.put("responseMessage", safeMessage("assistant", responseContent));
+        return writeJson(snapshot);
+    }
+
+    /** 提取请求消息的角色和内容摘要，不返回完整长 Prompt 或任何密钥。 */
+    private List<Map<String, Object>> safeMessages(Object messages) {
+        if (!(messages instanceof List<?> items)) {
+            return List.of();
+        }
+        return items.stream()
+            .filter(Map.class::isInstance)
+            .map(Map.class::cast)
+            .map(message -> safeMessage(
+                String.valueOf(message.getOrDefault("role", "unknown")),
+                String.valueOf(message.getOrDefault("content", ""))
+            ))
+            .toList();
+    }
+
+    /** 构建单条消息摘要。 */
+    private Map<String, Object> safeMessage(String role, String content) {
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("role", role);
+        message.put("contentPreview", limit(content, 1200));
+        message.put("contentLength", textLength(content));
+        return message;
+    }
+
+    /** 从模型地址中提取主机名，避免在报告中长期保存完整 endpoint。 */
+    private String endpointHost(String endpoint) {
+        try {
+            return URI.create(endpoint).getHost();
+        } catch (Exception exception) {
+            return "UNKNOWN";
+        }
     }
 
     private String resolveChatCompletionsUrl(String baseUrl) {

@@ -44,6 +44,8 @@ public record InvestmentAnalysisReport(
     String chartPayload,
     @Schema(description = "脱敏后的分析输入快照 JSON")
     String promptSnapshot,
+    @Schema(description = "脱敏后的模型对话快照 JSON，包含请求消息摘要和响应摘要")
+    String chatSnapshot,
     @Schema(description = "失败原因摘要，成功时为空")
     String failureReason,
     @Schema(description = "报告生成时间，北京时间")

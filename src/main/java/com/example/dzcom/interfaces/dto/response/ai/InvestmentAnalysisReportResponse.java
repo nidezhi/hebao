@@ -88,6 +88,14 @@ public record InvestmentAnalysisReportResponse(
         news:array，新闻事件点，每项包含 time/title/sourceCode。
         前端可用 series 绘制收益、动量、热度折线图，用 news 叠加事件标记。
         """) String chartPayload,
+    @Schema(description = "脱敏后的分析输入快照 JSON 字符串") String promptSnapshot,
+    @Schema(description = """
+        脱敏后的模型对话快照 JSON 字符串。
+        providerCode/modelCode/remoteModel 说明模型来源；
+        requestMessages 数组包含 role/contentPreview/contentLength；
+        responseMessage 包含 role/contentPreview/contentLength；
+        仅用于前端展示报告生成证据，不包含 API Key 或 Authorization。
+        """) String chatSnapshot,
     @Schema(description = "失败原因摘要") String failureReason,
     @Schema(description = "生成时间") LocalDateTime generatedAt,
     @Schema(description = "创建时间") LocalDateTime createdAt
@@ -111,6 +119,8 @@ public record InvestmentAnalysisReportResponse(
             .investmentPlan(report.investmentPlan())
             .simulatedReturn(report.simulatedReturn())
             .chartPayload(report.chartPayload())
+            .promptSnapshot(report.promptSnapshot())
+            .chatSnapshot(report.chatSnapshot())
             .failureReason(report.failureReason())
             .generatedAt(report.generatedAt())
             .createdAt(report.createdAt())

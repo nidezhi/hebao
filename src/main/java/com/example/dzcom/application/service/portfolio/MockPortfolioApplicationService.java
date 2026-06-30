@@ -5,6 +5,7 @@ import com.example.dzcom.application.assembler.portfolio.MockOrderExecutionViewA
 import com.example.dzcom.application.assembler.portfolio.MockPortfolioViewAssembler;
 import com.example.dzcom.application.command.portfolio.CancelMockOrderCommand;
 import com.example.dzcom.application.command.portfolio.CreateMockPortfolioCommand;
+import com.example.dzcom.application.command.portfolio.DeleteMockPortfolioCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockBuyCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockRebalanceCommand;
@@ -155,6 +156,24 @@ public class MockPortfolioApplicationService {
             .build(), userBizId, "AUTO_CLOSED_LOOP");
     }
 
+    /** 按配置的组合 BizId 获取自动闭环模拟组合；为空时返回空。 */
+    @Transactional(readOnly = true)
+    public java.util.Optional<MockPortfolioView> configuredAutomationPortfolio(String portfolioBizId) {
+        if (portfolioBizId == null || portfolioBizId.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        Portfolio portfolio = portfolios.findByBizId(portfolioBizId)
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "自动闭环配置的模拟组合不存在"));
+        if (!PORTFOLIO_TYPE_SIMULATION.equals(portfolio.portfolioType())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "自动闭环配置的组合不是模拟组合");
+        }
+        return java.util.Optional.of(assembler.assembleDetail(
+            portfolio,
+            valuations.findLatestByPortfolioBizId(portfolio.bizId()),
+            positions.findByPortfolioBizId(portfolio.bizId())
+        ));
+    }
+
     /** 为指定用户创建模拟组合。 */
     private MockPortfolioView createForUser(CreateMockPortfolioCommand command, String ownerUserBizId, String createdBy) {
         String portfolioName = normalizeName(command.portfolioName());
@@ -237,14 +256,44 @@ public class MockPortfolioApplicationService {
         );
     }
 
+    /**
+     * 逻辑删除当前用户拥有的普通模拟组合。
+     *
+     * <p>自动闭环 AI 资金池是系统级运行证据，不允许通过用户页面删除。组合删除只关闭
+     * 组合入口，历史订单、估值和闭环证据继续保留，供审计追溯。</p>
+     *
+     * @param command 删除模拟组合命令
+     * @throws BusinessException 当组合不存在、越权或属于自动闭环资金池时抛出
+     * @author dz
+     * @date 2026-06-30
+     */
+    @Transactional
+    public void delete(DeleteMockPortfolioCommand command) {
+        CurrentOperator operator = currentOperator.required();
+        Portfolio portfolio = requiredOwnedSimulationPortfolio(command.portfolioBizId(), operator);
+        if (isAutomationPortfolio(portfolio)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "自动闭环AI资金池不能在页面删除，请在系统配置中切换权威资金池");
+        }
+        LocalDateTime now = clock.now();
+        portfolios.save(portfolio.toBuilder()
+            .status(0)
+            .version(portfolio.version() + 1)
+            .updatedAt(now)
+            .updatedBy(operator.userBizId())
+            .deleted(1)
+            .deletedAt(now)
+            .build());
+    }
+
     /** 查询或创建自动闭环 AI 模拟资金池，供前端只读追溯。 */
     @Transactional
     public MockPortfolioView automationPortfolio() {
-        return ensureAutomationPortfolio(
-            autoInvestmentConfig.mockUserBizId(),
-            autoInvestmentConfig.mockPortfolioName(),
-            autoInvestmentConfig.initialCash()
-        );
+        return configuredAutomationPortfolio(autoInvestmentConfig.mockPortfolioBizId())
+            .orElseGet(() -> ensureAutomationPortfolio(
+                autoInvestmentConfig.mockUserBizId(),
+                autoInvestmentConfig.mockPortfolioName(),
+                autoInvestmentConfig.initialCash()
+            ));
     }
 
     /**
@@ -517,15 +566,56 @@ public class MockPortfolioApplicationService {
                 Map.of("reportBizId", report.bizId()));
         }
         String productBizId = resolveReportProductBizId(report, command.productBizId());
+        Portfolio portfolio = requiredOwnedSimulationPortfolio(command.portfolioBizId(), operator);
+        Product product = requiredTradableProduct(productBizId);
+        BigDecimal executableAmount = executableBuyAmount(portfolio, product, amount, command.maxTradeAmount(), operator.userBizId());
         String idempotencyKey = command.idempotencyKey() == null || command.idempotencyKey().isBlank()
             ? "REPORT-" + report.bizId() + "-" + productBizId
             : command.idempotencyKey();
         return buy(ExecuteMockBuyCommand.builder()
             .portfolioBizId(command.portfolioBizId())
             .productBizId(productBizId)
-            .amount(amount)
+            .amount(executableAmount)
             .idempotencyKey(idempotencyKey)
             .build());
+    }
+
+    /**
+     * 根据组合现金、费用和单笔上限计算报告买入的可执行金额。
+     *
+     * @param portfolio 模拟组合
+     * @param product 目标产品
+     * @param reportAmount 报告建议金额
+     * @param maxTradeAmount 单笔交易上限
+     * @param userBizId 用户业务标识
+     * @return 可执行买入金额
+     * @author dz
+     * @date 2026-06-30
+     */
+    private BigDecimal executableBuyAmount(
+        Portfolio portfolio,
+        Product product,
+        BigDecimal reportAmount,
+        BigDecimal maxTradeAmount,
+        String userBizId
+    ) {
+        PortfolioValuation latest = valuations.findLatestByPortfolioBizId(portfolio.bizId())
+            .orElseGet(() -> initialValuation(portfolio, BigDecimal.ZERO, clock.now()));
+        BigDecimal plannedAmount = maxTradeAmount == null || maxTradeAmount.compareTo(BigDecimal.ZERO) <= 0
+            ? reportAmount
+            : reportAmount.min(maxTradeAmount);
+        BigDecimal feeRate = defaultZero(product.getFeeRate());
+        BigDecimal affordableAmount = feeRate.compareTo(BigDecimal.ZERO) <= 0
+            ? latest.cashBalance()
+            : latest.cashBalance().divide(BigDecimal.ONE.add(feeRate), 8, RoundingMode.DOWN);
+        BigDecimal executableAmount = plannedAmount.min(affordableAmount).setScale(8, RoundingMode.DOWN);
+        if (executableAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            rejectWithAudit(userBizId, "REPORT", portfolio.bizId(), "MOCK_PLAN_CASH_CONTEXT",
+                "MEDIUM", "NO_CASH_FOR_BUY", "模拟组合现金不足，报告买入计划已转为待调仓或持有决策",
+                Map.of("portfolioBizId", portfolio.bizId(), "cashBalance", latest.cashBalance(),
+                    "reportAmount", reportAmount, "maxTradeAmount", maxTradeAmount == null ? "" : maxTradeAmount));
+        }
+        return executableAmount;
     }
 
     /**
@@ -975,6 +1065,10 @@ public class MockPortfolioApplicationService {
 
     /** 判断是否为系统自动闭环 AI 模拟资金池。 */
     private boolean isAutomationPortfolio(Portfolio portfolio) {
+        String configuredPortfolioBizId = autoInvestmentConfig.mockPortfolioBizId();
+        if (!configuredPortfolioBizId.isBlank() && configuredPortfolioBizId.equals(portfolio.bizId())) {
+            return true;
+        }
         return autoInvestmentConfig.mockUserBizId().equals(portfolio.ownerUserBizId())
             && autoInvestmentConfig.mockPortfolioName().equals(portfolio.portfolioName());
     }

@@ -54,6 +54,7 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
         String marketScope = TaskParameterParser.marketScope(event.parameters());
         int lookbackDays = TaskParameterParser.positiveInt(event.parameters(), "lookbackDays", 30);
         BigDecimal initialCapital = parseInitialCapital(event);
+        String portfolioContext = TaskParameterParser.string(event.parameters(), "portfolioContext", "");
         List<String> themeCodes = resolveThemeCodes(event);
         int maxThemeReports = TaskParameterParser.positiveInt(event.parameters(), "maxThemeReports", 1);
         if (themeCodes.size() > maxThemeReports) {
@@ -81,7 +82,7 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
             themeCodes
         );
         if (themeCodes.isEmpty()) {
-            analysis.generate(command(providerCode, modelCode, marketScope, null, lookbackDays, initialCapital));
+            analysis.generate(command(providerCode, modelCode, marketScope, null, lookbackDays, initialCapital, portfolioContext));
             log.info(
                 "自动投资报告任务完成: taskCode={}, eventId={}, generatedCount={}, modelCode={}, providerCode={}",
                 event.taskCode(),
@@ -93,7 +94,7 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
             return "已生成 1 份市场级自动投资分析报告";
         }
         themeCodes.forEach(themeCode -> analysis.generate(
-            command(providerCode, modelCode, marketScope, themeCode, lookbackDays, initialCapital)
+            command(providerCode, modelCode, marketScope, themeCode, lookbackDays, initialCapital, portfolioContext)
         ));
         log.info(
             "自动投资报告任务完成: taskCode={}, eventId={}, generatedCount={}, modelCode={}, providerCode={}, themeCodes={}",
@@ -175,6 +176,7 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
      * @param themeCode 主题编码
      * @param lookbackDays 回看天数
      * @param initialCapital 初始资金
+     * @param portfolioContext Mock 组合上下文 JSON
      * @return 投资分析命令
      * @author dz
      * @date 2026-06-24
@@ -185,7 +187,8 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
         String marketScope,
         String themeCode,
         int lookbackDays,
-        BigDecimal initialCapital
+        BigDecimal initialCapital,
+        String portfolioContext
     ) {
         return GenerateInvestmentAnalysisCommand.builder()
             .providerCode(providerCode)
@@ -194,6 +197,7 @@ public class AutoInvestmentReportGenerationTaskHandler implements InvestmentTask
             .themeCode(themeCode)
             .lookbackDays(lookbackDays)
             .initialCapital(initialCapital)
+            .portfolioContext(portfolioContext)
             .build();
     }
 }

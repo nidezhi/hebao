@@ -2,17 +2,23 @@ package com.example.dzcom.application.service.task;
 
 import com.example.dzcom.application.command.ai.GenerateBacktestFromPortfolioCommand;
 import com.example.dzcom.application.command.ai.SaveInvestmentFeedbackCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockBuyCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
+import com.example.dzcom.application.command.portfolio.ExecuteMockRebalanceCommand;
 import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.dto.ai.BacktestResultView;
 import com.example.dzcom.application.dto.ai.InvestmentFeedbackView;
 import com.example.dzcom.application.dto.portfolio.MockOrderExecutionView;
 import com.example.dzcom.application.dto.portfolio.MockPortfolioView;
+import com.example.dzcom.application.dto.portfolio.MockRebalanceExecutionView;
+import com.example.dzcom.application.dto.portfolio.PositionView;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.ai.AiModelApplicationService;
 import com.example.dzcom.application.service.ai.InvestmentClosedLoopApplicationService;
+import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.service.portfolio.MockPortfolioApplicationService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.example.dzcom.domain.model.ai.AiModel;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
 import com.example.dzcom.domain.model.task.ClosedLoopRun;
@@ -26,6 +32,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -78,7 +85,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
      */
     @Override
     public String execute(InvestmentTaskEvent event) {
-        Map<String, String> parameters = event.parameters() == null ? Map.of() : event.parameters();
+        Map<String, String> parameters = new LinkedHashMap<>(event.parameters() == null ? Map.of() : event.parameters());
+        String runMode = TaskParameterParser.string(parameters, "runMode", "FULL_PIPELINE");
         String automationLevel = TaskParameterParser.string(
             parameters,
             "automationLevel",
@@ -114,7 +122,9 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             mockUserBizId
         );
         try {
+            recordProfileSnapshot(run, parameters, runMode);
             recordSafetyGuards(run, parameters);
+            prepareMockPortfolioContext(run, parameters);
             runConfiguredTasks(run, event, parameters, "dataTaskCodes", "DATA_COLLECTION", "真实数据采集", 20);
             runReportTask(run, event, parameters);
             InvestmentAnalysisReport report = selectExecutableReport(run, parameters);
@@ -138,6 +148,10 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "reportBizId", report.bizId(),
                 "portfolioBizId", portfolio.bizId(),
                 "backtestBizId", backtest.bizId(),
+                "configProfileCode", TaskParameterParser.string(parameters, "configProfileCode", ""),
+                "profileType", TaskParameterParser.string(parameters, "profileType", ""),
+                "riskLevel", TaskParameterParser.string(parameters, "riskLevel", ""),
+                "runMode", runMode,
                 "modelCandidateBizId", candidate == null ? "" : candidate.bizId(),
                 "automationBoundary", "FULL_MOCK_WITH_PROMPT_MODEL_AUTO_ACTIVATION_REAL_TRADE_DISABLED"
             ));
@@ -185,6 +199,38 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         }
     }
 
+    /**
+     * 记录本次闭环使用的高级方案快照，方便前端和审计追溯方案边界。
+     *
+     * @param run 闭环运行实例
+     * @param parameters 本次任务参数
+     * @param runMode 运行模式
+     * @author dz
+     * @date 2026-06-30
+     */
+    private void recordProfileSnapshot(ClosedLoopRun run, Map<String, String> parameters, String runMode) {
+        closedLoops.succeedStep(run, "PROFILE_SNAPSHOT", "闭环方案快照", 5,
+            Map.of("configProfileCode", TaskParameterParser.string(parameters, "configProfileCode", "")),
+            mapOfNullable(
+                "profileName", TaskParameterParser.string(parameters, "profileName", ""),
+                "profileType", TaskParameterParser.string(parameters, "profileType", ""),
+                "riskLevel", TaskParameterParser.string(parameters, "riskLevel", ""),
+                "runMode", runMode,
+                "marketScope", TaskParameterParser.marketScope(parameters),
+                "dataTaskCodes", TaskParameterParser.list(parameters, "dataTaskCodes"),
+                "reportTaskCode", TaskParameterParser.string(parameters, "reportTaskCode", ""),
+                "promptTaskCode", TaskParameterParser.string(parameters, "promptTaskCode", ""),
+                "minQualityScore", minQualityScore(parameters),
+                "maxReportsForMock", TaskParameterParser.positiveInt(parameters, "maxReportsForMock", 20),
+                "allowAutoMockTrade", TaskParameterParser.bool(parameters, "allowAutoMockTrade", true),
+                "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", true),
+                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", true),
+                "allowRealTrade", TaskParameterParser.bool(parameters, "allowRealTrade", false),
+                "maxSingleTradeAmount", TaskParameterParser.string(parameters, "maxSingleTradeAmount", ""),
+                "strategyNote", TaskParameterParser.string(parameters, "strategyNote", "")
+            ));
+    }
+
     /** 记录真实交易、自动启用 Prompt/模型等危险开关的保护边界。 */
     private void recordSafetyGuards(ClosedLoopRun run, Map<String, String> parameters) {
         closedLoops.succeedStep(run, "SAFETY_GUARD", "自动化权限确认", 10,
@@ -192,17 +238,91 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "allowRealTrade", TaskParameterParser.bool(parameters, "allowRealTrade", false),
                 "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", true),
                 "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", true),
+                "configProfileCode", TaskParameterParser.string(parameters, "configProfileCode", ""),
                 "blocking", false,
                 "displaySeverity", "INFO",
                 "userFacing", false
             ),
             Map.of(
                 "policyCode", "FULL_MOCK_WITH_PROMPT_MODEL_AUTO_ACTIVATION",
+                "configProfileCode", TaskParameterParser.string(parameters, "configProfileCode", ""),
+                "configProfileSnapshot", TaskParameterParser.string(parameters, "configProfileSnapshot", ""),
                 "blocking", false,
                 "displaySeverity", "INFO",
                 "userFacing", false,
                 "summary", "自动闭环允许真实数据采集、报告生成、候选评分、Prompt/模型自动启用和Mock交易；真实交易仍需人工确认。"
             ));
+    }
+
+    /**
+     * 在报告生成前准备 Mock 组合上下文，让大模型基于真实资金池现金、估值和持仓输出方案。
+     *
+     * @param run 闭环运行实例
+     * @param parameters 本次任务参数，会写入 portfolioContext 和 mockPortfolioBizId
+     * @author dz
+     * @date 2026-06-30
+     */
+    private void prepareMockPortfolioContext(ClosedLoopRun run, Map<String, String> parameters) {
+        if (!TaskParameterParser.bool(parameters, "allowAutoMockTrade", true)) {
+            return;
+        }
+        if (TaskParameterParser.bool(parameters, "skipReportTask", false)) {
+            return;
+        }
+        String mockUserBizId = TaskParameterParser.string(parameters, "mockUserBizId", autoInvestmentConfig.mockUserBizId());
+        String mockPortfolioBizId = TaskParameterParser.string(parameters, "mockPortfolioBizId", autoInvestmentConfig.mockPortfolioBizId());
+        MockPortfolioView configuredPortfolio = portfolios.configuredAutomationPortfolio(mockPortfolioBizId).orElse(null);
+        String effectiveMockUserBizId = configuredPortfolio == null || configuredPortfolio.ownerUserBizId() == null
+            || configuredPortfolio.ownerUserBizId().isBlank()
+            ? mockUserBizId
+            : configuredPortfolio.ownerUserBizId();
+        CurrentOperator operator = new CurrentOperator(effectiveMockUserBizId, "AUTO_CLOSED_LOOP", Set.of("USER"), Set.of());
+        MockPortfolioView portfolio = currentOperator.callAs(operator, () -> configuredPortfolio == null
+            ? portfolios.ensureAutomationPortfolio(
+                effectiveMockUserBizId,
+                TaskParameterParser.string(parameters, "mockPortfolioName", autoInvestmentConfig.mockPortfolioName()),
+                positiveDecimal(parameters, "initialCash", autoInvestmentConfig.initialCash())
+            )
+            : configuredPortfolio);
+        parameters.put("mockPortfolioBizId", portfolio.bizId());
+        parameters.put("portfolioContext", Jsons.toJson(portfolioContext(run, parameters, portfolio)));
+        closedLoops.succeedStep(run, "MOCK_PORTFOLIO_CONTEXT", "Mock组合上下文", 15,
+            Map.of("portfolioBizId", portfolio.bizId(), "mockUserBizId", effectiveMockUserBizId),
+            portfolioContext(run, parameters, portfolio));
+    }
+
+    /** 构造传给模型和执行器的 Mock 组合上下文。 */
+    private Map<String, Object> portfolioContext(
+        ClosedLoopRun run,
+        Map<String, String> parameters,
+        MockPortfolioView portfolio
+    ) {
+        return mapOfNullable(
+            "runBizId", run.bizId(),
+            "runNo", run.runNo(),
+            "portfolioBizId", portfolio.bizId(),
+            "portfolioName", portfolio.portfolioName(),
+            "ownerUserBizId", portfolio.ownerUserBizId(),
+            "baseCurrency", portfolio.baseCurrency(),
+            "totalAsset", portfolio.latestValuation() == null ? BigDecimal.ZERO : portfolio.latestValuation().totalAsset(),
+            "cashBalance", portfolio.latestValuation() == null ? BigDecimal.ZERO : portfolio.latestValuation().cashBalance(),
+            "positionValue", portfolio.latestValuation() == null ? BigDecimal.ZERO : portfolio.latestValuation().positionValue(),
+            "maxSingleTradeAmount", TaskParameterParser.string(parameters, "maxSingleTradeAmount", ""),
+            "positions", portfolio.positions() == null ? List.of() : portfolio.positions().stream().map(this::positionContext).toList()
+        );
+    }
+
+    /** 构造单个持仓上下文。 */
+    private Map<String, Object> positionContext(PositionView position) {
+        return mapOfNullable(
+            "productBizId", position.productBizId(),
+            "positionSide", position.positionSide(),
+            "quantity", position.quantity(),
+            "availableQuantity", position.availableQuantity(),
+            "averageCost", position.averageCost(),
+            "costAmount", position.costAmount(),
+            "realizedProfit", position.realizedProfit()
+        );
     }
 
     /** 按配置同步执行一组子任务。 */
@@ -449,6 +569,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         copyIfKeyPresent(parameters, overrides, "themeCodes");
         copyIfPresent(parameters, overrides, "themes");
         copyIfPresent(parameters, overrides, "initialCapital");
+        copyIfPresent(parameters, overrides, "portfolioContext");
         copyIfPresent(parameters, overrides, "maxThemeReports");
         log.info(
             "自动投资闭环报告任务开始: runNo={}, reportTaskCode={}, overrides={}",
@@ -677,7 +798,17 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             "mockUserBizId",
             autoInvestmentConfig.mockUserBizId()
         );
-        CurrentOperator operator = new CurrentOperator(mockUserBizId, "AUTO_CLOSED_LOOP", Set.of("USER"), Set.of());
+        String mockPortfolioBizId = TaskParameterParser.string(
+            parameters,
+            "mockPortfolioBizId",
+            autoInvestmentConfig.mockPortfolioBizId()
+        );
+        MockPortfolioView configuredPortfolio = portfolios.configuredAutomationPortfolio(mockPortfolioBizId).orElse(null);
+        String effectiveMockUserBizId = configuredPortfolio == null || configuredPortfolio.ownerUserBizId() == null
+            || configuredPortfolio.ownerUserBizId().isBlank()
+            ? mockUserBizId
+            : configuredPortfolio.ownerUserBizId();
+        CurrentOperator operator = new CurrentOperator(effectiveMockUserBizId, "AUTO_CLOSED_LOOP", Set.of("USER"), Set.of());
         return currentOperator.callAs(operator, () -> {
             BigDecimal initialCash = positiveDecimal(parameters, "initialCash", autoInvestmentConfig.initialCash());
             String portfolioName = TaskParameterParser.string(
@@ -686,47 +817,119 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 autoInvestmentConfig.mockPortfolioName()
             );
             log.info(
-                "自动投资闭环Mock交易开始: runNo={}, reportBizId={}, mockUserBizId={}, initialCash={}, mockProductBizId={}",
+                "自动投资闭环Mock交易开始: runNo={}, reportBizId={}, mockUserBizId={}, mockPortfolioBizId={}, initialCash={}, mockProductBizId={}",
                 run.runNo(),
                 report.bizId(),
-                mockUserBizId,
+                effectiveMockUserBizId,
+                mockPortfolioBizId,
                 initialCash,
                 TaskParameterParser.string(parameters, "mockProductBizId", null)
             );
-            MockPortfolioView portfolio = portfolios.ensureAutomationPortfolio(
-                mockUserBizId,
-                portfolioName,
-                initialCash
-            );
-            MockOrderExecutionView execution = portfolios.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
-                .portfolioBizId(portfolio.bizId())
-                .reportBizId(report.bizId())
-                .productBizId(TaskParameterParser.string(parameters, "mockProductBizId", null))
-                .idempotencyKey("AUTO-CLOSED-LOOP-" + run.bizId() + "-" + report.bizId())
-                .build());
+            MockPortfolioView portfolio = configuredPortfolio == null
+                ? portfolios.ensureAutomationPortfolio(
+                    effectiveMockUserBizId,
+                    portfolioName,
+                    initialCash
+                )
+                : configuredPortfolio;
+            String actionType = actionType(report);
+            List<ExecuteMockRebalanceCommand.TargetWeight> targets = targetWeights(report);
+            MockExecutionResult execution = executeMockPlan(run, parameters, report, portfolio);
             MockPortfolioView refreshed = portfolios.refreshValuation(execution.portfolio().bizId());
             closedLoops.succeedStep(run, "MOCK_TRADE", "自动Mock交易", 70,
-                Map.of("reportBizId", report.bizId(), "portfolioBizId", portfolio.bizId(), "mockUserBizId", mockUserBizId),
-                Map.of(
-                    "orderBizId", execution.order().bizId(),
+                mapOfNullable("reportBizId", report.bizId(), "portfolioBizId", portfolio.bizId(),
+                    "mockUserBizId", effectiveMockUserBizId,
+                    "actionType", actionType,
+                    "targetWeightCount", targets.size(),
+                    "maxSingleTradeAmount", TaskParameterParser.string(parameters, "maxSingleTradeAmount", ""),
+                    "investmentPlan", report.investmentPlan()),
+                mapOfNullable(
+                    "actionType", actionType,
+                    "executionMode", execution.mode(),
+                    "orderBizId", execution.orderBizId(),
+                    "generatedOrderCount", execution.orderCount(),
+                    "targetWeightCount", execution.targetWeightCount(),
+                    "reason", execution.reason(),
                     "portfolioBizId", refreshed.bizId(),
-                    "portfolioName", portfolioName,
-                    "mockUserBizId", mockUserBizId,
+                    "configuredPortfolioBizId", mockPortfolioBizId,
+                    "portfolioName", refreshed.portfolioName(),
+                    "mockUserBizId", effectiveMockUserBizId,
                     "aiPoolInitialCash", initialCash,
                     "latestTotalAsset", refreshed.latestValuation() == null ? BigDecimal.ZERO : refreshed.latestValuation().totalAsset(),
                     "latestCashBalance", refreshed.latestValuation() == null ? BigDecimal.ZERO : refreshed.latestValuation().cashBalance(),
-                    "status", execution.order().status()
+                    "status", execution.status()
                 ));
             log.info(
-                "自动投资闭环Mock交易完成: runNo={}, reportBizId={}, portfolioBizId={}, orderBizId={}, orderStatus={}",
+                "自动投资闭环Mock交易完成: runNo={}, reportBizId={}, portfolioBizId={}, executionMode={}, orderBizId={}, orderStatus={}",
                 run.runNo(),
                 report.bizId(),
                 refreshed.bizId(),
-                execution.order().bizId(),
-                execution.order().status()
+                execution.mode(),
+                execution.orderBizId(),
+                execution.status()
             );
             return refreshed;
         });
+    }
+
+    /**
+     * 基于报告方案和组合上下文执行 Mock 计划；优先调仓，无法调仓时才降级为单笔买入。
+     */
+    private MockExecutionResult executeMockPlan(
+        ClosedLoopRun run,
+        Map<String, String> parameters,
+        InvestmentAnalysisReport report,
+        MockPortfolioView portfolio
+    ) {
+        try {
+            List<ExecuteMockRebalanceCommand.TargetWeight> targets = targetWeights(report);
+            String actionType = actionType(report);
+            if (!targets.isEmpty() && !"BUY".equals(actionType)) {
+                MockRebalanceExecutionView rebalance = portfolios.rebalance(ExecuteMockRebalanceCommand.builder()
+                    .portfolioBizId(portfolio.bizId())
+                    .targets(targets)
+                    .minTradeAmount(positiveDecimal(parameters, "minTradeAmount", new BigDecimal("100")))
+                    .idempotencyKey("AUTO-CLOSED-LOOP-" + run.bizId() + "-" + report.bizId())
+                    .build());
+                if (rebalance.executions() == null || rebalance.executions().isEmpty()) {
+                    String reason = "报告方案与当前组合接近，无需生成新的 Mock 订单";
+                    closedLoops.skippedStep(run, "MOCK_TRADE_NOOP", "Mock交易无动作", 71,
+                        reason, Map.of("portfolioBizId", portfolio.bizId(), "actionType", actionType, "targetWeights", targets.size()));
+                    return new MockExecutionResult("HOLD", null, 0, "NO_ORDER", rebalance.portfolio(), reason, targets.size());
+                }
+                MockOrderExecutionView first = rebalance.executions().get(0);
+                return new MockExecutionResult("REBALANCE", first.order().bizId(), rebalance.executions().size(),
+                    first.order().status(), rebalance.portfolio(), "已按报告目标权重执行模拟调仓", targets.size());
+            }
+            if (isNoTradeAction(actionType)) {
+                String reason = "报告方案建议" + actionType + "，本轮不生成新的 Mock 订单";
+                closedLoops.skippedStep(run, "MOCK_TRADE_NOOP", "Mock交易无动作", 71,
+                    reason, Map.of("portfolioBizId", portfolio.bizId(), "actionType", actionType));
+                return new MockExecutionResult(actionType, null, 0, "NO_ORDER", portfolio, reason, targets.size());
+            }
+            MockOrderExecutionView buy = portfolios.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
+                .portfolioBizId(portfolio.bizId())
+                .reportBizId(report.bizId())
+                .productBizId(TaskParameterParser.string(parameters, "mockProductBizId", null))
+                .maxTradeAmount(positiveDecimal(parameters, "maxSingleTradeAmount", new BigDecimal("10000")))
+                .idempotencyKey("AUTO-CLOSED-LOOP-" + run.bizId() + "-" + report.bizId())
+                .build());
+            return new MockExecutionResult("BUY", buy.order().bizId(), 1, buy.order().status(), buy.portfolio(),
+                "已按报告参考配置金额执行模拟买入", targets.size());
+        } catch (BusinessException exception) {
+            String reason = "Mock 计划无法执行: " + exception.getMessage();
+            log.warn("自动投资闭环Mock计划阻断: runNo={}, reportBizId={}, portfolioBizId={}, reason={}",
+                run.runNo(), report.bizId(), portfolio.bizId(), reason);
+            closedLoops.blockedStep(run, "MOCK_TRADE", "自动Mock交易", 70, reason,
+                mapOfNullable("reportBizId", report.bizId(), "portfolioBizId", portfolio.bizId(),
+                    "portfolioContext", parameters.get("portfolioContext"), "investmentPlan", report.investmentPlan()));
+            throw new ClosedLoopBlockedException(reason);
+        }
+    }
+
+    /** 判断报告方案是否明确要求本轮不交易。 */
+    private boolean isNoTradeAction(String actionType) {
+        return "HOLD".equals(actionType) || "SKIP".equals(actionType);
     }
 
     /** 生成组合回测摘要并写入自动反馈。 */
@@ -882,6 +1085,67 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         }
     }
 
+    /** 解析报告方案动作类型，默认走买入兼容旧报告。 */
+    private String actionType(InvestmentAnalysisReport report) {
+        JsonNode plan = Jsons.readObjectOrEmpty(report.investmentPlan());
+        String value = firstText(plan, "actionType", "suggestedActionType", "tradeAction");
+        return value == null || value.isBlank() ? "BUY" : value.trim().toUpperCase();
+    }
+
+    /** 从报告方案中解析目标权重数组。 */
+    private List<ExecuteMockRebalanceCommand.TargetWeight> targetWeights(InvestmentAnalysisReport report) {
+        JsonNode plan = Jsons.readObjectOrEmpty(report.investmentPlan());
+        JsonNode targets = firstArray(plan, "targetWeights", "rebalanceTargets", "targetPortfolio");
+        if (targets == null || !targets.isArray()) {
+            return List.of();
+        }
+        List<ExecuteMockRebalanceCommand.TargetWeight> result = new ArrayList<>();
+        targets.forEach(target -> {
+            String productBizId = firstText(target, "productBizId", "targetBizId", "bizId");
+            BigDecimal weight = firstDecimal(target, "targetWeight", "weight", "allocationRate");
+            if (productBizId != null && !productBizId.isBlank() && weight != null) {
+                result.add(ExecuteMockRebalanceCommand.TargetWeight.builder()
+                    .productBizId(productBizId.trim())
+                    .targetWeight(weight.setScale(10, RoundingMode.HALF_UP))
+                    .build());
+            }
+        });
+        return result;
+    }
+
+    /** 读取第一个文本字段。 */
+    private String firstText(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            String value = Jsons.text(node, fieldName);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /** 读取第一个数组字段。 */
+    private JsonNode firstArray(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            JsonNode child = node == null ? null : node.get(fieldName);
+            if (child != null && child.isArray()) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    /** 读取第一个数值字段。 */
+    private BigDecimal firstDecimal(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            BigDecimal value = Jsons.decimal(node, fieldName);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     /** 读取可为空字符串，避免空文本被当作有效参数向下游传递。 */
     private String nullableString(Map<String, String> parameters, String key) {
         String value = parameters.get(key);
@@ -1007,6 +1271,18 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     /** 报告质量门禁检查结果。 */
     private record ReportGateCheck(InvestmentAnalysisReport report, boolean passed, Map<String, Object> summary) {
+    }
+
+    /** Mock 执行结果摘要。 */
+    private record MockExecutionResult(
+        String mode,
+        String orderBizId,
+        int orderCount,
+        String status,
+        MockPortfolioView portfolio,
+        String reason,
+        int targetWeightCount
+    ) {
     }
 
     /** AI 结构化核心数据采集落库摘要。 */

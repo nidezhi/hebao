@@ -96,6 +96,7 @@ public class LocalRuleInvestmentAnalysisProvider implements InvestmentAnalysisPr
             .simulatedReturn(writeJson(buildSimulatedReturn(context)))
             .chartPayload(writeJson(buildChartPayload(context)))
             .promptSnapshot(writeJson(buildInputSnapshot(context)))
+            .chatSnapshot(null)
             .generatedAt(context.generatedAt())
             .createdAt(context.generatedAt())
             .build();

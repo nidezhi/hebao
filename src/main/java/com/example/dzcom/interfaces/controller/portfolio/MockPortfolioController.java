@@ -6,6 +6,7 @@ import com.example.dzcom.application.command.portfolio.ExecuteMockBuyCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockPlanFromReportCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockRebalanceCommand;
 import com.example.dzcom.application.command.portfolio.ExecuteMockSellCommand;
+import com.example.dzcom.application.command.portfolio.DeleteMockPortfolioCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.page.PageQuery;
 import com.example.dzcom.application.common.result.Result;
@@ -133,6 +134,35 @@ public class MockPortfolioController {
     })
     public Result<MockPortfolioResponse> detail(@Valid @RequestBody MockPortfolioDetailRequest request) {
         return Result.success(MockPortfolioResponse.from(portfolios.detail(request.portfolioBizId())));
+    }
+
+    /**
+     * 删除当前用户的普通模拟组合。
+     *
+     * @param request 模拟组合详情请求
+     * @return 空结果
+     * @throws BusinessException 当组合不存在、越权或属于自动闭环资金池时抛出
+     * @author dz
+     * @date 2026-06-30
+     */
+    @PostMapping("/delete")
+    @Operation(
+        summary = "删除模拟组合",
+        description = "逻辑删除当前用户拥有的普通模拟组合。自动闭环AI资金池不能在页面删除，历史订单和估值仍保留用于审计。"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "删除成功"),
+        @ApiResponse(responseCode = "400", description = "参数不合法或自动闭环资金池不可删除"),
+        @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
+        @ApiResponse(responseCode = "403", description = "无权删除该模拟组合"),
+        @ApiResponse(responseCode = "404", description = "模拟组合不存在"),
+        @ApiResponse(responseCode = "500", description = "系统错误")
+    })
+    public Result<Void> delete(@Valid @RequestBody MockPortfolioDetailRequest request) {
+        portfolios.delete(DeleteMockPortfolioCommand.builder()
+            .portfolioBizId(request.portfolioBizId())
+            .build());
+        return Result.success();
     }
 
     /**
@@ -327,7 +357,7 @@ public class MockPortfolioController {
     @PostMapping("/orders/buy-from-report")
     @Operation(
         summary = "根据投资分析报告执行模拟买入",
-        description = "读取报告 investmentPlan.referenceAllocationAmount，并按报告主题或指定产品生成模拟买入订单。低质量报告和数据缺口报告会被拒绝。"
+        description = "读取报告 investmentPlan.referenceAllocationAmount，并结合组合现金、费用和单次上限生成模拟买入订单。低质量报告和数据缺口报告会被拒绝。"
     )
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "执行成功，返回模拟订单执行结果", useReturnTypeSchema = true),
@@ -346,6 +376,7 @@ public class MockPortfolioController {
                 .portfolioBizId(request.portfolioBizId())
                 .reportBizId(request.reportBizId())
                 .productBizId(request.productBizId())
+                .maxTradeAmount(request.maxTradeAmount())
                 .idempotencyKey(request.idempotencyKey())
                 .build()
         )));

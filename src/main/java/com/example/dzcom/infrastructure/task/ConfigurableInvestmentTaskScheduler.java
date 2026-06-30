@@ -46,7 +46,7 @@ public class ConfigurableInvestmentTaskScheduler implements InvestmentTaskSchedu
             .forEach(definition -> {
                 validate(definition);
                 ScheduledFuture<?> future = investmentTaskScheduler.schedule(
-                    () -> tasks.trigger(definition.taskCode(), definition.parameters(), "SCHEDULE"),
+                    () -> tasks.trigger(definition.taskCode(), Map.of(), "SCHEDULE"),
                     new CronTrigger(definition.cron(), ZoneId.of(definition.zone()))
                 );
                 schedules.put(definition.taskCode(), future);

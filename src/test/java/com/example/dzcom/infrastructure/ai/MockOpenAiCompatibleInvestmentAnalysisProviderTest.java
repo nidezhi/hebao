@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /** OpenAI 兼容投资分析 Provider 测试。 */
 class MockOpenAiCompatibleInvestmentAnalysisProviderTest {
@@ -43,30 +44,36 @@ class MockOpenAiCompatibleInvestmentAnalysisProviderTest {
                   "promptSnapshot": {"source": "remote"}
                 }
                 请以系统解析为准。
-                """
+                """,
+            "{\"requestMessages\":[{\"role\":\"user\",\"contentPreview\":\"safe\",\"contentLength\":4}]}"
         );
 
         assertEquals("SUCCEEDED", report.status());
         assertEquals("OPENAI_COMPATIBLE", report.providerCode());
         assertEquals("{\"summary\":\"全市场报告\"}", report.investmentSummary());
         assertEquals("{\"direction\":\"NEUTRAL\"}", report.trend());
+        assertEquals("{\"requestMessages\":[{\"role\":\"user\",\"contentPreview\":\"safe\",\"contentLength\":4}]}", report.chatSnapshot());
+        assertFalse(report.chatSnapshot().contains("Authorization"));
+        assertFalse(report.chatSnapshot().contains("test"));
     }
 
     private InvestmentAnalysisReport mergeRemoteOutput(
         MockOpenAiCompatibleInvestmentAnalysisProvider provider,
         InvestmentAnalysisReport localReport,
         AiModelRuntimeConfig modelConfig,
-        String content
+        String content,
+        String chatSnapshot
     ) throws Exception {
         Method method = MockOpenAiCompatibleInvestmentAnalysisProvider.class
             .getDeclaredMethod(
                 "mergeRemoteOutput",
                 InvestmentAnalysisReport.class,
                 AiModelRuntimeConfig.class,
+                String.class,
                 String.class
             );
         method.setAccessible(true);
-        return (InvestmentAnalysisReport) method.invoke(provider, localReport, modelConfig, content);
+        return (InvestmentAnalysisReport) method.invoke(provider, localReport, modelConfig, content, chatSnapshot);
     }
 
     private InvestmentAnalysisReport localReport() {

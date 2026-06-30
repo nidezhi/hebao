@@ -79,6 +79,9 @@ public class InvestmentAnalysisReportEntity {
     /** 脱敏后的分析输入和参数快照。 */
     @Schema(description = "脱敏后的提示词与输入快照 JSON 字符串")
     private String promptSnapshot;
+    /** 脱敏后的模型对话快照。 */
+    @Schema(description = "脱敏后的模型对话快照 JSON 字符串")
+    private String chatSnapshot;
     /** 失败时保存的原因摘要；成功时为空。 */
     @Schema(description = "失败原因摘要，成功时为空")
     private String failureReason;
