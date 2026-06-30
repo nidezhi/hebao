@@ -21,10 +21,15 @@ import com.example.dzcom.application.service.portfolio.MockPortfolioApplicationS
 import com.fasterxml.jackson.databind.JsonNode;
 import com.example.dzcom.domain.model.ai.AiModel;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
+import com.example.dzcom.domain.enums.product.ProductTradeStatus;
+import com.example.dzcom.domain.model.product.Product;
 import com.example.dzcom.domain.model.task.ClosedLoopRun;
 import com.example.dzcom.domain.model.task.InvestmentTaskDefinition;
 import com.example.dzcom.domain.model.task.ScheduledTaskExecution;
 import com.example.dzcom.domain.repository.ai.InvestmentAnalysisReportStore;
+import com.example.dzcom.domain.repository.product.ProductInvestmentProfileStore;
+import com.example.dzcom.domain.repository.product.ProductSearchCriteria;
+import com.example.dzcom.domain.repository.product.ProductStore;
 import com.example.dzcom.domain.repository.task.InvestmentTaskDefinitionStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,6 +65,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     private final ClosedLoopOrchestrationApplicationService closedLoops;
     private final InvestmentAnalysisReportStore reports;
     private final MockPortfolioApplicationService portfolios;
+    private final ProductStore products;
+    private final ProductInvestmentProfileStore investmentProfiles;
     private final InvestmentClosedLoopApplicationService investmentClosedLoop;
     private final AiModelApplicationService models;
     private final CurrentOperatorProvider currentOperator;
@@ -266,9 +273,6 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         if (!TaskParameterParser.bool(parameters, "allowAutoMockTrade", true)) {
             return;
         }
-        if (TaskParameterParser.bool(parameters, "skipReportTask", false)) {
-            return;
-        }
         String mockUserBizId = TaskParameterParser.string(parameters, "mockUserBizId", autoInvestmentConfig.mockUserBizId());
         String mockPortfolioBizId = TaskParameterParser.string(parameters, "mockPortfolioBizId", autoInvestmentConfig.mockPortfolioBizId());
         MockPortfolioView configuredPortfolio = portfolios.configuredAutomationPortfolio(mockPortfolioBizId).orElse(null);
@@ -308,6 +312,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             "cashBalance", portfolio.latestValuation() == null ? BigDecimal.ZERO : portfolio.latestValuation().cashBalance(),
             "positionValue", portfolio.latestValuation() == null ? BigDecimal.ZERO : portfolio.latestValuation().positionValue(),
             "maxSingleTradeAmount", TaskParameterParser.string(parameters, "maxSingleTradeAmount", ""),
+            "candidateProducts", candidateProducts(parameters),
+            "decisionPolicy", "优先使用 targetWeights 调仓；无目标权重且报告高质量时，空仓组合允许小额探索买入候选产品；否则 HOLD/SKIP 不下单。",
             "positions", portfolio.positions() == null ? List.of() : portfolio.positions().stream().map(this::positionContext).toList()
         );
     }
@@ -841,6 +847,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                     "mockUserBizId", effectiveMockUserBizId,
                     "actionType", actionType,
                     "targetWeightCount", targets.size(),
+                    "candidateProducts", candidateProducts(parameters),
                     "maxSingleTradeAmount", TaskParameterParser.string(parameters, "maxSingleTradeAmount", ""),
                     "investmentPlan", report.investmentPlan()),
                 mapOfNullable(
@@ -902,6 +909,18 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                     first.order().status(), rebalance.portfolio(), "已按报告目标权重执行模拟调仓", targets.size());
             }
             if (isNoTradeAction(actionType)) {
+                if (shouldExecuteExploratoryBuy(parameters, report, portfolio, targets)) {
+                    MockOrderExecutionView exploratoryBuy = portfolios.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
+                        .portfolioBizId(portfolio.bizId())
+                        .reportBizId(report.bizId())
+                        .productBizId(firstCandidateProductBizId(parameters))
+                        .maxTradeAmount(exploratoryTradeAmount(parameters))
+                        .idempotencyKey("AUTO-CLOSED-LOOP-EXPLORE-" + run.bizId() + "-" + report.bizId())
+                        .build());
+                    return new MockExecutionResult("EXPLORATORY_BUY", exploratoryBuy.order().bizId(), 1,
+                        exploratoryBuy.order().status(), exploratoryBuy.portfolio(),
+                        "报告建议" + actionType + "但组合空仓且质量达标，按候选产品执行小额探索 Mock 买入", targets.size());
+                }
                 String reason = "报告方案建议" + actionType + "，本轮不生成新的 Mock 订单";
                 closedLoops.skippedStep(run, "MOCK_TRADE_NOOP", "Mock交易无动作", 71,
                     reason, Map.of("portfolioBizId", portfolio.bizId(), "actionType", actionType));
@@ -930,6 +949,82 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     /** 判断报告方案是否明确要求本轮不交易。 */
     private boolean isNoTradeAction(String actionType) {
         return "HOLD".equals(actionType) || "SKIP".equals(actionType);
+    }
+
+    /** 判断是否允许对空仓资金池执行小额探索买入，以便闭环产生可复盘样本。 */
+    private boolean shouldExecuteExploratoryBuy(
+        Map<String, String> parameters,
+        InvestmentAnalysisReport report,
+        MockPortfolioView portfolio,
+        List<ExecuteMockRebalanceCommand.TargetWeight> targets
+    ) {
+        return TaskParameterParser.bool(parameters, "allowExploratoryMockBuy", true)
+            && targets.isEmpty()
+            && portfolio.positions() != null
+            && portfolio.positions().isEmpty()
+            && report.dataQualityScore() != null
+            && report.dataQualityScore().compareTo(minQualityScore(parameters)) >= 0
+            && firstCandidateProductBizId(parameters) != null;
+    }
+
+    /** 读取探索买入金额，默认不超过单笔上限的 50%。 */
+    private BigDecimal exploratoryTradeAmount(Map<String, String> parameters) {
+        BigDecimal configured = positiveDecimal(parameters, "exploratoryTradeAmount",
+            positiveDecimal(parameters, "maxSingleTradeAmount", new BigDecimal("10000")).multiply(new BigDecimal("0.50")));
+        BigDecimal maxSingle = positiveDecimal(parameters, "maxSingleTradeAmount", new BigDecimal("10000"));
+        return configured.min(maxSingle).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** 读取第一个可交易候选产品业务标识。 */
+    private String firstCandidateProductBizId(Map<String, String> parameters) {
+        return candidateProducts(parameters).stream()
+            .findFirst()
+            .map(item -> String.valueOf(item.get("productBizId")))
+            .orElse(null);
+    }
+
+    /** 查询传给模型的可交易候选产品池，避免模型因无 productBizId 永久 HOLD。 */
+    private List<Map<String, Object>> candidateProducts(Map<String, String> parameters) {
+        int limit = TaskParameterParser.positiveInt(parameters, "candidateProductLimit", 8);
+        return products.search(new ProductSearchCriteria(
+                null,
+                null,
+                ProductTradeStatus.TRADABLE,
+                null,
+                "CNY",
+                1,
+                limit,
+                "createdAt",
+                false
+            )).items().stream()
+            .filter(this::isMockTradableProduct)
+            .map(this::candidateProductContext)
+            .toList();
+    }
+
+    /** 判断产品是否满足自动 Mock 最低画像门禁。 */
+    private boolean isMockTradableProduct(Product product) {
+        if (product == null || product.getTradeStatus() != ProductTradeStatus.TRADABLE) {
+            return false;
+        }
+        return investmentProfiles.findByProductBizId(product.getBizId())
+            .map(profile -> profile.mockTradable()
+                && profile.dataQualityScore() != null
+                && profile.dataQualityScore().compareTo(new BigDecimal("0.45")) >= 0)
+            .orElse(false);
+    }
+
+    /** 构造单个候选产品上下文。 */
+    private Map<String, Object> candidateProductContext(Product product) {
+        return mapOfNullable(
+            "productBizId", product.getBizId(),
+            "productCode", product.getProductCode(),
+            "productName", product.getProductName(),
+            "productType", product.getProductType() == null ? "" : product.getProductType().name(),
+            "marketCode", product.getMarketCode(),
+            "riskLevel", product.getRiskLevel(),
+            "currency", product.getCurrency()
+        );
     }
 
     /** 生成组合回测摘要并写入自动反馈。 */

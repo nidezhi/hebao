@@ -17,7 +17,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -166,7 +170,7 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         String userPrompt = prompt(localReport, command);
         Map<String, Object> payload = requestPayload(userPrompt, modelConfig);
         log.info(
-            "投资分析模型远端调用开始: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, userPromptLength={}",
+            "投资分析模型远端调用开始: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, userPromptLength={}, userPromptHash={}",
             localReport.requestId(),
             modelConfig.modelCode(),
             modelConfig.modelVersion(),
@@ -178,7 +182,8 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             modelConfig.timeoutSeconds(),
             modelConfig.maxTokens(),
             modelConfig.temperature(),
-            userPrompt.length()
+            userPrompt.length(),
+            sha256(userPrompt)
         );
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -226,13 +231,14 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
                 buildChatSnapshot(payload, content, endpoint, response.statusCode(), elapsedMs(startedAt))
             );
             log.info(
-                "投资分析模型远端调用完成: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}, qualityScore={}, confidenceLevel={}",
+                "投资分析模型远端调用完成: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}, contentHash={}, qualityScore={}, confidenceLevel={}",
                 localReport.requestId(),
                 modelConfig.modelCode(),
                 modelConfig.modelVersion(),
                 modelConfig.providerCode(),
                 elapsedMs(startedAt),
                 textLength(content),
+                sha256(content),
                 report.dataQualityScore(),
                 report.confidenceLevel()
             );
@@ -362,6 +368,9 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             每个字段必须是 JSON 对象；不得输出 Markdown；不得编造缺失数据。
             如果 portfolioContext 不为空，investmentPlan 必须显式考虑当前 Mock 组合现金、总资产和持仓，
             actionType 只能是 BUY/SELL/REBALANCE/HOLD/SKIP 之一；现金不足时不得强行 BUY，应输出 HOLD、SELL、REBALANCE 或 SKIP，并解释原因。
+            如果 portfolioContext.candidateProducts 不为空，必须从候选产品中选择可交易标的输出 productBizId/productCode/marketCode，
+            或在 targetWeights 中输出目标权重；不得再以“无具体productBizId”为理由 HOLD。
+            如果组合空仓、现金充足、数据质量为 HIGH_CONFIDENCE，且没有明确风险拒绝原因，应输出小额 BUY 或低权重 REBALANCE 作为可复盘 Mock 样本。
             若建议调仓，请在 investmentPlan.targetWeights 输出数组，元素包含 productBizId 和 targetWeight，targetWeight 总和不得超过 1。
             marketScope=%s
             themeCode=%s
@@ -656,5 +665,18 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
     /** 计算模型远端调用耗时毫秒。 */
     private long elapsedMs(long startedAt) {
         return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+    }
+
+    /** 计算文本 SHA-256 摘要，日志只记录摘要用于关联模型输入输出。 */
+    private String sha256(String value) {
+        if (value == null) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            return "SHA256_UNAVAILABLE";
+        }
     }
 }

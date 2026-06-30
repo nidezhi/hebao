@@ -15,10 +15,15 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /** OpenAI Chat Completions 兼容 JSON 调用客户端。 */
 @Component
@@ -67,8 +72,10 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         validateRemoteCallable(operationCode, modelConfig);
         long startedAt = System.nanoTime();
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
+        String callId = UUID.randomUUID().toString();
         log.info(
-            "AI JSON模型调用开始: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, systemPromptLength={}, userPromptLength={}",
+            "AI JSON模型调用开始: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, systemPromptLength={}, userPromptLength={}, systemPromptHash={}, userPromptHash={}",
+            callId,
             operationCode,
             modelConfig.modelCode(),
             modelConfig.modelVersion(),
@@ -81,7 +88,9 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             modelConfig.maxTokens(),
             modelConfig.temperature(),
             textLength(systemPrompt),
-            textLength(userPrompt)
+            textLength(userPrompt),
+            sha256(systemPrompt),
+            sha256(userPrompt)
         );
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -97,7 +106,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
                 .send(request, HttpResponse.BodyHandlers.ofString());
             long durationMs = elapsedMs(startedAt);
             log.info(
-                "AI JSON模型调用响应: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, httpStatus={}, durationMs={}, responseLength={}",
+                "AI JSON模型调用响应: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, httpStatus={}, durationMs={}, responseLength={}",
+                callId,
                 operationCode,
                 modelConfig.modelCode(),
                 modelConfig.modelVersion(),
@@ -108,7 +118,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 log.error(
-                    "AI JSON模型调用远端失败: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, responseBody={}",
+                    "AI JSON模型调用远端失败: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, responseBody={}",
+                    callId,
                     operationCode,
                     modelConfig.modelCode(),
                     modelConfig.modelVersion(),
@@ -124,18 +135,21 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             }
             String content = normalizeJsonObjectContent(extractContent(response.body(), operationCode), operationCode);
             log.info(
-                "AI JSON模型调用完成: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}",
+                "AI JSON模型调用完成: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}, contentHash={}",
+                callId,
                 operationCode,
                 modelConfig.modelCode(),
                 modelConfig.modelVersion(),
                 modelConfig.providerCode(),
                 elapsedMs(startedAt),
-                textLength(content)
+                textLength(content),
+                sha256(content)
             );
             return content;
         } catch (BusinessException exception) {
             log.error(
-                "AI JSON模型调用业务失败: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
+                "AI JSON模型调用业务失败: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
+                callId,
                 operationCode,
                 modelConfig.modelCode(),
                 modelConfig.modelVersion(),
@@ -147,7 +161,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             log.error(
-                "AI JSON模型调用被中断: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
+                "AI JSON模型调用被中断: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
+                callId,
                 operationCode,
                 modelConfig.modelCode(),
                 modelConfig.modelVersion(),
@@ -157,7 +172,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             throw new BusinessException(HttpStatus.BAD_GATEWAY, operationCode + "模型调用被中断");
         } catch (Exception exception) {
             log.error(
-                "AI JSON模型调用异常: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
+                "AI JSON模型调用异常: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
+                callId,
                 operationCode,
                 modelConfig.modelCode(),
                 modelConfig.modelVersion(),
@@ -382,5 +398,19 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
     /** 计算模型调用耗时毫秒。 */
     private long elapsedMs(long startedAt) {
         return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+    }
+
+    /** 计算文本 SHA-256 摘要，日志只记录摘要用于关联，不记录完整 Prompt。 */
+    private String sha256(String value) {
+        if (value == null) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(bytes);
+        } catch (NoSuchAlgorithmException exception) {
+            return "SHA256_UNAVAILABLE";
+        }
     }
 }

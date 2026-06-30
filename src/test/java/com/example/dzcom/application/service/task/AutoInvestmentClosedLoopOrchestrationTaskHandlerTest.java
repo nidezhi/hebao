@@ -22,6 +22,13 @@ import com.example.dzcom.application.service.system.SystemConfigReader;
 import com.example.dzcom.domain.model.ai.AiModel;
 import com.example.dzcom.domain.model.ai.AiModelSkillBinding;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
+import com.example.dzcom.domain.enums.product.ProductTradeStatus;
+import com.example.dzcom.domain.enums.product.ProductType;
+import com.example.dzcom.domain.model.product.Product;
+import com.example.dzcom.domain.model.product.ProductInvestmentProfile;
+import com.example.dzcom.domain.repository.product.ProductInvestmentProfileStore;
+import com.example.dzcom.domain.repository.product.ProductSearchCriteria;
+import com.example.dzcom.domain.repository.product.ProductStore;
 import com.example.dzcom.domain.model.task.ClosedLoopRun;
 import com.example.dzcom.domain.model.task.ClosedLoopStep;
 import com.example.dzcom.domain.model.task.InvestmentTaskDefinition;
@@ -202,12 +209,12 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             .noneMatch(step -> "UNEXPECTED_FAILURE".equals(step.stepCode())));
     }
 
-    /** 报告明确建议持有时，自动闭环应跳过下单但继续沉淀估值和反馈。 */
+    /** 报告建议持有但组合空仓且质量达标时，默认执行小额探索买入产出可复盘样本。 */
     @Test
-    void shouldSkipOrderWhenReportSuggestsHold() {
+    void shouldExecuteExploratoryBuyWhenHoldReportHasNoPosition() {
         Fixture fixture = new Fixture();
         fixture.reports.items.add(reportWithPlan("report-hold", new BigDecimal("0.80"), true, """
-            {"planType":"REFERENCE_ALLOCATION","actionType":"HOLD","decisionReason":"现金不足，等待更好机会"}
+            {"planType":"REFERENCE_ALLOCATION","actionType":"HOLD","decisionReason":"等待更好机会"}
             """));
 
         String summary = fixture.handler.execute(
@@ -229,18 +236,58 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .build());
 
         assertTrue(summary.contains("reportBizId=report-hold"));
-        assertEquals(0, fixture.portfolioService.buyFromReportCalls);
+        assertEquals(1, fixture.portfolioService.buyFromReportCalls);
         assertEquals(0, fixture.portfolioService.rebalanceCalls);
+        assertEquals("product-a", fixture.portfolioService.lastProductBizId);
+        assertEquals(new BigDecimal("5000.00"), fixture.portfolioService.lastMaxTradeAmount);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_PORTFOLIO_CONTEXT".equals(step.stepCode())
+                && step.outputSummary() != null
+                && step.outputSummary().contains("\"candidateProducts\"")));
         assertEquals(1, fixture.closedLoopService.backtestCalls);
         assertEquals(1, fixture.closedLoopService.feedbackCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .noneMatch(step -> "MOCK_TRADE_NOOP".equals(step.stepCode())));
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_TRADE".equals(step.stepCode())
+                && step.outputSummary() != null
+                && step.outputSummary().contains("\"executionMode\":\"EXPLORATORY_BUY\"")));
+    }
+
+    /** 报告明确建议持有且关闭探索买入时，自动闭环应跳过下单但继续沉淀估值和反馈。 */
+    @Test
+    void shouldSkipOrderWhenReportSuggestsHoldAndExplorationDisabled() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(reportWithPlan("report-hold", new BigDecimal("0.80"), true, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"HOLD","decisionReason":"现金不足，等待更好机会"}
+            """));
+
+        String summary = fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-hold-no-explore")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true",
+                    "allowExploratoryMockBuy", "false"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertTrue(summary.contains("reportBizId=report-hold"));
+        assertEquals(0, fixture.portfolioService.buyFromReportCalls);
+        assertEquals(0, fixture.portfolioService.rebalanceCalls);
         assertTrue(fixture.closedLoopStore.steps.stream()
             .anyMatch(step -> "MOCK_TRADE_NOOP".equals(step.stepCode())
                 && "SKIPPED".equals(step.stepStatus())
                 && step.failureReason().contains("HOLD")));
-        assertTrue(fixture.closedLoopStore.steps.stream()
-            .anyMatch(step -> "MOCK_TRADE".equals(step.stepCode())
-                && step.outputSummary() != null
-                && step.outputSummary().contains("\"executionMode\":\"HOLD\"")));
     }
 
     /** 已有合格报告时可跳过报告生成，避免调试后半段闭环时重复消耗远端模型。 */
@@ -569,6 +616,8 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private final MemoryClosedLoopRunStore closedLoopStore = new MemoryClosedLoopRunStore();
         private final MemoryReportStore reports = new MemoryReportStore();
         private final MemoryAiModelStore modelStore = new MemoryAiModelStore();
+        private final MemoryProductStore productStore = new MemoryProductStore();
+        private final MemoryProductInvestmentProfileStore investmentProfiles = new MemoryProductInvestmentProfileStore();
         private final CountingPortfolioService portfolioService = new CountingPortfolioService();
         private final MemorySystemConfigReader systemConfigs = new MemorySystemConfigReader();
         private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig =
@@ -605,6 +654,8 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 closedLoops,
                 reports,
                 portfolioService,
+                productStore,
+                investmentProfiles,
                 closedLoopService,
                 new AiModelApplicationService(modelStore, new MemoryAiModelSkillBindingStore(), ids, () -> NOW),
                 operatorProvider,
@@ -723,14 +774,97 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         }
     }
 
+    /** 内存产品仓储。 */
+    private static final class MemoryProductStore implements ProductStore {
+        private final List<Product> items = List.of(Product.builder()
+            .bizId("product-a")
+            .productNo("P001")
+            .productCode("588000")
+            .productName("科创50ETF")
+            .productType(ProductType.ETF)
+            .marketCode("SSE")
+            .currency("CNY")
+            .tradeStatus(ProductTradeStatus.TRADABLE)
+            .riskLevel(3)
+            .createdAt(NOW)
+            .createdBy("test")
+            .deleted(0)
+            .build());
+
+        @Override
+        public Product save(Product product) {
+            return product;
+        }
+
+        @Override
+        public Optional<Product> findByBizId(String bizId) {
+            return items.stream().filter(item -> item.getBizId().equals(bizId)).findFirst();
+        }
+
+        @Override
+        public boolean existsByMarketAndCode(String marketCode, String productCode) {
+            return findByMarketAndCode(marketCode, productCode).isPresent();
+        }
+
+        @Override
+        public Optional<Product> findByMarketAndCode(String marketCode, String productCode) {
+            return items.stream()
+                .filter(item -> item.getMarketCode().equals(marketCode) && item.getProductCode().equals(productCode))
+                .findFirst();
+        }
+
+        @Override
+        public PageResult<Product> search(ProductSearchCriteria criteria) {
+            return PageResult.<Product>builder()
+                .items(items.stream()
+                    .filter(item -> criteria.tradeStatus() == null || item.getTradeStatus() == criteria.tradeStatus())
+                    .toList())
+                .total(items.size())
+                .page(criteria.page())
+                .size(criteria.size())
+                .totalPages(1)
+                .build();
+        }
+    }
+
+    /** 内存产品画像仓储。 */
+    private static final class MemoryProductInvestmentProfileStore implements ProductInvestmentProfileStore {
+        private final ProductInvestmentProfile profile = ProductInvestmentProfile.builder()
+            .bizId("profile-a")
+            .productBizId("product-a")
+            .assetClass("ETF")
+            .riskSummary("测试画像")
+            .volatilityLevel("MEDIUM")
+            .liquidityLevel("HIGH")
+            .suitableRiskLevel(3)
+            .mockTradable(true)
+            .minHoldingDays(1)
+            .dataQualityScore(new BigDecimal("0.80"))
+            .createdAt(NOW)
+            .updatedAt(NOW)
+            .build();
+
+        @Override
+        public ProductInvestmentProfile save(ProductInvestmentProfile profile) {
+            return profile;
+        }
+
+        @Override
+        public Optional<ProductInvestmentProfile> findByProductBizId(String productBizId) {
+            return profile.productBizId().equals(productBizId) ? Optional.of(profile) : Optional.empty();
+        }
+    }
+
     /** 统计组合服务，质量门禁阻断时不应被调用。 */
     private static final class CountingPortfolioService extends com.example.dzcom.application.service.portfolio.MockPortfolioApplicationService {
         private int ensureCalls;
         private String lastReportBizId;
         private String lastUserBizId;
         private String lastPortfolioBizId;
+        private String lastProductBizId;
         private String lastPortfolioName;
         private BigDecimal lastInitialCash;
+        private BigDecimal lastMaxTradeAmount;
         private MockPortfolioView configuredPortfolio;
         private int buyFromReportCalls;
         private int rebalanceCalls;
@@ -764,6 +898,8 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         public MockOrderExecutionView buyFromReport(ExecuteMockPlanFromReportCommand command) {
             buyFromReportCalls++;
             lastReportBizId = command.reportBizId();
+            lastProductBizId = command.productBizId();
+            lastMaxTradeAmount = command.maxTradeAmount();
             if (failBuyFromReport) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "模拟组合现金不足");
             }

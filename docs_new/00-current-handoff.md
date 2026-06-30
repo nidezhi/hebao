@@ -69,6 +69,8 @@
 - 系统配置页信息架构已优化：页面改为左侧“配置树”父子导航，自动投资闭环下挂默认配置、生效概览、配置项列表、配置方案；右侧只展示当前节点内容，避免默认配置与列表/方案列表上下堆叠混乱。
 - 自动闭环定时任务已改为每天三次：`09:30、13:30、20:30`（Asia/Shanghai，cron=`0 30 9,13,20 * * *`）；默认 Mock 资金组合已重置为 10W CNY 现金、0 持仓、0 订单。
 - 自动闭环 Mock 执行已从“固定报告买入”升级为“组合上下文感知”：报告生成前会把 Mock 组合现金、估值、持仓和单笔上限传入模型上下文；执行时优先按 `investmentPlan.targetWeights` 再平衡，`HOLD/SKIP` 会记录无动作并继续估值/反馈，只有旧报告或明确 `BUY` 才按现金和上限收敛为单笔买入；现金不足会记录为 `MOCK_TRADE` 业务阻断，不再落入系统异常。
+- 自动闭环 Mock 样本生成已增强：`portfolioContext` 现在包含通过画像门禁的 `candidateProducts`；模型不得再因“无 productBizId”直接 HOLD。若报告仍建议 HOLD/SKIP，但组合空仓、质量达标且配置 `allowExploratoryMockBuy=true`，后端会按候选产品执行小额探索 Mock 买入，默认不超过单笔上限的 50%，用于产生可复盘样本。
+- 大模型调用埋点已增强：投资报告模型日志新增 `userPromptHash/contentHash`；通用 JSON 模型客户端新增 `callId/systemPromptHash/userPromptHash/contentHash` 和耗时/HTTP 状态，仍不记录密钥或完整 Prompt。
 - Overview 投资驾驶舱已升级为运行态 UI：指标区下方新增 LIVE RUNTIME 控制条，默认每 5 秒静默刷新，支持暂停/立即刷新；刷新时保留当前选中闭环实例，避免运行时间线跳回最新实例。
 - 本轮页面反馈已收口：Mock 组合支持删除但保护自动化 AI 资金池；Simulation 资产曲线空数据会明确提示估值历史缺失；Report Studio 左侧列表可滚动，新增 Mock 闭环上下文提醒，并展示真实 `promptSnapshot/chatSnapshot`；Overview 节点抽屉展示模型输入输出、Mock 动作、订单数、原因和组合结果等证据。
 - 报告 `chat_snapshot` 本地库错位已修复：V47 迁移改为幂等补列，当前 `dz_database.aiw_investment_analysis_report` 已存在 `chat_snapshot JSON`，自动报告 insert 不应再因 Unknown column 阻断。
@@ -88,6 +90,7 @@
 - Overview 运行态 UI 验证：`node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；`node node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning；本地 `/overview` 冒烟确认 LIVE RUNTIME、5 秒倒计时、暂停/立即刷新控件可见。
 - 本轮 Mock/报告/复盘/Overview 页面反馈验证：`./mvnw -q -Dtest=MockOpenAiCompatibleInvestmentAnalysisProviderTest,MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；`./mvnw -q -DskipTests compile` 通过；前端 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning。
 - 报告 `chat_snapshot` 库表修复验证：执行 `V47__add_report_chat_snapshot.sql` 到当前 `dz_database` 成功；`information_schema.columns` 确认 `chat_snapshot/json` 存在；`./mvnw -q -DskipTests compile` 通过。
+- 自动闭环探索买入与模型埋点验证：`./mvnw -q -Dtest=AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,MockOpenAiCompatibleInvestmentAnalysisProviderTest test` 通过；`./mvnw -q -DskipTests compile` 通过；当前库有 8 个满足 `mock_tradable=1` 且质量分 `0.65` 的候选产品。
 - 真实浏览器/API 冒烟依赖用户在 IDEA 启动后端服务；未启动服务时不把路由/API 冒烟写成通过。
 
 ### 下一步默认动作
