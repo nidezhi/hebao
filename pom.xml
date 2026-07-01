@@ -36,6 +36,8 @@
         <springdoc.version>3.0.3</springdoc.version>
         <mybatis-plus.version>3.5.16</mybatis-plus.version>
         <jdk.unsafe.access.arg></jdk.unsafe.access.arg>
+        <jdk.final.field.mutation.arg></jdk.final.field.mutation.arg>
+        <jdk.runtime.warning.args>${jdk.unsafe.access.arg} ${jdk.final.field.mutation.arg}</jdk.runtime.warning.args>
     </properties>
     <dependencies>
         <!-- ========== Web & MVC ========== -->
@@ -204,14 +206,14 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <jvmArguments>${jdk.unsafe.access.arg}</jvmArguments>
+                    <jvmArguments>${jdk.runtime.warning.args}</jvmArguments>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>${jdk.unsafe.access.arg}</argLine>
+                    <argLine>${jdk.runtime.warning.args}</argLine>
                 </configuration>
             </plugin>
         </plugins>
@@ -239,6 +241,15 @@
                     </plugin>
                 </plugins>
             </build>
+        </profile>
+        <profile>
+            <id>jdk-final-field-mutation</id>
+            <activation>
+                <jdk>[26,)</jdk>
+            </activation>
+            <properties>
+                <jdk.final.field.mutation.arg>--enable-final-field-mutation=ALL-UNNAMED</jdk.final.field.mutation.arg>
+            </properties>
         </profile>
     </profiles>
 

@@ -58,8 +58,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +78,8 @@ public class MockPortfolioApplicationService {
     private static final String PORTFOLIO_TYPE_SIMULATION = "SIMULATION";
     private static final String DEFAULT_CURRENCY = "CNY";
     private static final String CHANNEL_SIMULATOR = "SIMULATOR";
+    private static final int ORDER_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
+    private static final int ORDER_IDEMPOTENCY_HASH_LENGTH = 24;
     private static final Set<String> SORT_FIELDS = Set.of("createdAt", "updatedAt", "portfolioNo", "portfolioName");
 
     private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig;
@@ -315,6 +321,7 @@ public class MockPortfolioApplicationService {
         Portfolio portfolio = requiredOwnedSimulationPortfolio(command.portfolioBizId(), operator);
         Product product = requiredTradableProduct(command.productBizId());
         requireMockTradable(product.getBizId(), operator.userBizId(), "ORDER", portfolio.bizId());
+        String idempotencyKey = normalizeOrderIdempotencyKey(command.idempotencyKey());
         BigDecimal amount = normalizeBuyAmount(command.amount());
         MarketQuote quote = quotes.findLatest(product.getBizId(), "1D", null)
             .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "产品缺少最新行情，不能模拟成交"));
@@ -342,7 +349,7 @@ public class MockPortfolioApplicationService {
                     "requiredCash", requiredCash));
         }
         MockOrder existingOrder = orders
-            .findByUserAndIdempotencyKey(operator.userBizId(), command.idempotencyKey())
+            .findByUserAndIdempotencyKey(operator.userBizId(), idempotencyKey)
             .orElse(null);
         if (existingOrder != null) {
             TradeExecution existingExecution = executions.findFirstByOrderBizId(existingOrder.bizId())
@@ -355,7 +362,7 @@ public class MockPortfolioApplicationService {
             operator,
             portfolio,
             product,
-            command.idempotencyKey(),
+            idempotencyKey,
             price,
             quantity,
             amount,
@@ -392,6 +399,7 @@ public class MockPortfolioApplicationService {
         Portfolio portfolio = requiredOwnedSimulationPortfolio(command.portfolioBizId(), operator);
         Product product = requiredTradableProduct(command.productBizId());
         requireMockTradable(product.getBizId(), operator.userBizId(), "ORDER", portfolio.bizId());
+        String idempotencyKey = normalizeOrderIdempotencyKey(command.idempotencyKey());
         BigDecimal quantity = normalizeSellQuantity(command.quantity());
         MarketQuote quote = latestValidQuote(product.getBizId(), "产品缺少最新行情，不能模拟卖出");
         BigDecimal price = quote.closePrice();
@@ -407,7 +415,7 @@ public class MockPortfolioApplicationService {
                     "availableQuantity", existingPosition.availableQuantity(), "sellQuantity", quantity));
         }
         MockOrder existingOrder = orders
-            .findByUserAndIdempotencyKey(operator.userBizId(), command.idempotencyKey())
+            .findByUserAndIdempotencyKey(operator.userBizId(), idempotencyKey)
             .orElse(null);
         if (existingOrder != null) {
             TradeExecution existingExecution = executions.findFirstByOrderBizId(existingOrder.bizId())
@@ -422,7 +430,7 @@ public class MockPortfolioApplicationService {
             operator,
             portfolio,
             product,
-            command.idempotencyKey(),
+            idempotencyKey,
             price,
             quantity,
             amount,
@@ -1682,7 +1690,43 @@ public class MockPortfolioApplicationService {
         String prefix = idempotencyKey == null || idempotencyKey.isBlank()
             ? "REBALANCE-" + ids.newBizId()
             : idempotencyKey.trim();
-        return prefix + "-" + sequence + "-" + side + "-" + productBizId;
+        return normalizeOrderIdempotencyKey(prefix + "-" + sequence + "-" + side + "-" + productBizId);
+    }
+
+    /**
+     * 将模拟订单幂等键压缩到数据库契约允许的长度内。
+     *
+     * <p>自动闭环会把运行、报告、调仓腿和产品标识组合成幂等键，原始值可能超过
+     * {@code aiw_order.idempotency_key} 的 128 字符限制。这里保留可读前缀并追加
+     * SHA-256 摘要片段，保证同一个原始幂等键稳定映射到同一个短键，同时避免写库截断。</p>
+     *
+     * @param idempotencyKey 原始幂等键
+     * @return 可安全写入订单表的幂等键
+     * @author dz
+     * @date 2026-07-01
+     */
+    private String normalizeOrderIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return idempotencyKey;
+        }
+        String normalized = idempotencyKey.trim();
+        if (normalized.length() <= ORDER_IDEMPOTENCY_KEY_MAX_LENGTH) {
+            return normalized;
+        }
+        String hash = sha256Hex(normalized).substring(0, ORDER_IDEMPOTENCY_HASH_LENGTH);
+        int prefixLength = ORDER_IDEMPOTENCY_KEY_MAX_LENGTH - ORDER_IDEMPOTENCY_HASH_LENGTH - 2;
+        return normalized.substring(0, prefixLength) + "--" + hash;
+    }
+
+    /** 计算幂等键摘要，用于压缩超长业务幂等键。 */
+    private String sha256Hex(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("JVM 不支持 SHA-256", exception);
+        }
     }
 
     /** 判断订单是否已进入不可撤销终态。 */

@@ -70,6 +70,9 @@
 - 持续进化分析层已建立：新增 `POST /api/analytics/investment-evolution/summary`，按最近样本归集闭环成功率、Mock 收益/回撤/换手代理、风控拒绝原因、模型调用稳定性、反馈/回测样本和模型/Prompt/Skill A/B 归因；样本不足时返回 `sampleStatus/limitations`，不伪造长期结论。
 - 前端新增 `/investment-evolution` 统一分析页，入口在“投资闭环”菜单；页面只消费真实分析接口和 adapter 后的结构化 ViewModel。
 - 后端启动故障已修复：模型调用审计接入后 `MockOpenAiCompatibleInvestmentAnalysisProvider` 和 `OpenAiCompatibleJsonCompletionClient` 存在测试兼容构造器与生产构造器，Spring 曾误走无参构造路径；现已显式标记生产构造器并补启动回归测试。
+- `/ai-call-audits` 页面已升级为紧凑型模型调用审计工作台：筛选区按主筛选 + 更多高级筛选收纳；列表按状态图标、模型层、调用层、业务归因、Prompt/Skill 分级展示；主 UI 优先展示中文业务/场景/任务 label，原始枚举只作为追踪字段或次要信息保留。
+- 自动闭环报告子任务失败原因已收紧：父闭环不再出现 `自动报告任务失败: null`，任务执行审计会对空 message 异常兜底为异常类型，父节点会带上 `taskCode/status/eventId/reason`；Java 26 下 MyBatis `BoundSql.sql` final-field mutation warning 已在 Maven 测试/启动参数中加入推荐开关。
+- Mock 订单幂等键越界已修复：自动闭环再平衡腿单会把长幂等键压缩为 `可读前缀 + SHA-256 摘要`，稳定映射且不超过 `aiw_order.idempotency_key VARCHAR(128)`；未改旧 Mapper XML，后续新增仍遵循 MyBatis-Plus 优先。
 - Handoff 自身瘦身已执行：本文最新区只保留入口索引、当前有效状态和最近验证摘要；详细历史默认不读。
 
 ### 最近验证结果
@@ -80,6 +83,9 @@
 - 模型调用审计中心最新整改验证：`./mvnw -q -Dtest=AiModelCallAuditApplicationServiceTest,ControllerRequestContractTest,OpenAiCompatibleJsonCompletionClientTest,MockOpenAiCompatibleInvestmentAnalysisProviderTest test` 通过；`/Users/daniel/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；同 Node 路径执行 `node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
 - 持续进化分析验证：`./mvnw -q -Dtest=InvestmentEvolutionAnalyticsApplicationServiceTest,ControllerRequestContractTest test` 通过；前端 bundled Node 执行 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning；`diff --check` 通过。
 - 后端启动故障验证：`./mvnw -q -Dtest=DzcomApplicationTests test` 通过，已断言核心 AI Bean 可由 Spring 装配；`./mvnw -q -Dtest=MockOpenAiCompatibleInvestmentAnalysisProviderTest,OpenAiCompatibleJsonCompletionClientTest,AiModelCallAuditApplicationServiceTest,InvestmentEvolutionAnalyticsApplicationServiceTest,ControllerRequestContractTest test` 通过；`git diff --check` 通过。`spring-boot:run` 已验证可启动并已停止，避免占用 IDEA 端口。
+- 模型调用审计页验证：前端 bundled Node 执行 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning；`/ai-call-audits` 路由冒烟通过，真实接口返回审计记录，筛选卡片高度约 `102px`，正文未裸展示 `INVESTMENT_REPORT/DEFAULT`，控制台无 error。
+- 自动闭环失败原因验证：`./mvnw -q -Dtest=AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,InvestmentTaskManagementServiceTest test` 通过；`./mvnw -q -DskipTests compile` 通过；`git diff --check` 通过。测试覆盖报告子任务抛出无 message 异常时，父任务记录为 `BLOCKED` 且失败原因包含任务编码、状态和异常类型，不再包含 `null`。
+- Mock 订单幂等键验证：`./mvnw -q -Dtest=MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；`./mvnw -q -DskipTests compile` 通过；`git diff --check` 通过。新增测试覆盖长自动闭环幂等键在再平衡保存前被压缩到 128 字符内。
 - 真实浏览器/API 冒烟依赖用户在 IDEA 启动后端服务；未启动服务时不把路由/API 冒烟写成通过。
 
 ### 下一步默认动作

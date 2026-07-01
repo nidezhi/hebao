@@ -189,18 +189,19 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             ));
             throw blocked;
         } catch (Exception exception) {
+            String failureReason = unexpectedFailureReason(exception);
             log.warn(
                 "自动投资闭环异常失败: taskCode={}, eventId={}, runNo={}, exceptionType={}, reason={}",
                 event.taskCode(),
                 event.eventId(),
                 run.runNo(),
                 exception.getClass().getSimpleName(),
-                exception.getMessage()
+                failureReason
             );
             closedLoops.failedStep(run, "UNEXPECTED_FAILURE", "闭环异常兜底", 999,
-                exception.getMessage(), Map.of("taskCode", event.taskCode()));
-            closedLoops.completeRun(run, "FAILED", "BLOCK", exception.getMessage(), Map.of(
-                "failureReason", exception.getMessage()
+                failureReason, Map.of("taskCode", event.taskCode()));
+            closedLoops.completeRun(run, "FAILED", "BLOCK", failureReason, Map.of(
+                "failureReason", failureReason
             ));
             throw exception;
         }
@@ -585,7 +586,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         );
         Map<String, Object> result = executeChildTask(parentEvent, reportTaskCode, overrides);
         if (!"SUCCEEDED".equals(result.get("status"))) {
-            String reason = "自动报告任务失败: " + result.get("failureReason");
+            String reason = childTaskFailureReason("自动报告任务失败", reportTaskCode, result);
             log.warn(
                 "自动投资闭环报告任务失败: runNo={}, reportTaskCode={}, status={}, failureReason={}",
                 run.runNo(),
@@ -685,10 +686,11 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             "reportBizId", report.bizId()
         ));
         if (!"SUCCEEDED".equals(result.get("status"))) {
+            String reason = childTaskFailureReason("Prompt 治理任务失败", promptTaskCode, result);
             log.warn("自动投资闭环Prompt候选任务失败: runNo={}, promptTaskCode={}, result={}",
                 run.runNo(), promptTaskCode, result);
             closedLoops.blockedStep(run, "PROMPT_CANDIDATE", "Prompt候选与评分", 50,
-                "Prompt 治理任务失败: " + result.get("failureReason"), Map.of("taskCode", promptTaskCode));
+                reason, Map.of("taskCode", promptTaskCode));
             return;
         }
         Map<String, Object> promptSummary = readObjectMapOrEmptySafe(result.get("resultSummary"));
@@ -1157,6 +1159,50 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             execution.failureReason()
         );
         return result;
+    }
+
+    /**
+     * 构造父级闭环可展示的子任务失败原因。
+     *
+     * <p>子任务异常可能只记录状态或异常类型，本方法统一补齐任务编码和状态，避免闭环节点出现
+     * “自动报告任务失败: null” 这类不可排查文案。</p>
+     *
+     * @param prefix 父级节点失败语义
+     * @param taskCode 子任务编码
+     * @param result 子任务执行结果
+     * @return 非空、可展示、可检索的失败原因
+     */
+    private String childTaskFailureReason(String prefix, String taskCode, Map<String, Object> result) {
+        String failureReason = stringValue(result.get("failureReason"));
+        String status = stringValue(result.get("status"));
+        String eventId = stringValue(result.get("eventId"));
+        if (failureReason.isBlank()) {
+            failureReason = "子任务未返回失败原因";
+        }
+        return prefix + ": taskCode=" + taskCode
+            + ", status=" + (status.isBlank() ? "UNKNOWN" : status)
+            + ", eventId=" + (eventId.isBlank() ? "-" : eventId)
+            + ", reason=" + failureReason;
+    }
+
+    /** 将对象转为非空安全字符串。 */
+    private String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    /**
+     * 构造自动闭环兜底异常的稳定失败原因。
+     *
+     * @param exception 原始异常
+     * @return 非空失败原因
+     */
+    private String unexpectedFailureReason(Exception exception) {
+        String message = exception.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String type = exception.getClass().getSimpleName();
+        return "自动闭环异常失败: " + (type == null || type.isBlank() ? "UnknownException" : type);
     }
 
     /** 解析单主题编码，多个主题时由报告任务批量生成，本轮运行记录只保留第一个用于筛选。 */

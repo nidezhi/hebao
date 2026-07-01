@@ -141,6 +141,32 @@ class MockPortfolioApplicationServiceTest {
             .anyMatch(check -> "TARGET_WEIGHT_EXCEEDED".equals(check.reasonCode())));
     }
 
+    /** 自动闭环再平衡的长幂等键必须压缩到订单表字段长度内。 */
+    @Test
+    void shouldCompactLongRebalanceIdempotencyKeyBeforeSavingOrder() {
+        Fixture fixture = new Fixture();
+        String longAutoClosedLoopKey = "AUTO-CLOSED-LOOP-"
+            + "0d52ec64-4ae4-4c96-a0cb-cef8b23c5f65"
+            + "-"
+            + "ff4991ad-7617-4dba-9ead-0f28a32cab63"
+            + "-"
+            + "profile-20260701-closed-loop-authoritative";
+
+        fixture.service.rebalance(ExecuteMockRebalanceCommand.builder()
+            .portfolioBizId("portfolio-1")
+            .targets(List.of(ExecuteMockRebalanceCommand.TargetWeight.builder()
+                .productBizId("71000000-0000-0000-0000-000000000888")
+                .targetWeight(new BigDecimal("0.20"))
+                .build()))
+            .idempotencyKey(longAutoClosedLoopKey)
+            .build());
+
+        MockOrder savedOrder = fixture.orders.orders.values().iterator().next();
+        assertTrue(savedOrder.idempotencyKey().length() <= 128);
+        assertTrue(savedOrder.idempotencyKey().startsWith("AUTO-CLOSED-LOOP-"));
+        assertTrue(savedOrder.idempotencyKey().contains("--"));
+    }
+
     /** 模拟买入成功时也要沉淀 PASS 风控样本，支撑风控审计页闭环。 */
     @Test
     void shouldRecordPassRiskChecksWhenBuySucceeds() {

@@ -502,6 +502,46 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         assertEquals("没有找到满足质量门禁的最新投资报告", execution.failureReason());
     }
 
+    /** 报告子任务异常没有 message 时，父闭环也必须保留可排查失败原因，不能显示 null。 */
+    @Test
+    void shouldDescribeReportTaskFailureWhenChildExceptionMessageIsMissing() {
+        Fixture fixture = new Fixture();
+        fixture.taskHandlers.remove(fixture.reportTaskHandler);
+        fixture.taskHandlers.add(new BlankMessageFailingTaskHandler("REPORT_TASK"));
+        InvestmentTaskExecutionService executionService = new InvestmentTaskExecutionService(
+            List.of(fixture.handler),
+            fixture.executions,
+            Optional.of(fixture.definitions),
+            Optional.empty(),
+            fixture.ids,
+            () -> NOW
+        );
+
+        ScheduledTaskExecution execution = executionService.executeAndReturn(
+            InvestmentTaskEvent.builder()
+                .eventId("event-report-null-message")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "reportTaskCode", "report-task",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals("BLOCKED", execution.status());
+        assertTrue(execution.failureReason().contains("自动报告任务失败: taskCode=report-task"));
+        assertTrue(execution.failureReason().contains("status=FAILED"));
+        assertTrue(execution.failureReason().contains("reason=投资任务执行异常: IllegalStateException"));
+        assertTrue(!execution.failureReason().contains("null"));
+    }
+
     /** 历史 Kafka 定时消息命中已禁用任务时，应直接跳过，避免继续执行旧高消费参数。 */
     @Test
     void shouldSkipDisabledScheduledTaskEvent() {
@@ -727,6 +767,25 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         public String execute(InvestmentTaskEvent event) {
             calls++;
             return "executed";
+        }
+    }
+
+    /** 抛出无 message 异常的任务处理器，用于覆盖父子任务失败原因兜底。 */
+    private static final class BlankMessageFailingTaskHandler implements InvestmentTaskHandler {
+        private final String taskType;
+
+        private BlankMessageFailingTaskHandler(String taskType) {
+            this.taskType = taskType;
+        }
+
+        @Override
+        public boolean supports(String type) {
+            return taskType.equals(type);
+        }
+
+        @Override
+        public String execute(InvestmentTaskEvent event) {
+            throw new IllegalStateException();
         }
     }
 

@@ -91,18 +91,20 @@ public class InvestmentTaskExecutionService {
                 .build());
             return succeeded;
         } catch (InvestmentTaskBlockedException exception) {
+            String failureReason = failureReason(exception, "投资任务被业务门禁阻断");
             ScheduledTaskExecution blocked = executions.save(running.toBuilder()
                 .status("BLOCKED")
-                .failureReason(limit(exception.getMessage(), FAILURE_REASON_MAX_LENGTH))
+                .failureReason(limit(failureReason, FAILURE_REASON_MAX_LENGTH))
                 .completedAt(clock.now())
                 .build());
             log.warn("投资任务被业务门禁阻断: eventId={}, taskCode={}, taskType={}, reason={}",
-                effectiveEvent.eventId(), effectiveEvent.taskCode(), effectiveEvent.taskType(), exception.getMessage());
+                effectiveEvent.eventId(), effectiveEvent.taskCode(), effectiveEvent.taskType(), failureReason);
             return blocked;
         } catch (Exception exception) {
+            String failureReason = failureReason(exception, "投资任务执行异常");
             ScheduledTaskExecution failed = executions.save(running.toBuilder()
                 .status("FAILED")
-                .failureReason(limit(exception.getMessage(), FAILURE_REASON_MAX_LENGTH))
+                .failureReason(limit(failureReason, FAILURE_REASON_MAX_LENGTH))
                 .completedAt(clock.now())
                 .build());
             log.error("投资任务执行失败: eventId={}, taskCode={}, taskType={}",
@@ -170,6 +172,25 @@ public class InvestmentTaskExecutionService {
     /** 判断是否人工触发。 */
     private boolean isManualTrigger(InvestmentTaskEvent event) {
         return "MANUAL".equalsIgnoreCase(event.triggerSource());
+    }
+
+    /**
+     * 构造稳定可展示的任务失败原因。
+     *
+     * <p>部分底层异常可能没有 message。执行审计不能把空值落库，否则父级闭环只能显示
+     * “失败: null”，前端也无法结构化展示阻断上下文。</p>
+     *
+     * @param exception 原始异常
+     * @param fallbackPrefix 兜底业务语义
+     * @return 非空失败原因
+     */
+    private String failureReason(Exception exception, String fallbackPrefix) {
+        String message = exception.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String type = exception.getClass().getSimpleName();
+        return fallbackPrefix + ": " + (type.isBlank() ? "UnknownException" : type);
     }
 
     /** 限制审计文本长度，避免异常消息撑大记录。 */
