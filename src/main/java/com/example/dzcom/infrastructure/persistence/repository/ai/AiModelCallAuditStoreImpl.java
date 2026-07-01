@@ -79,6 +79,7 @@ public class AiModelCallAuditStoreImpl implements AiModelCallAuditStore {
     @Override
     public PageResult<AiModelCallAudit> search(AiModelCallAuditSearchCriteria criteria) {
         LambdaQueryWrapper<AiModelCallAuditEntity> wrapper = wrapper(criteria);
+        selectListColumns(wrapper);
         applySort(wrapper, criteria.sort(), criteria.asc());
         IPage<AiModelCallAuditEntity> page = mapper.selectPage(
             Page.of(criteria.page(), criteria.size(), true),
@@ -119,6 +120,58 @@ public class AiModelCallAuditStoreImpl implements AiModelCallAuditStore {
         eq(wrapper, AiModelCallAuditEntity::getScenarioCode, criteria.scenarioCode());
         eq(wrapper, AiModelCallAuditEntity::getEnvironment, criteria.environment());
         return wrapper;
+    }
+
+    /**
+     * 选择列表页需要的轻量字段。
+     *
+     * <p>完整输入输出 payload 只在详情查询返回，避免审计列表随着大模型上下文膨胀而变慢。</p>
+     *
+     * @param wrapper 查询包装器
+     */
+    private void selectListColumns(LambdaQueryWrapper<AiModelCallAuditEntity> wrapper) {
+        wrapper.select(
+            AiModelCallAuditEntity::getBizId,
+            AiModelCallAuditEntity::getCallId,
+            AiModelCallAuditEntity::getOperationCode,
+            AiModelCallAuditEntity::getCallStatus,
+            AiModelCallAuditEntity::getProviderCode,
+            AiModelCallAuditEntity::getModelCode,
+            AiModelCallAuditEntity::getModelVersion,
+            AiModelCallAuditEntity::getRemoteModel,
+            AiModelCallAuditEntity::getEndpoint,
+            AiModelCallAuditEntity::getHttpMethod,
+            AiModelCallAuditEntity::getHttpStatus,
+            AiModelCallAuditEntity::getDurationMs,
+            AiModelCallAuditEntity::getSystemPromptHash,
+            AiModelCallAuditEntity::getUserPromptHash,
+            AiModelCallAuditEntity::getResponseHash,
+            AiModelCallAuditEntity::getRequestPreview,
+            AiModelCallAuditEntity::getResponsePreview,
+            AiModelCallAuditEntity::getInputSummary,
+            AiModelCallAuditEntity::getOutputSummary,
+            AiModelCallAuditEntity::getBusinessType,
+            AiModelCallAuditEntity::getBusinessBizId,
+            AiModelCallAuditEntity::getBusinessLabel,
+            AiModelCallAuditEntity::getTaskCode,
+            AiModelCallAuditEntity::getEventId,
+            AiModelCallAuditEntity::getRunBizId,
+            AiModelCallAuditEntity::getRunNo,
+            AiModelCallAuditEntity::getReportBizId,
+            AiModelCallAuditEntity::getPromptBizId,
+            AiModelCallAuditEntity::getPromptCode,
+            AiModelCallAuditEntity::getPromptVersion,
+            AiModelCallAuditEntity::getSkillBizId,
+            AiModelCallAuditEntity::getSkillCode,
+            AiModelCallAuditEntity::getSkillVersion,
+            AiModelCallAuditEntity::getModelSkillBindingBizId,
+            AiModelCallAuditEntity::getScenarioCode,
+            AiModelCallAuditEntity::getEnvironment,
+            AiModelCallAuditEntity::getErrorCode,
+            AiModelCallAuditEntity::getErrorMessage,
+            AiModelCallAuditEntity::getCreatedAt,
+            AiModelCallAuditEntity::getUpdatedAt
+        );
     }
 
     /**
@@ -182,6 +235,8 @@ public class AiModelCallAuditStoreImpl implements AiModelCallAuditStore {
             .responseHash(audit.responseHash())
             .requestPreview(audit.requestPreview())
             .responsePreview(audit.responsePreview())
+            .requestPayload(audit.requestPayload())
+            .responsePayload(audit.responsePayload())
             .inputSummary(audit.inputSummary())
             .outputSummary(audit.outputSummary())
             .businessType(audit.businessType())
@@ -233,6 +288,8 @@ public class AiModelCallAuditStoreImpl implements AiModelCallAuditStore {
             .responseHash(entity.getResponseHash())
             .requestPreview(entity.getRequestPreview())
             .responsePreview(entity.getResponsePreview())
+            .requestPayload(entity.getRequestPayload())
+            .responsePayload(entity.getResponsePayload())
             .inputSummary(entity.getInputSummary())
             .outputSummary(entity.getOutputSummary())
             .businessType(entity.getBusinessType())

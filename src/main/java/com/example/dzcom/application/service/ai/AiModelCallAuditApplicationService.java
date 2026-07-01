@@ -64,6 +64,7 @@ public class AiModelCallAuditApplicationService {
     ) {
         LocalDateTime now = clock.now();
         AiModelCallAuditContext safeContext = context == null ? AiModelCallAuditContext.empty() : context;
+        String requestPayload = joinPromptPreview(systemPrompt, userPrompt);
         return audits.save(AiModelCallAudit.builder()
             .bizId(ids.newBizId())
             .callId(callId)
@@ -77,7 +78,8 @@ public class AiModelCallAuditApplicationService {
             .httpMethod("POST")
             .systemPromptHash(systemPromptHash)
             .userPromptHash(userPromptHash)
-            .requestPreview(preview(joinPromptPreview(systemPrompt, userPrompt)))
+            .requestPreview(preview(requestPayload))
+            .requestPayload(payload(requestPayload))
             .inputSummary(toJson(safeContext.inputSummary()))
             .businessType(trim(safeContext.businessType()))
             .businessBizId(trim(safeContext.businessBizId()))
@@ -230,6 +232,7 @@ public class AiModelCallAuditApplicationService {
             .durationMs(durationMs)
             .responseHash(responseHash)
             .responsePreview(preview(responseText))
+            .responsePayload(payload(responseText))
             .outputSummary(toJson(outputSummary))
             .errorCode(trim(errorCode))
             .errorMessage(preview(errorMessage, 1024))
@@ -262,6 +265,8 @@ public class AiModelCallAuditApplicationService {
             .responseHash(audit.responseHash())
             .requestPreview(audit.requestPreview())
             .responsePreview(audit.responsePreview())
+            .requestPayload(audit.requestPayload())
+            .responsePayload(audit.responsePayload())
             .inputSummary(audit.inputSummary())
             .outputSummary(audit.outputSummary())
             .modelDisplay(modelDisplay(audit))
@@ -326,6 +331,19 @@ public class AiModelCallAuditApplicationService {
      */
     private String preview(String value) {
         return preview(value, PREVIEW_LIMIT);
+    }
+
+    /**
+     * 保存模型调用完整审计内容。
+     *
+     * <p>完整内容用于详情弹窗排查模型输入输出，列表和外层预览仍使用截断后的 preview 字段，
+     * 避免大文本影响审计页加载与展示。</p>
+     *
+     * @param value 原始输入或输出文本
+     * @return 去除前后空白后的完整审计文本
+     */
+    private String payload(String value) {
+        return value == null ? null : value.strip();
     }
 
     /**

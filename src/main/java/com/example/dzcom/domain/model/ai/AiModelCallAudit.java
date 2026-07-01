@@ -29,6 +29,8 @@ public record AiModelCallAudit(
     String responseHash,
     String requestPreview,
     String responsePreview,
+    String requestPayload,
+    String responsePayload,
     String inputSummary,
     String outputSummary,
     String businessType,

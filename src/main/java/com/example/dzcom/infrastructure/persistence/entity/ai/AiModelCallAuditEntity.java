@@ -38,6 +38,8 @@ public class AiModelCallAuditEntity {
     private String responseHash;
     private String requestPreview;
     private String responsePreview;
+    private String requestPayload;
+    private String responsePayload;
     private String inputSummary;
     private String outputSummary;
     private String businessType;

@@ -44,6 +44,10 @@ public record AiModelCallAuditResponse(
     String requestPreview,
     @Schema(description = "脱敏截断后的输出预览")
     String responsePreview,
+    @Schema(description = "脱敏后的完整输入内容，仅详情排查使用")
+    String requestPayload,
+    @Schema(description = "脱敏后的完整输出内容，仅详情排查使用")
+    String responsePayload,
     @Schema(description = "结构化输入摘要 JSON")
     String inputSummary,
     @Schema(description = "结构化输出摘要 JSON")
@@ -128,6 +132,8 @@ public record AiModelCallAuditResponse(
             .responseHash(view.responseHash())
             .requestPreview(view.requestPreview())
             .responsePreview(view.responsePreview())
+            .requestPayload(view.requestPayload())
+            .responsePayload(view.responsePayload())
             .inputSummary(view.inputSummary())
             .outputSummary(view.outputSummary())
             .modelDisplay(view.modelDisplay())

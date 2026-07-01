@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="DzcomApplication local" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="dzcom" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.example.dzcom.DzcomApplication" />
+    <option name="ACTIVE_PROFILES" value="local" />
+    <option name="VM_PARAMETERS" value="--sun-misc-unsafe-memory-access=allow --enable-final-field-mutation=ALL-UNNAMED" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

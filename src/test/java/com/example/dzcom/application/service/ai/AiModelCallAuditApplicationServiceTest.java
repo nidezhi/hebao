@@ -71,6 +71,38 @@ class AiModelCallAuditApplicationServiceTest {
         assertNotNull(view.requestPreview());
     }
 
+    @Test
+    void shouldKeepFullPayloadWhenPreviewIsTruncated() {
+        MemoryAuditStore store = new MemoryAuditStore();
+        AiModelCallAuditApplicationService service = new AiModelCallAuditApplicationService(
+            store,
+            new IncrementalIds(),
+            () -> LocalDateTime.of(2026, 7, 1, 10, 0)
+        );
+        String longPrompt = "配置".repeat(4500);
+        String longResponse = "{\"result\":\"" + "输出".repeat(4500) + "\"}";
+
+        service.start(
+            "call-long",
+            "AUTO_INVESTMENT_REPORT_GENERATION",
+            modelConfig(),
+            "https://example.test/v1/chat/completions",
+            "system-hash",
+            "user-hash",
+            "system",
+            longPrompt,
+            AiModelCallAuditContext.empty()
+        );
+        service.succeed("call-long", 200, 2000, "response-hash", longResponse, Map.of());
+
+        AiModelCallAuditView view = service.detail("audit-1");
+
+        assertTrue(view.requestPreview().endsWith("..."));
+        assertTrue(view.responsePreview().endsWith("..."));
+        assertTrue(view.requestPayload().contains(longPrompt));
+        assertEquals(longResponse, view.responsePayload());
+    }
+
     private AiModelRuntimeConfig modelConfig() {
         return AiModelRuntimeConfig.builder()
             .modelCode("openai-compatible-analysis")

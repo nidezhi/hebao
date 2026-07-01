@@ -29,6 +29,8 @@ public record AiModelCallAuditView(
     String responseHash,
     String requestPreview,
     String responsePreview,
+    String requestPayload,
+    String responsePayload,
     String inputSummary,
     String outputSummary,
     String modelDisplay,
