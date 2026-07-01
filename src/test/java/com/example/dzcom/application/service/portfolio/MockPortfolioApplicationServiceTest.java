@@ -141,16 +141,17 @@ class MockPortfolioApplicationServiceTest {
             .anyMatch(check -> "TARGET_WEIGHT_EXCEEDED".equals(check.reasonCode())));
     }
 
-    /** 自动闭环再平衡的长幂等键必须压缩到订单表字段长度内。 */
+    /** 自动闭环再平衡的长幂等键必须原样保存，便于排查闭环执行链路。 */
     @Test
-    void shouldCompactLongRebalanceIdempotencyKeyBeforeSavingOrder() {
+    void shouldPreserveLongRebalanceIdempotencyKeyWhenSavingOrder() {
         Fixture fixture = new Fixture();
         String longAutoClosedLoopKey = "AUTO-CLOSED-LOOP-"
             + "0d52ec64-4ae4-4c96-a0cb-cef8b23c5f65"
             + "-"
             + "ff4991ad-7617-4dba-9ead-0f28a32cab63"
             + "-"
-            + "profile-20260701-closed-loop-authoritative";
+            + "profile-20260701-closed-loop-authoritative"
+            + "-with-readable-run-report-rebalance-context";
 
         fixture.service.rebalance(ExecuteMockRebalanceCommand.builder()
             .portfolioBizId("portfolio-1")
@@ -162,9 +163,9 @@ class MockPortfolioApplicationServiceTest {
             .build());
 
         MockOrder savedOrder = fixture.orders.orders.values().iterator().next();
-        assertTrue(savedOrder.idempotencyKey().length() <= 128);
-        assertTrue(savedOrder.idempotencyKey().startsWith("AUTO-CLOSED-LOOP-"));
-        assertTrue(savedOrder.idempotencyKey().contains("--"));
+        String expectedKey = longAutoClosedLoopKey + "-1-BUY-71000000-0000-0000-0000-000000000888";
+        assertEquals(expectedKey, savedOrder.idempotencyKey());
+        assertTrue(savedOrder.idempotencyKey().length() > 128);
     }
 
     /** 模拟买入成功时也要沉淀 PASS 风控样本，支撑风控审计页闭环。 */
@@ -215,6 +216,38 @@ class MockPortfolioApplicationServiceTest {
             .build());
 
         assertEquals("product-1", execution.order().productBizId());
+        assertEquals("FILLED", execution.order().status());
+    }
+
+    /** 报告投资方案字段漂移到 orderSizing 和 selectedProduct 时，也应归一化成可执行 Mock 买入。 */
+    @Test
+    void shouldNormalizeNestedReportPlanFieldsWhenBuyingFromReport() {
+        Fixture fixture = new Fixture();
+        fixture.reports.save(InvestmentAnalysisReport.builder()
+            .bizId("report-nested-plan")
+            .requestId("request-nested-plan")
+            .providerCode("OPENAI_COMPATIBLE")
+            .modelCode("openai-compatible-analysis")
+            .marketScope("CN_MAINLAND")
+            .status("SUCCEEDED")
+            .confidenceLevel("MEDIUM_CONFIDENCE")
+            .dataQualityScore(new BigDecimal("0.80"))
+            .dataQualityGate("{\"passed\":true}")
+            .investmentPlan("""
+                {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","selectedProduct":{"productBizId":"product-1"},"orderSizing":{"referenceTradeAmount":5000,"referenceAllocationRate":0.05,"maxSingleTradeAmountLimit":10000}}
+                """)
+            .generatedAt(NOW)
+            .createdAt(NOW)
+            .build());
+
+        var execution = fixture.service.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
+            .portfolioBizId("portfolio-1")
+            .reportBizId("report-nested-plan")
+            .idempotencyKey("nested-report-buy")
+            .build());
+
+        assertEquals("product-1", execution.order().productBizId());
+        assertEquals(0, new BigDecimal("5000.00000000").compareTo(execution.order().executedAmount()));
         assertEquals("FILLED", execution.order().status());
     }
 

@@ -189,7 +189,7 @@ public class AutoInvestmentClosedLoopConfigService {
         result.put("marketScope", "CN_MAINLAND");
         result.put("dataTaskCodes", "real-data-quality-snapshot");
         result.put("reportTaskCode", "auto-openai-investment-report-generation");
-        result.put("promptTaskCode", "");
+        result.put("promptTaskCode", "auto-prompt-governance");
         result.put("skipReportTask", "false");
         result.put("allowPromptCandidate", "true");
         result.put("allowModelCandidate", "true");
@@ -197,8 +197,8 @@ public class AutoInvestmentClosedLoopConfigService {
         result.put("minQualityScore", "0.45");
         result.put("maxReportsForMock", "20");
         result.put("allowAutoMockTrade", "true");
-        result.put("allowAutoPromptActivation", "true");
-        result.put("allowAutoModelActivation", "true");
+        result.put("allowAutoPromptActivation", "false");
+        result.put("allowAutoModelActivation", "false");
         result.put("allowRealTrade", "false");
         result.put("maxSingleTradeAmount", "10000");
         result.put("benchmarkCode", "");

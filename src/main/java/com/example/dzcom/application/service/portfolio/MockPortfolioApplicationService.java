@@ -58,12 +58,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,8 +74,6 @@ public class MockPortfolioApplicationService {
     private static final String PORTFOLIO_TYPE_SIMULATION = "SIMULATION";
     private static final String DEFAULT_CURRENCY = "CNY";
     private static final String CHANNEL_SIMULATOR = "SIMULATOR";
-    private static final int ORDER_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
-    private static final int ORDER_IDEMPOTENCY_HASH_LENGTH = 24;
     private static final Set<String> SORT_FIELDS = Set.of("createdAt", "updatedAt", "portfolioNo", "portfolioName");
 
     private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig;
@@ -567,11 +561,12 @@ public class MockPortfolioApplicationService {
         CurrentOperator operator = currentOperator.required();
         ensureReportExecutable(report, operator.userBizId());
         var plan = Jsons.readObjectOrEmpty(report.investmentPlan());
-        BigDecimal amount = Jsons.decimal(plan, "referenceAllocationAmount");
+        BigDecimal amount = reportExecutableAmount(plan);
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             rejectWithAudit(operator.userBizId(), "REPORT", report.bizId(), "REPORT_EXECUTABLE_AMOUNT",
                 "HIGH", "NO_EXECUTABLE_AMOUNT", "报告未给出可执行的参考配置金额",
-                Map.of("reportBizId", report.bizId()));
+                Map.of("reportBizId", report.bizId(), "supportedAmountFields",
+                    "referenceAllocationAmount,executableAmount,plannedTradeAmount,referenceTradeAmount,orderSizing.*"));
         }
         String productBizId = resolveReportProductBizId(report, command.productBizId());
         Portfolio portfolio = requiredOwnedSimulationPortfolio(command.portfolioBizId(), operator);
@@ -586,6 +581,43 @@ public class MockPortfolioApplicationService {
             .amount(executableAmount)
             .idempotencyKey(idempotencyKey)
             .build());
+    }
+
+    /**
+     * 从不同版本模型输出的投资方案中归一化读取可执行参考金额。
+     *
+     * @param plan 投资方案 JSON
+     * @return 可执行参考金额，无法解析时返回 null
+     * @author dz
+     * @date 2026-07-01
+     */
+    private BigDecimal reportExecutableAmount(com.fasterxml.jackson.databind.JsonNode plan) {
+        BigDecimal topLevelAmount = firstDecimal(plan,
+            "referenceAllocationAmount",
+            "executableAmount",
+            "plannedTradeAmount",
+            "referenceTradeAmount"
+        );
+        if (topLevelAmount != null) {
+            return topLevelAmount;
+        }
+        return firstDecimal(Jsons.object(plan, "orderSizing"),
+            "referenceTradeAmount",
+            "plannedTradeAmount",
+            "referenceAllocationAmount",
+            "maxSingleTradeAmountLimit"
+        );
+    }
+
+    /** 读取第一个可用数值字段。 */
+    private BigDecimal firstDecimal(com.fasterxml.jackson.databind.JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            BigDecimal value = Jsons.decimal(node, fieldName);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     /**
@@ -1190,6 +1222,10 @@ public class MockPortfolioApplicationService {
         if (planProductBizId != null && !planProductBizId.isBlank()) {
             return planProductBizId;
         }
+        String selectedProductBizId = Jsons.text(Jsons.object(plan, "selectedProduct"), "productBizId");
+        if (selectedProductBizId != null && !selectedProductBizId.isBlank()) {
+            return selectedProductBizId;
+        }
         String planProductCode = Jsons.text(plan, "productCode");
         String planMarketCode = Jsons.text(plan, "marketCode");
         if (planProductCode != null && !planProductCode.isBlank()
@@ -1694,14 +1730,14 @@ public class MockPortfolioApplicationService {
     }
 
     /**
-     * 将模拟订单幂等键压缩到数据库契约允许的长度内。
+     * 归一化模拟订单幂等键的空白字符，保留业务追踪原文。
      *
-     * <p>自动闭环会把运行、报告、调仓腿和产品标识组合成幂等键，原始值可能超过
-     * {@code aiw_order.idempotency_key} 的 128 字符限制。这里保留可读前缀并追加
-     * SHA-256 摘要片段，保证同一个原始幂等键稳定映射到同一个短键，同时避免写库截断。</p>
+     * <p>自动闭环会把运行、报告、调仓腿和产品标识组合成幂等键，原始值本身
+     * 是排查重复提交和执行链路的重要上下文。字段长度由 Flyway migration 扩容承载，
+     * 服务层不得压缩或哈希改写幂等键。</p>
      *
      * @param idempotencyKey 原始幂等键
-     * @return 可安全写入订单表的幂等键
+     * @return 去除首尾空白后的幂等键
      * @author dz
      * @date 2026-07-01
      */
@@ -1709,24 +1745,7 @@ public class MockPortfolioApplicationService {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             return idempotencyKey;
         }
-        String normalized = idempotencyKey.trim();
-        if (normalized.length() <= ORDER_IDEMPOTENCY_KEY_MAX_LENGTH) {
-            return normalized;
-        }
-        String hash = sha256Hex(normalized).substring(0, ORDER_IDEMPOTENCY_HASH_LENGTH);
-        int prefixLength = ORDER_IDEMPOTENCY_KEY_MAX_LENGTH - ORDER_IDEMPOTENCY_HASH_LENGTH - 2;
-        return normalized.substring(0, prefixLength) + "--" + hash;
-    }
-
-    /** 计算幂等键摘要，用于压缩超长业务幂等键。 */
-    private String sha256Hex(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("JVM 不支持 SHA-256", exception);
-        }
+        return idempotencyKey.trim();
     }
 
     /** 判断订单是否已进入不可撤销终态。 */

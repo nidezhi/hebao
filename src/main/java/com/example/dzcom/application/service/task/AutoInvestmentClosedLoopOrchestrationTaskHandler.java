@@ -61,6 +61,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     private final InvestmentTaskDefinitionStore definitions;
     private final ObjectProvider<InvestmentTaskExecutionService> taskExecution;
+    private final ObjectProvider<ClosedLoopSchemaPreflight> schemaPreflight;
     private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig;
     private final ClosedLoopOrchestrationApplicationService closedLoops;
     private final InvestmentAnalysisReportStore reports;
@@ -131,6 +132,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         try {
             recordProfileSnapshot(run, parameters, runMode);
             recordSafetyGuards(run, parameters);
+            recordSchemaPreflight(run);
             prepareMockPortfolioContext(run, parameters);
             runConfiguredTasks(run, event, parameters, "dataTaskCodes", "DATA_COLLECTION", "真实数据采集", 20);
             runReportTask(run, event, parameters);
@@ -231,8 +233,8 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "minQualityScore", minQualityScore(parameters),
                 "maxReportsForMock", TaskParameterParser.positiveInt(parameters, "maxReportsForMock", 20),
                 "allowAutoMockTrade", TaskParameterParser.bool(parameters, "allowAutoMockTrade", true),
-                "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", true),
-                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", true),
+                "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", false),
+                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", false),
                 "allowRealTrade", TaskParameterParser.bool(parameters, "allowRealTrade", false),
                 "maxSingleTradeAmount", TaskParameterParser.string(parameters, "maxSingleTradeAmount", ""),
                 "strategyNote", TaskParameterParser.string(parameters, "strategyNote", "")
@@ -244,22 +246,44 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         closedLoops.succeedStep(run, "SAFETY_GUARD", "自动化权限确认", 10,
             Map.of(
                 "allowRealTrade", TaskParameterParser.bool(parameters, "allowRealTrade", false),
-                "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", true),
-                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", true),
+                "allowAutoPromptActivation", TaskParameterParser.bool(parameters, "allowAutoPromptActivation", false),
+                "allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", false),
                 "configProfileCode", TaskParameterParser.string(parameters, "configProfileCode", ""),
                 "blocking", false,
                 "displaySeverity", "INFO",
                 "userFacing", false
             ),
             Map.of(
-                "policyCode", "FULL_MOCK_WITH_PROMPT_MODEL_AUTO_ACTIVATION",
+                "policyCode", "FULL_MOCK_WITH_PROMPT_MODEL_CANDIDATES_ONLY",
                 "configProfileCode", TaskParameterParser.string(parameters, "configProfileCode", ""),
                 "configProfileSnapshot", TaskParameterParser.string(parameters, "configProfileSnapshot", ""),
                 "blocking", false,
                 "displaySeverity", "INFO",
                 "userFacing", false,
-                "summary", "自动闭环允许真实数据采集、报告生成、候选评分、Prompt/模型自动启用和Mock交易；真实交易仍需人工确认。"
+                "summary", "自动闭环允许真实数据采集、报告生成、候选评分和Mock交易；Prompt/模型正式启用与真实交易默认需要人工确认。"
             ));
+    }
+
+    /**
+     * 在闭环进入模型和 Mock 交易前检查关键数据库结构，避免运行到写订单时才暴露迁移漂移。
+     *
+     * @param run 闭环运行实例
+     * @author dz
+     * @date 2026-07-01
+     */
+    private void recordSchemaPreflight(ClosedLoopRun run) {
+        ClosedLoopSchemaPreflightResult result = schemaPreflight
+            .getIfAvailable(() -> ClosedLoopSchemaPreflightResult::pass)
+            .inspect();
+        if (result.passed()) {
+            closedLoops.succeedStep(run, "SCHEMA_PREFLIGHT", "数据库结构预检", 15,
+                Map.of("required", true),
+                result.summary());
+            return;
+        }
+        String reason = "数据库结构预检未通过: " + String.join(",", result.reasons());
+        closedLoops.blockedStep(run, "SCHEMA_PREFLIGHT", "数据库结构预检", 15, reason, result.summary());
+        throw new ClosedLoopBlockedException(reason);
     }
 
     /**
@@ -842,6 +866,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 : configuredPortfolio;
             String actionType = actionType(report);
             List<ExecuteMockRebalanceCommand.TargetWeight> targets = targetWeights(report);
+            recordMockPlanNormalization(run, report, actionType, targets);
             MockExecutionResult execution = executeMockPlan(run, parameters, report, portfolio);
             MockPortfolioView refreshed = portfolios.refreshValuation(execution.portfolio().bizId());
             closedLoops.succeedStep(run, "MOCK_TRADE", "自动Mock交易", 70,
@@ -879,6 +904,50 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             );
             return refreshed;
         });
+    }
+
+    /**
+     * 记录报告投资方案归一化结果，便于定位模型输出字段漂移和后续 Mock 执行动作。
+     *
+     * @param run 闭环运行实例
+     * @param report 投资分析报告
+     * @param actionType 归一化后的动作类型
+     * @param targets 归一化后的目标权重
+     * @author dz
+     * @date 2026-07-01
+     */
+    private void recordMockPlanNormalization(
+        ClosedLoopRun run,
+        InvestmentAnalysisReport report,
+        String actionType,
+        List<ExecuteMockRebalanceCommand.TargetWeight> targets
+    ) {
+        JsonNode plan = Jsons.readObjectOrEmpty(report.investmentPlan());
+        BigDecimal executableAmount = firstDecimalPath(plan,
+            "referenceAllocationAmount",
+            "executableAmount",
+            "plannedTradeAmount",
+            "referenceTradeAmount",
+            "orderSizing.referenceTradeAmount",
+            "orderSizing.plannedTradeAmount",
+            "orderSizing.referenceAllocationAmount",
+            "orderSizing.maxSingleTradeAmountLimit"
+        );
+        String productBizId = firstTextPath(plan,
+            "productBizId",
+            "targetBizId",
+            "selectedProduct.productBizId",
+            "selectedProduct.bizId"
+        );
+        closedLoops.succeedStep(run, "MOCK_PLAN_NORMALIZATION", "Mock计划归一化", 65,
+            mapOfNullable("reportBizId", report.bizId(), "investmentPlan", report.investmentPlan()),
+            mapOfNullable(
+                "actionType", actionType,
+                "referenceTradeAmount", executableAmount,
+                "productBizId", productBizId,
+                "targetWeightCount", targets.size(),
+                "normalizationStatus", executableAmount == null && targets.isEmpty() ? "REVIEW" : "PASS"
+            ));
     }
 
     /**
@@ -1080,7 +1149,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     /** 根据自动化开关处理 Prompt/模型正式启用；真实交易始终只记录闸门。 */
     private void recordActivationGuards(ClosedLoopRun run, Map<String, String> parameters, AiModel candidate) {
-        if (TaskParameterParser.bool(parameters, "allowAutoPromptActivation", true)) {
+        if (TaskParameterParser.bool(parameters, "allowAutoPromptActivation", false)) {
             closedLoops.succeedStep(run, "PROMPT_ACTIVATION_GUARD", "Prompt正式启用闸门", 90,
                 Map.of("allowAutoPromptActivation", true),
                 Map.of(
@@ -1093,7 +1162,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 "新 Prompt 正式启用开关关闭，本轮只保留候选与评分",
                 Map.of("allowAutoPromptActivation", false));
         }
-        if (TaskParameterParser.bool(parameters, "allowAutoModelActivation", true) && candidate != null) {
+        if (TaskParameterParser.bool(parameters, "allowAutoModelActivation", false) && candidate != null) {
             AiModel activated = models.changeStatus(candidate.bizId(), "ACTIVE");
             closedLoops.succeedStep(run, "MODEL_ACTIVATION_GUARD", "模型正式启用闸门", 91,
                 Map.of("allowAutoModelActivation", true, "modelCandidateBizId", candidate.bizId()),
@@ -1106,7 +1175,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         } else {
             closedLoops.skippedStep(run, "MODEL_ACTIVATION_GUARD", "模型正式启用闸门", 91,
                 "新模型正式启用开关关闭或无候选模型，本轮只保留 DRAFT 候选",
-                Map.of("allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", true),
+                Map.of("allowAutoModelActivation", TaskParameterParser.bool(parameters, "allowAutoModelActivation", false),
                     "modelCandidateBizId", candidate == null ? "" : candidate.bizId()));
         }
         closedLoops.skippedStep(run, "REAL_TRADE_GUARD", "真实交易闸门", 92,
@@ -1265,6 +1334,20 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         return null;
     }
 
+    /** 按点分路径读取第一个文本字段。 */
+    private String firstTextPath(JsonNode node, String... paths) {
+        for (String path : paths) {
+            JsonNode child = pathNode(node, path);
+            if (child != null && !child.isMissingNode() && !child.isNull()) {
+                String value = child.isTextual() ? child.asText() : child.toString();
+                if (!value.isBlank()) {
+                    return value;
+                }
+            }
+        }
+        return null;
+    }
+
     /** 读取第一个数组字段。 */
     private JsonNode firstArray(JsonNode node, String... fieldNames) {
         for (String fieldName : fieldNames) {
@@ -1285,6 +1368,41 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
             }
         }
         return null;
+    }
+
+    /** 按点分路径读取第一个数值字段。 */
+    private BigDecimal firstDecimalPath(JsonNode node, String... paths) {
+        for (String path : paths) {
+            BigDecimal value = decimal(pathNode(node, path));
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /** 解析点分路径上的 JSON 节点。 */
+    private JsonNode pathNode(JsonNode node, String path) {
+        JsonNode current = node;
+        for (String part : path.split("\\.")) {
+            current = current == null ? null : current.get(part);
+            if (current == null) {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    /** 将 JSON 标量转为数值。 */
+    private BigDecimal decimal(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.decimalValue();
+        }
+        String text = node.asText();
+        return text == null || text.isBlank() ? null : new BigDecimal(text.trim());
     }
 
     /** 读取可为空字符串，避免空文本被当作有效参数向下游传递。 */

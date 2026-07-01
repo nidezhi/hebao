@@ -111,14 +111,16 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .taskCode("auto-investment-closed-loop-orchestration")
                 .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
                 .triggerSource("MANUAL")
-                .parameters(Map.of(
-                    "automationLevel", "FULL_MOCK",
-                    "mockUserBizId", "user-1",
-                    "minQualityScore", "0.45",
-                    "dataTaskCodes", "data-task",
-                    "reportTaskCode", "report-task",
-                    "requireStructuredCoreData", "false",
-                    "allowAutoMockTrade", "true"
+                .parameters(Map.ofEntries(
+                    Map.entry("automationLevel", "FULL_MOCK"),
+                    Map.entry("mockUserBizId", "user-1"),
+                    Map.entry("minQualityScore", "0.45"),
+                    Map.entry("dataTaskCodes", "data-task"),
+                    Map.entry("reportTaskCode", "report-task"),
+                    Map.entry("requireStructuredCoreData", "false"),
+                    Map.entry("allowAutoMockTrade", "true"),
+                    Map.entry("allowAutoPromptActivation", "true"),
+                    Map.entry("allowAutoModelActivation", "true")
                 ))
                 .triggeredAt(NOW)
                 .build());
@@ -132,6 +134,9 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         assertTrue(fixture.closedLoopStore.steps.stream()
             .anyMatch(step -> "QUALITY_GATE".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
         assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_PLAN_NORMALIZATION".equals(step.stepCode())
+                && step.outputSummary().contains("\"referenceTradeAmount\":5000")));
+        assertTrue(fixture.closedLoopStore.steps.stream()
             .anyMatch(step -> "PROMPT_ACTIVATION_GUARD".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
         assertTrue(fixture.closedLoopStore.steps.stream()
             .anyMatch(step -> "MODEL_ACTIVATION_GUARD".equals(step.stepCode()) && "SUCCEEDED".equals(step.stepStatus())));
@@ -139,6 +144,40 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             .anyMatch(step -> "REAL_TRADE_GUARD".equals(step.stepCode()) && "SKIPPED".equals(step.stepStatus())));
         assertTrue(fixture.modelStore.items.values().stream()
             .anyMatch(model -> model.modelVersion().startsWith("candidate-") && "ACTIVE".equals(model.status())));
+    }
+
+    /** 数据库结构预检未通过时，应在进入模型和 Mock 交易前阻断闭环。 */
+    @Test
+    void shouldBlockBeforeMockTradeWhenSchemaPreflightFails() {
+        Fixture fixture = new Fixture();
+        fixture.schemaPreflight.result = new ClosedLoopSchemaPreflightResult(
+            false,
+            List.of("ORDER_IDEMPOTENCY_KEY_TOO_SHORT"),
+            Map.of("aiw_order.idempotency_key.length", 128, "requiredOrderIdempotencyLength", 512)
+        );
+        fixture.reports.items.add(report("report-pass", new BigDecimal("0.80"), true));
+
+        assertThrows(RuntimeException.class, () -> fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-schema-drift")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build()));
+
+        assertEquals(0, fixture.portfolioService.buyFromReportCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "SCHEMA_PREFLIGHT".equals(step.stepCode())
+                && "BLOCKED".equals(step.stepStatus())
+                && step.failureReason().contains("ORDER_IDEMPOTENCY_KEY_TOO_SHORT")));
     }
 
     /** 报告给出目标权重时，自动闭环应按组合上下文执行再平衡而不是固定买入。 */
@@ -623,7 +662,9 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
     }
 
     private static InvestmentAnalysisReport report(String bizId, BigDecimal qualityScore, boolean gatePassed) {
-        return reportWithPlan(bizId, qualityScore, gatePassed, "{\"planType\":\"REFERENCE_ALLOCATION\"}");
+        return reportWithPlan(bizId, qualityScore, gatePassed, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","selectedProduct":{"productBizId":"product-a"},"orderSizing":{"referenceTradeAmount":5000}}
+            """);
     }
 
     private static InvestmentAnalysisReport reportWithPlan(
@@ -659,6 +700,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
         private final MemoryProductStore productStore = new MemoryProductStore();
         private final MemoryProductInvestmentProfileStore investmentProfiles = new MemoryProductInvestmentProfileStore();
         private final CountingPortfolioService portfolioService = new CountingPortfolioService();
+        private final StubSchemaPreflight schemaPreflight = new StubSchemaPreflight();
         private final MemorySystemConfigReader systemConfigs = new MemorySystemConfigReader();
         private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig =
             new AutoInvestmentClosedLoopConfigService(systemConfigs);
@@ -690,6 +732,7 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
             handler = new AutoInvestmentClosedLoopOrchestrationTaskHandler(
                 definitions,
                 new FixedObjectProvider<>(executionService),
+                new FixedObjectProvider<>(schemaPreflight),
                 autoInvestmentConfig,
                 closedLoops,
                 reports,
@@ -717,6 +760,16 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 .createdAt(NOW)
                 .updatedAt(NOW)
                 .build();
+        }
+    }
+
+    /** 可切换结果的 schema 预检桩，避免编排单测依赖真实数据库。 */
+    private static final class StubSchemaPreflight implements ClosedLoopSchemaPreflight {
+        private ClosedLoopSchemaPreflightResult result = ClosedLoopSchemaPreflightResult.pass();
+
+        @Override
+        public ClosedLoopSchemaPreflightResult inspect() {
+            return result;
         }
     }
 

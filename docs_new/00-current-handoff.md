@@ -72,7 +72,10 @@
 - 后端启动故障已修复：模型调用审计接入后 `MockOpenAiCompatibleInvestmentAnalysisProvider` 和 `OpenAiCompatibleJsonCompletionClient` 存在测试兼容构造器与生产构造器，Spring 曾误走无参构造路径；现已显式标记生产构造器并补启动回归测试。
 - `/ai-call-audits` 页面已升级为紧凑型模型调用审计工作台：筛选区按主筛选 + 更多高级筛选收纳；列表按状态图标、模型层、调用层、业务归因、Prompt/Skill 分级展示；主 UI 优先展示中文业务/场景/任务 label，原始枚举只作为追踪字段或次要信息保留。
 - 自动闭环报告子任务失败原因已收紧：父闭环不再出现 `自动报告任务失败: null`，任务执行审计会对空 message 异常兜底为异常类型，父节点会带上 `taskCode/status/eventId/reason`；Java 26 下 MyBatis `BoundSql.sql` final-field mutation warning 已在 Maven 测试/启动参数中加入推荐开关。
-- Mock 订单幂等键越界已修复：自动闭环再平衡腿单会把长幂等键压缩为 `可读前缀 + SHA-256 摘要`，稳定映射且不超过 `aiw_order.idempotency_key VARCHAR(128)`；未改旧 Mapper XML，后续新增仍遵循 MyBatis-Plus 优先。
+- Mock 订单幂等键越界改为数据库字段扩容解决：新增 `V49__expand_order_idempotency_key.sql` 将 `aiw_order.idempotency_key` 扩为 `VARCHAR(512)`，Service 层只 trim 首尾空白并保留自动闭环可读追踪原文，不再压缩或哈希改写。
+- 自动闭环诊断优化已落地：闭环新增 `SCHEMA_PREFLIGHT` 数据库结构预检，提前阻断 `aiw_order.idempotency_key` 未扩容、报告 `chat_snapshot` 缺失、模型调用审计表缺失等本地 schema 漂移；新增 `MOCK_PLAN_NORMALIZATION` 步骤记录模型报告被解析出的动作、金额、产品和目标权重；报告转 Mock 买入兼容 `orderSizing.referenceTradeAmount`、`plannedTradeAmount`、`selectedProduct.productBizId` 等真实库内字段；默认方案恢复 `promptTaskCode=auto-prompt-governance`，Prompt/模型正式自动启用默认关闭；真实数据质量快照新增 `sampleStatus=PASS/REVIEW/BLOCK`。
+- UI 基线已确认并三轮修正：参考阿里云控制台的全宽 `50px` 顶栏、约 `204px` 左侧菜单、宽广工作面、黑灰主色、紧凑筛选、标签页与表格主导；左侧菜单父级约 `40px`、子级约 `34px` 且内缩分层；DZAI icon 已切换为自有黑灰标识。
+- 顶栏无意义入口已收敛：删除无后续动作的“工作台/文档/费用/工单”装饰入口，保留品牌、真实全局搜索、用户状态和登录登出；全局搜索基于现有路由生成结果，可点击跳转真实页面。
 - Handoff 自身瘦身已执行：本文最新区只保留入口索引、当前有效状态和最近验证摘要；详细历史默认不读。
 
 ### 最近验证结果
@@ -85,7 +88,10 @@
 - 后端启动故障验证：`./mvnw -q -Dtest=DzcomApplicationTests test` 通过，已断言核心 AI Bean 可由 Spring 装配；`./mvnw -q -Dtest=MockOpenAiCompatibleInvestmentAnalysisProviderTest,OpenAiCompatibleJsonCompletionClientTest,AiModelCallAuditApplicationServiceTest,InvestmentEvolutionAnalyticsApplicationServiceTest,ControllerRequestContractTest test` 通过；`git diff --check` 通过。`spring-boot:run` 已验证可启动并已停止，避免占用 IDEA 端口。
 - 模型调用审计页验证：前端 bundled Node 执行 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning；`/ai-call-audits` 路由冒烟通过，真实接口返回审计记录，筛选卡片高度约 `102px`，正文未裸展示 `INVESTMENT_REPORT/DEFAULT`，控制台无 error。
 - 自动闭环失败原因验证：`./mvnw -q -Dtest=AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,InvestmentTaskManagementServiceTest test` 通过；`./mvnw -q -DskipTests compile` 通过；`git diff --check` 通过。测试覆盖报告子任务抛出无 message 异常时，父任务记录为 `BLOCKED` 且失败原因包含任务编码、状态和异常类型，不再包含 `null`。
-- Mock 订单幂等键验证：`./mvnw -q -Dtest=MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；`./mvnw -q -DskipTests compile` 通过；`git diff --check` 通过。新增测试覆盖长自动闭环幂等键在再平衡保存前被压缩到 128 字符内。
+- Mock 订单幂等键扩容验证：`./mvnw -q -Dtest=MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；`./mvnw -q -DskipTests compile` 通过；`git diff --check` 通过。测试覆盖长自动闭环幂等键按原文保存且长度超过 128，依赖 V49 字段扩容承载。
+- 自动闭环诊断优化验证：`./mvnw -q -Dtest=MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；`./mvnw -q -DskipTests compile` 通过；`git diff --check` 通过。测试覆盖 schema preflight 阻断、嵌套报告计划字段归一化、默认候选/启用边界和 Mock 买入真实字段解析。
+- 阿里云控制台 UI 三轮比例验证：前端 bundled Node 执行 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning；`git diff --check` 通过；HTTP 冒烟 `/`、`/overview`、`/ai-call-audits`、`/config-center/system-configs`、`/ui-system` 均返回 200；浏览器测量确认全宽顶栏 `50px`、侧栏 `204px`、父菜单 `40px`、子菜单 `34px`、搜索/按钮 `32px`，主按钮与选中态为黑灰体系。
+- 顶栏搜索验证：`vue-tsc -b` 与 `vite build` 通过；`/ui-system`、`/development-rules` HTTP 冒烟 200；浏览器验证输入“开发”出现 `/ui-system`、`/development-rules`、`/standby/api` 三个真实路由结果，点击“开发铁律”可跳转 `/development-rules`，顶栏不再出现“文档/费用/工单”装饰链接。
 - 真实浏览器/API 冒烟依赖用户在 IDEA 启动后端服务；未启动服务时不把路由/API 冒烟写成通过。
 
 ### 下一步默认动作

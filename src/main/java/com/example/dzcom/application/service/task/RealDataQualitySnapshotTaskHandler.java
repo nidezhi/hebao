@@ -78,6 +78,8 @@ public class RealDataQualitySnapshotTaskHandler implements InvestmentTaskHandler
             .add(quoteCoverage.multiply(new BigDecimal("0.40")))
             .add(newsCoverage.multiply(new BigDecimal("0.25")))
             .setScale(4, RoundingMode.HALF_UP);
+        boolean reportAllowed = quality.compareTo(new BigDecimal("0.60")) >= 0;
+        String sampleStatus = sampleStatus(reportAllowed, recentNews, minNewsCount);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("taskCode", event.taskCode());
         detail.put("expectedProductCount", productCodes.size());
@@ -88,7 +90,8 @@ public class RealDataQualitySnapshotTaskHandler implements InvestmentTaskHandler
         detail.put("productCoverage", productCoverage);
         detail.put("quoteCoverage", quoteCoverage);
         detail.put("newsCoverage", newsCoverage);
-        detail.put("reportAllowed", quality.compareTo(new BigDecimal("0.60")) >= 0);
+        detail.put("sampleStatus", sampleStatus);
+        detail.put("reportAllowed", reportAllowed);
         sources.saveQualitySnapshot(DataQualitySnapshot.builder()
             .bizId(ids.newBizId())
             .sourceCode(SOURCE_CODE)
@@ -102,9 +105,26 @@ public class RealDataQualitySnapshotTaskHandler implements InvestmentTaskHandler
             .detail(support.json(detail))
             .createdAt(now)
             .build());
-        support.saveHealth(SOURCE_CODE, quality.compareTo(new BigDecimal("0.60")) >= 0 ? 1 : 0,
+        support.saveHealth(SOURCE_CODE, reportAllowed ? 1 : 0,
             "真实核心数据质量未达到报告门禁", now);
         return "真实数据质量快照完成: quality=" + quality + ", products=" + productsReady
-            + ", quoteReady=" + quoteReady + ", recentNews=" + recentNews;
+            + ", quoteReady=" + quoteReady + ", recentNews=" + recentNews + ", sampleStatus=" + sampleStatus;
+    }
+
+    /**
+     * 计算真实数据样本状态；质量够但新闻样本不足时进入 REVIEW，避免被误读为完全健康。
+     *
+     * @param reportAllowed 报告质量门禁是否通过
+     * @param recentNews 近期资讯数量
+     * @param minNewsCount 期望资讯数量
+     * @return PASS、REVIEW 或 BLOCK
+     * @author dz
+     * @date 2026-07-01
+     */
+    private String sampleStatus(boolean reportAllowed, long recentNews, int minNewsCount) {
+        if (!reportAllowed) {
+            return "BLOCK";
+        }
+        return recentNews < minNewsCount ? "REVIEW" : "PASS";
     }
 }
