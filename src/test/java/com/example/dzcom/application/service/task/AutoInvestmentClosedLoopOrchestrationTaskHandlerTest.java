@@ -213,13 +213,117 @@ class AutoInvestmentClosedLoopOrchestrationTaskHandlerTest {
                 && step.outputSummary().contains("\"executionMode\":\"REBALANCE\"")));
     }
 
+    /** 报告金额落在 orderSuggestion.referenceAmount 时，归一化节点和 Mock 买入都应识别该金额。 */
+    @Test
+    void shouldNormalizeOrderSuggestionReferenceAmount() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(reportWithPlan("report-order-suggestion", new BigDecimal("0.80"), true, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","selectedProduct":{"productBizId":"product-a"},"orderSuggestion":{"side":"BUY","referenceAmount":5000,"cashAfterReferenceTrade":95000}}
+            """));
+
+        fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-order-suggestion")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertEquals(1, fixture.portfolioService.buyFromReportCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_PLAN_NORMALIZATION".equals(step.stepCode())
+                && step.outputSummary().contains("\"referenceTradeAmount\":5000")
+                && step.outputSummary().contains("\"amountSource\":\"orderSuggestion.referenceAmount\"")
+                && step.outputSummary().contains("\"normalizationStatus\":\"PASS\"")));
+    }
+
+    /** 报告只有 BUY 目标权重时，应能基于组合总资产推导参考买入金额。 */
+    @Test
+    void shouldInferBuyAmountFromTargetWeightWhenAmountMissing() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(reportWithPlan("report-target-weight-buy", new BigDecimal("0.80"), true, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","selectedProduct":{"productBizId":"product-a"},"targetWeights":[{"productBizId":"product-a","targetWeight":0.05}]}
+            """));
+
+        fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-infer-target-weight")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build());
+
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_PLAN_NORMALIZATION".equals(step.stepCode())
+                && step.outputSummary().contains("\"referenceTradeAmount\":5000.00")
+                && step.outputSummary().contains("\"amountSource\":\"targetWeights[0].targetWeight*portfolio.totalAsset\"")
+                && step.outputSummary().contains("\"normalizationStatus\":\"PASS\"")));
+    }
+
+    /** BUY 报告缺少金额且无法推导时，归一化节点不能误标为 PASS。 */
+    @Test
+    void shouldMarkBuyPlanBlockedWhenExecutableAmountMissing() {
+        Fixture fixture = new Fixture();
+        fixture.reports.items.add(reportWithPlan("report-buy-missing-amount", new BigDecimal("0.80"), true, """
+            {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","selectedProduct":{"productBizId":"product-a"}}
+            """));
+
+        assertThrows(RuntimeException.class, () -> fixture.handler.execute(
+            InvestmentTaskEvent.builder()
+                .eventId("event-buy-missing-amount")
+                .taskCode("auto-investment-closed-loop-orchestration")
+                .taskType("AUTO_INVESTMENT_CLOSED_LOOP_ORCHESTRATION")
+                .triggerSource("MANUAL")
+                .parameters(Map.of(
+                    "automationLevel", "FULL_MOCK",
+                    "mockUserBizId", "user-1",
+                    "minQualityScore", "0.45",
+                    "dataTaskCodes", "data-task",
+                    "skipReportTask", "true",
+                    "requireStructuredCoreData", "false",
+                    "allowAutoMockTrade", "true"
+                ))
+                .triggeredAt(NOW)
+                .build()));
+
+        assertEquals(0, fixture.portfolioService.buyFromReportCalls);
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .anyMatch(step -> "MOCK_PLAN_NORMALIZATION".equals(step.stepCode())
+                && "BLOCKED".equals(step.stepStatus())
+                && step.failureReason().contains("Mock 计划字段契约不满足")
+                && step.inputSummary().contains("\"normalizationStatus\":\"BLOCK\"")
+                && step.inputSummary().contains("\"missingFields\":[\"executableAmount\"]")));
+        assertTrue(fixture.closedLoopStore.steps.stream()
+            .noneMatch(step -> "MOCK_TRADE".equals(step.stepCode())));
+    }
+
     /** 买入现金不足应记录为 Mock 决策阻断，不应落入 UNEXPECTED_FAILURE。 */
     @Test
     void shouldBlockMockTradeGracefullyWhenBuyPlanHasNoCash() {
         Fixture fixture = new Fixture();
         fixture.portfolioService.failBuyFromReport = true;
         fixture.reports.items.add(reportWithPlan("report-buy", new BigDecimal("0.80"), true, """
-            {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","referenceAllocationAmount":1000000}
+            {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","selectedProduct":{"productBizId":"product-a"},"referenceAllocationAmount":1000000}
             """));
 
         assertThrows(RuntimeException.class, () -> fixture.handler.execute(

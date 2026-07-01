@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -75,6 +76,15 @@ public class MockPortfolioApplicationService {
     private static final String DEFAULT_CURRENCY = "CNY";
     private static final String CHANNEL_SIMULATOR = "SIMULATOR";
     private static final Set<String> SORT_FIELDS = Set.of("createdAt", "updatedAt", "portfolioNo", "portfolioName");
+    private static final String SUPPORTED_REPORT_AMOUNT_FIELDS = String.join(",",
+        "referenceAllocationAmount",
+        "executableAmount",
+        "plannedTradeAmount",
+        "referenceTradeAmount",
+        "orderSizing.*",
+        "orderReference.referenceAmount",
+        "orderSuggestion.referenceAmount"
+    );
 
     private final AutoInvestmentClosedLoopConfigService autoInvestmentConfig;
     private final PortfolioStore portfolios;
@@ -561,15 +571,16 @@ public class MockPortfolioApplicationService {
         CurrentOperator operator = currentOperator.required();
         ensureReportExecutable(report, operator.userBizId());
         var plan = Jsons.readObjectOrEmpty(report.investmentPlan());
-        BigDecimal amount = reportExecutableAmount(plan);
+        Portfolio portfolio = requiredOwnedSimulationPortfolio(command.portfolioBizId(), operator);
+        BigDecimal amount = reportExecutableAmount(plan)
+            .or(() -> inferReportAmountFromTargetWeight(plan, portfolio))
+            .orElse(null);
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             rejectWithAudit(operator.userBizId(), "REPORT", report.bizId(), "REPORT_EXECUTABLE_AMOUNT",
                 "HIGH", "NO_EXECUTABLE_AMOUNT", "报告未给出可执行的参考配置金额",
-                Map.of("reportBizId", report.bizId(), "supportedAmountFields",
-                    "referenceAllocationAmount,executableAmount,plannedTradeAmount,referenceTradeAmount,orderSizing.*"));
+                Map.of("reportBizId", report.bizId(), "supportedAmountFields", SUPPORTED_REPORT_AMOUNT_FIELDS));
         }
         String productBizId = resolveReportProductBizId(report, command.productBizId());
-        Portfolio portfolio = requiredOwnedSimulationPortfolio(command.portfolioBizId(), operator);
         Product product = requiredTradableProduct(productBizId);
         BigDecimal executableAmount = executableBuyAmount(portfolio, product, amount, command.maxTradeAmount(), operator.userBizId());
         String idempotencyKey = command.idempotencyKey() == null || command.idempotencyKey().isBlank()
@@ -591,7 +602,7 @@ public class MockPortfolioApplicationService {
      * @author dz
      * @date 2026-07-01
      */
-    private BigDecimal reportExecutableAmount(com.fasterxml.jackson.databind.JsonNode plan) {
+    private Optional<BigDecimal> reportExecutableAmount(com.fasterxml.jackson.databind.JsonNode plan) {
         BigDecimal topLevelAmount = firstDecimal(plan,
             "referenceAllocationAmount",
             "executableAmount",
@@ -599,14 +610,62 @@ public class MockPortfolioApplicationService {
             "referenceTradeAmount"
         );
         if (topLevelAmount != null) {
-            return topLevelAmount;
+            return Optional.of(topLevelAmount);
         }
-        return firstDecimal(Jsons.object(plan, "orderSizing"),
+        BigDecimal orderSizingAmount = firstDecimal(Jsons.object(plan, "orderSizing"),
             "referenceTradeAmount",
             "plannedTradeAmount",
             "referenceAllocationAmount",
             "maxSingleTradeAmountLimit"
         );
+        if (orderSizingAmount != null) {
+            return Optional.of(orderSizingAmount);
+        }
+        BigDecimal orderReferenceAmount = firstDecimal(Jsons.object(plan, "orderReference"),
+            "referenceAmount",
+            "plannedTradeAmount",
+            "executableAmount"
+        );
+        if (orderReferenceAmount != null) {
+            return Optional.of(orderReferenceAmount);
+        }
+        return Optional.ofNullable(firstDecimal(Jsons.object(plan, "orderSuggestion"),
+            "referenceAmount",
+            "plannedTradeAmount",
+            "executableAmount"
+        ));
+    }
+
+    /**
+     * 当报告只给目标权重时，结合组合总资产推导参考买入金额。
+     *
+     * @param plan 投资方案 JSON
+     * @param portfolio 模拟组合
+     * @return 可推导的参考买入金额
+     * @author dz
+     * @date 2026-07-01
+     */
+    private Optional<BigDecimal> inferReportAmountFromTargetWeight(
+        com.fasterxml.jackson.databind.JsonNode plan,
+        Portfolio portfolio
+    ) {
+        var targetWeights = Jsons.array(plan, "targetWeights");
+        if (targetWeights.isEmpty()) {
+            return Optional.empty();
+        }
+        BigDecimal targetWeight = Jsons.decimal(targetWeights.get(0), "targetWeight");
+        if (targetWeight == null || targetWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            return Optional.empty();
+        }
+        PortfolioValuation latest = valuations.findLatestByPortfolioBizId(portfolio.bizId())
+            .orElseGet(() -> initialValuation(portfolio, BigDecimal.ZERO, clock.now()));
+        if (latest.totalAsset() == null || latest.cashBalance() == null || latest.totalAsset().compareTo(BigDecimal.ZERO) <= 0) {
+            return Optional.empty();
+        }
+        BigDecimal inferred = latest.totalAsset().multiply(targetWeight)
+            .min(latest.cashBalance())
+            .setScale(8, RoundingMode.DOWN);
+        return inferred.compareTo(BigDecimal.ZERO) > 0 ? Optional.of(inferred) : Optional.empty();
     }
 
     /** 读取第一个可用数值字段。 */
@@ -1225,6 +1284,10 @@ public class MockPortfolioApplicationService {
         String selectedProductBizId = Jsons.text(Jsons.object(plan, "selectedProduct"), "productBizId");
         if (selectedProductBizId != null && !selectedProductBizId.isBlank()) {
             return selectedProductBizId;
+        }
+        String targetProductBizId = Jsons.text(Jsons.array(plan, "targetWeights").get(0), "productBizId");
+        if (targetProductBizId != null && !targetProductBizId.isBlank()) {
+            return targetProductBizId;
         }
         String planProductCode = Jsons.text(plan, "productCode");
         String planMarketCode = Jsons.text(plan, "marketCode");

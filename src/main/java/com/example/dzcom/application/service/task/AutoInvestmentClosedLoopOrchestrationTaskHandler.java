@@ -58,6 +58,21 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     private static final String REAL_NEWS_TASK_TYPE = "REAL_NEWS_SYNC";
     private static final String REAL_QUALITY_TASK_TYPE = "REAL_DATA_QUALITY_SNAPSHOT";
     private static final DateTimeFormatter VERSION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final String[] EXECUTABLE_AMOUNT_PATHS = {
+        "referenceAllocationAmount",
+        "executableAmount",
+        "plannedTradeAmount",
+        "referenceTradeAmount",
+        "orderSizing.referenceTradeAmount",
+        "orderSizing.plannedTradeAmount",
+        "orderSizing.referenceAllocationAmount",
+        "orderSizing.maxSingleTradeAmountLimit",
+        "orderReference.referenceAmount",
+        "orderReference.plannedTradeAmount",
+        "orderSuggestion.referenceAmount",
+        "orderSuggestion.plannedTradeAmount",
+        "orderSuggestion.executableAmount"
+    };
 
     private final InvestmentTaskDefinitionStore definitions;
     private final ObjectProvider<InvestmentTaskExecutionService> taskExecution;
@@ -866,7 +881,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
                 : configuredPortfolio;
             String actionType = actionType(report);
             List<ExecuteMockRebalanceCommand.TargetWeight> targets = targetWeights(report);
-            recordMockPlanNormalization(run, report, actionType, targets);
+            recordMockPlanNormalization(run, report, portfolio, actionType, targets);
             MockExecutionResult execution = executeMockPlan(run, parameters, report, portfolio);
             MockPortfolioView refreshed = portfolios.refreshValuation(execution.portfolio().bizId());
             closedLoops.succeedStep(run, "MOCK_TRADE", "自动Mock交易", 70,
@@ -912,6 +927,7 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
      * @param run 闭环运行实例
      * @param report 投资分析报告
      * @param actionType 归一化后的动作类型
+     * @param portfolio Mock 组合上下文
      * @param targets 归一化后的目标权重
      * @author dz
      * @date 2026-07-01
@@ -919,35 +935,131 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
     private void recordMockPlanNormalization(
         ClosedLoopRun run,
         InvestmentAnalysisReport report,
+        MockPortfolioView portfolio,
+        String actionType,
+        List<ExecuteMockRebalanceCommand.TargetWeight> targets
+    ) {
+        MockPlanNormalizationResult normalized = normalizeMockPlan(report, portfolio, actionType, targets);
+        Map<String, Object> output = mapOfNullable(
+            "actionType", actionType,
+            "referenceTradeAmount", normalized.executableAmount(),
+            "amountSource", normalized.amountSource(),
+            "productBizId", normalized.productBizId(),
+            "targetWeightCount", targets.size(),
+            "normalizationStatus", normalized.status(),
+            "missingFields", normalized.missingFields(),
+            "supportedAmountFields", String.join(",", EXECUTABLE_AMOUNT_PATHS)
+        );
+        if ("BLOCK".equals(normalized.status())) {
+            String reason = "Mock 计划字段契约不满足: " + String.join(",", normalized.missingFields());
+            closedLoops.blockedStep(run, "MOCK_PLAN_NORMALIZATION", "Mock计划归一化", 65, reason,
+                mapOfNullable("reportBizId", report.bizId(), "investmentPlan", report.investmentPlan(), "normalization", output));
+            throw new ClosedLoopBlockedException(reason);
+        }
+        closedLoops.succeedStep(run, "MOCK_PLAN_NORMALIZATION", "Mock计划归一化", 65,
+            mapOfNullable("reportBizId", report.bizId(), "investmentPlan", report.investmentPlan()),
+            output);
+    }
+
+    /**
+     * 把报告投资方案归一化为 Mock 执行契约，并输出字段级状态。
+     *
+     * @param report 投资分析报告
+     * @param portfolio Mock 组合上下文
+     * @param actionType 归一化后的动作类型
+     * @param targets 目标权重
+     * @return Mock 计划归一化结果
+     * @author dz
+     * @date 2026-07-01
+     */
+    private MockPlanNormalizationResult normalizeMockPlan(
+        InvestmentAnalysisReport report,
+        MockPortfolioView portfolio,
         String actionType,
         List<ExecuteMockRebalanceCommand.TargetWeight> targets
     ) {
         JsonNode plan = Jsons.readObjectOrEmpty(report.investmentPlan());
-        BigDecimal executableAmount = firstDecimalPath(plan,
-            "referenceAllocationAmount",
-            "executableAmount",
-            "plannedTradeAmount",
-            "referenceTradeAmount",
-            "orderSizing.referenceTradeAmount",
-            "orderSizing.plannedTradeAmount",
-            "orderSizing.referenceAllocationAmount",
-            "orderSizing.maxSingleTradeAmountLimit"
-        );
+        AmountSource amountSource = firstDecimalPathWithSource(plan, EXECUTABLE_AMOUNT_PATHS);
+        BigDecimal executableAmount = amountSource.amount();
+        String source = amountSource.source();
+        if (executableAmount == null) {
+            AmountSource inferred = inferAmountFromTargetWeight(portfolio, targets);
+            executableAmount = inferred.amount();
+            source = inferred.source();
+        }
         String productBizId = firstTextPath(plan,
             "productBizId",
             "targetBizId",
             "selectedProduct.productBizId",
             "selectedProduct.bizId"
         );
-        closedLoops.succeedStep(run, "MOCK_PLAN_NORMALIZATION", "Mock计划归一化", 65,
-            mapOfNullable("reportBizId", report.bizId(), "investmentPlan", report.investmentPlan()),
-            mapOfNullable(
-                "actionType", actionType,
-                "referenceTradeAmount", executableAmount,
-                "productBizId", productBizId,
-                "targetWeightCount", targets.size(),
-                "normalizationStatus", executableAmount == null && targets.isEmpty() ? "REVIEW" : "PASS"
-            ));
+        if ((productBizId == null || productBizId.isBlank()) && !targets.isEmpty()) {
+            productBizId = targets.get(0).productBizId();
+        }
+        List<String> missingFields = mockPlanMissingFields(actionType, executableAmount, productBizId, targets);
+        String status = missingFields.isEmpty() ? "PASS" : ("BUY".equals(actionType) || "REBALANCE".equals(actionType) ? "BLOCK" : "REVIEW");
+        return new MockPlanNormalizationResult(executableAmount, source, productBizId, status, missingFields);
+    }
+
+    /**
+     * 基于目标权重和组合估值推导参考交易金额，作为模型未显式输出金额时的兜底。
+     *
+     * @param portfolio Mock 组合上下文
+     * @param targets 目标权重
+     * @return 推导出的金额和来源
+     * @author dz
+     * @date 2026-07-01
+     */
+    private AmountSource inferAmountFromTargetWeight(
+        MockPortfolioView portfolio,
+        List<ExecuteMockRebalanceCommand.TargetWeight> targets
+    ) {
+        if (portfolio == null || portfolio.latestValuation() == null || targets == null || targets.isEmpty()) {
+            return new AmountSource(null, "");
+        }
+        BigDecimal totalAsset = portfolio.latestValuation().totalAsset();
+        BigDecimal cashBalance = portfolio.latestValuation().cashBalance();
+        BigDecimal targetWeight = targets.get(0).targetWeight();
+        if (totalAsset == null || cashBalance == null || targetWeight == null
+            || totalAsset.compareTo(BigDecimal.ZERO) <= 0 || targetWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            return new AmountSource(null, "");
+        }
+        BigDecimal inferred = totalAsset.multiply(targetWeight).min(cashBalance).setScale(2, RoundingMode.HALF_UP);
+        return inferred.compareTo(BigDecimal.ZERO) > 0
+            ? new AmountSource(inferred, "targetWeights[0].targetWeight*portfolio.totalAsset")
+            : new AmountSource(null, "");
+    }
+
+    /**
+     * 计算 Mock 计划字段缺失清单，供前端和 Prompt 治理定位不可执行原因。
+     *
+     * @param actionType 动作类型
+     * @param executableAmount 可执行金额
+     * @param productBizId 产品业务标识
+     * @param targets 目标权重
+     * @return 缺失字段编码
+     * @author dz
+     * @date 2026-07-01
+     */
+    private List<String> mockPlanMissingFields(
+        String actionType,
+        BigDecimal executableAmount,
+        String productBizId,
+        List<ExecuteMockRebalanceCommand.TargetWeight> targets
+    ) {
+        List<String> missingFields = new ArrayList<>();
+        if ("BUY".equals(actionType)) {
+            if (productBizId == null || productBizId.isBlank()) {
+                missingFields.add("selectedProduct.productBizId");
+            }
+            if (executableAmount == null || executableAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                missingFields.add("executableAmount");
+            }
+        }
+        if ("REBALANCE".equals(actionType) && (targets == null || targets.isEmpty())) {
+            missingFields.add("targetWeights");
+        }
+        return missingFields;
     }
 
     /**
@@ -1372,13 +1484,18 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
 
     /** 按点分路径读取第一个数值字段。 */
     private BigDecimal firstDecimalPath(JsonNode node, String... paths) {
+        return firstDecimalPathWithSource(node, paths).amount();
+    }
+
+    /** 按点分路径读取第一个数值字段，并保留命中的来源路径。 */
+    private AmountSource firstDecimalPathWithSource(JsonNode node, String... paths) {
         for (String path : paths) {
             BigDecimal value = decimal(pathNode(node, path));
             if (value != null) {
-                return value;
+                return new AmountSource(value, path);
             }
         }
-        return null;
+        return new AmountSource(null, "");
     }
 
     /** 解析点分路径上的 JSON 节点。 */
@@ -1542,6 +1659,20 @@ public class AutoInvestmentClosedLoopOrchestrationTaskHandler implements Investm
         String reason,
         int targetWeightCount
     ) {
+    }
+
+    /** Mock 计划归一化结果。 */
+    private record MockPlanNormalizationResult(
+        BigDecimal executableAmount,
+        String amountSource,
+        String productBizId,
+        String status,
+        List<String> missingFields
+    ) {
+    }
+
+    /** 金额和来源路径。 */
+    private record AmountSource(BigDecimal amount, String source) {
     }
 
     /** AI 结构化核心数据采集落库摘要。 */

@@ -336,11 +336,11 @@ quality=0.9375
 
 | 优先级 | 建议 | 目的 |
 | --- | --- | --- |
-| P0 | 对齐本地 schema：`idempotency_key` 应达到 `VARCHAR(512)` | 消除订单落库硬失败 |
 | P0 | 定义并使用 `ExecutableMockPlan` 稳定契约 | 消除“报告有金额但执行器识别不到”的断链 |
-| P1 | 恢复 `promptTaskCode` 或明确关闭原因 | 让 Prompt 能根据 Mock 失败样本自我修正 |
-| P1 | 新增 `MOCK_PLAN_NORMALIZATION` 和字段级审计 | 让前端和复盘看到具体缺字段，而不是笼统失败 |
-| P1 | 明确默认方案是否允许自动启用 Prompt/模型 | 修正安全边界漂移 |
+| P0 | 修正 `MOCK_PLAN_NORMALIZATION` 的 PASS 条件 | 归一化后若金额为空，必须 `BLOCK/REVIEW`，不能继续到 Mock 交易 |
+| P1 | 对齐本地 schema：`idempotency_key` 应达到 `VARCHAR(512)` | 消除订单落库硬失败；23:41 复核中该项已通过 |
+| P1 | 恢复 `promptTaskCode` 或明确关闭原因 | 让 Prompt 能根据 Mock 失败样本自我修正；23:41 复核中该项已恢复 |
+| P1 | 明确默认方案是否允许自动启用 Prompt/模型 | 修正安全边界漂移；23:41 复核中开关已恢复为 false |
 | P2 | 数据质量样本不足时输出 `REVIEW` | 避免总分过线掩盖新闻证据偏薄 |
 
 ## 8. 下一次验证清单
@@ -363,7 +363,7 @@ varchar(512)
 
 闭环验证建议：
 
-- 最近一次 `QUALITY_GATE` 通过后，`MOCK_PLAN_NORMALIZATION` 输出 `PASS`。
+- 最近一次 `QUALITY_GATE` 通过后，`MOCK_PLAN_NORMALIZATION` 输出非空可执行金额且状态为 `PASS`。
 - `MOCK_TRADE` 不再因 `NO_EXECUTABLE_AMOUNT` 阻断。
 - 若报告选择 `HOLD/SKIP`，必须有结构化 `notExecutableReason`。
 - 若报告选择 `BUY`，必须能在订单表看到一条 `FILLED` 或结构化 `REJECTED` 订单。
@@ -377,3 +377,121 @@ varchar(512)
 2. 报告计划契约漂移：报告把可执行金额放在 `orderSizing.referenceTradeAmount`、`orderReference.referenceAmount` 等非统一字段，Mock 执行器无法稳定识别。
 
 数据质量本身已经比早期明显改善，当前优化重点应从“补基础数据”转为“稳定报告到 Mock 交易的执行契约、schema preflight 和 Prompt 治理反馈”。
+
+## 10. 23:41 附件日志复核
+
+用户补充日志对应运行：
+
+```text
+runNo=CLR-20260701-56170c05
+reportBizId=151fb4b5-f858-495c-bc0b-496004d06836
+triggerSource=MANUAL
+```
+
+### 10.1 已改善项
+
+这次运行相比前一轮诊断已有进步：
+
+| 项 | 23:41 复核结果 | 说明 |
+| --- | --- | --- |
+| `SCHEMA_PREFLIGHT` | `SUCCEEDED` | `aiw_order.idempotency_key.length=512`，`chat_snapshot` 和 `aiw_ai_model_call_audit` 均存在 |
+| Prompt 治理 | `PROMPT_CANDIDATE=SUCCEEDED` | `promptTaskCode=auto-prompt-governance` 已恢复并生成评估 |
+| 安全开关 | 已恢复 | `allowAutoPromptActivation=false`、`allowAutoModelActivation=false` |
+| 数据质量 | `sampleStatus=REVIEW` | 总分 `0.9375`，但 `recentNews=15`，样本状态已能表达偏薄 |
+| 报告质量 | 通过 | `HIGH_CONFIDENCE`，`dataQualityScore=0.7631` |
+
+因此当前最新阻断不再是 schema 漂移或 Prompt 治理缺席。
+
+### 10.2 最新阻断点
+
+闭环步骤显示：
+
+```text
+MOCK_PLAN_NORMALIZATION = SUCCEEDED
+output_summary.referenceTradeAmount = null
+MOCK_TRADE = BLOCKED
+reason = Mock 计划无法执行: 报告未给出可执行的参考配置金额
+```
+
+风险审计显示：
+
+```json
+{
+  "ruleCode": "REPORT_EXECUTABLE_AMOUNT",
+  "checkResult": "REJECT",
+  "reasonCode": "NO_EXECUTABLE_AMOUNT",
+  "supportedAmountFields": "referenceAllocationAmount,executableAmount,plannedTradeAmount,referenceTradeAmount,orderSizing.*"
+}
+```
+
+报告计划实际包含：
+
+```json
+{
+  "actionType": "BUY",
+  "targetWeights": [
+    {
+      "productBizId": "2b08333f-6fb8-4890-854a-77aab9ecdb47",
+      "targetWeight": 0.05
+    }
+  ],
+  "orderSuggestion": {
+    "side": "BUY",
+    "referenceAmount": 5000,
+    "referenceAllocationRate": 0.05,
+    "cashAfterReferenceTrade": 95000
+  },
+  "selectedProduct": {
+    "productBizId": "2b08333f-6fb8-4890-854a-77aab9ecdb47",
+    "productCode": "159819"
+  }
+}
+```
+
+根因更新：
+
+- Prompt 已输出可执行意图、产品和金额，但金额字段落在 `orderSuggestion.referenceAmount`。
+- 当前风控支持字段中没有 `orderSuggestion.referenceAmount`。
+- `MOCK_PLAN_NORMALIZATION` 虽然识别出 `actionType=BUY`、`productBizId`、`targetWeightCount=1`，但没有识别金额，仍错误标记为 `PASS`。
+
+### 10.3 最新 P0 建议
+
+1. `MOCK_PLAN_NORMALIZATION` 支持金额字段别名：
+   - `executableAmount`
+   - `plannedTradeAmount`
+   - `referenceTradeAmount`
+   - `referenceAllocationAmount`
+   - `orderSizing.referenceTradeAmount`
+   - `orderReference.referenceAmount`
+   - `orderSuggestion.referenceAmount`
+2. 对 `targetWeights` 提供金额推导：
+   - 若 `targetWeight=0.05` 且 `totalAsset=100000`，可推导 `executableAmount=5000`。
+   - 推导金额必须受 `cashBalance` 和 `maxSingleTradeAmount` 约束。
+3. 修正归一化状态：
+   - `BUY` 或 `REBALANCE` 且最终金额为空时，`normalizationStatus` 不得为 `PASS`。
+   - 应输出 `BLOCK` 或 `REVIEW`，并把缺失字段写入 `missingFields`。
+4. Prompt 评估增加 Mock 执行契约扣分：
+   - 本次 Prompt 评估分 `0.9044`，但实际 Mock 不可执行。
+   - 评分应把 `NO_EXECUTABLE_AMOUNT` 作为硬性扣分或 `REJECT` 条件。
+
+### 10.4 更新后的当前结论
+
+当前最近一次运行已经证明：
+
+- 数据质量可以支撑报告生成。
+- schema preflight 已能识别并通过关键字段。
+- Prompt 治理已恢复。
+- Mock 失败剩余核心问题是“执行金额字段契约和归一化规则不一致”。
+
+下一步不应继续补基础数据，而应集中处理 `ExecutableMockPlan` 字段契约、金额别名归一化和 Prompt 评估闭环。
+
+### 10.5 2026-07-01 代码落地摘要
+
+已完成本诊断 P0 的后端落地：
+
+- `MOCK_PLAN_NORMALIZATION` 支持 `orderSuggestion.referenceAmount`、`orderReference.referenceAmount` 等金额别名。
+- 报告只有 `targetWeights[0].targetWeight` 时，可结合组合 `totalAsset/cashBalance` 推导可执行参考金额。
+- BUY/REBALANCE 缺少可执行金额或产品时，归一化节点直接 `BLOCKED`，不再继续进入 `MOCK_TRADE`。
+- `buyFromReport` 同步支持目标权重金额推导和 `targetWeights[0].productBizId`，避免编排层能识别、交易层不能执行。
+
+验证：`./mvnw -q -Dtest=MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test`、`./mvnw -q -DskipTests compile`、`git diff --check` 均通过。

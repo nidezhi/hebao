@@ -251,6 +251,70 @@ class MockPortfolioApplicationServiceTest {
         assertEquals("FILLED", execution.order().status());
     }
 
+    /** 报告金额落在 orderSuggestion.referenceAmount 时，应避免误判为无可执行金额。 */
+    @Test
+    void shouldNormalizeOrderSuggestionAmountWhenBuyingFromReport() {
+        Fixture fixture = new Fixture();
+        fixture.reports.save(InvestmentAnalysisReport.builder()
+            .bizId("report-order-suggestion")
+            .requestId("request-order-suggestion")
+            .providerCode("OPENAI_COMPATIBLE")
+            .modelCode("openai-compatible-analysis")
+            .marketScope("CN_MAINLAND")
+            .status("SUCCEEDED")
+            .confidenceLevel("MEDIUM_CONFIDENCE")
+            .dataQualityScore(new BigDecimal("0.80"))
+            .dataQualityGate("{\"passed\":true}")
+            .investmentPlan("""
+                {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","selectedProduct":{"productBizId":"product-1"},"orderSuggestion":{"side":"BUY","referenceAmount":5000,"referenceAllocationRate":0.05,"cashAfterReferenceTrade":95000}}
+                """)
+            .generatedAt(NOW)
+            .createdAt(NOW)
+            .build());
+
+        var execution = fixture.service.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
+            .portfolioBizId("portfolio-1")
+            .reportBizId("report-order-suggestion")
+            .idempotencyKey("order-suggestion-buy")
+            .build());
+
+        assertEquals("product-1", execution.order().productBizId());
+        assertEquals(0, new BigDecimal("5000.00000000").compareTo(execution.order().executedAmount()));
+        assertEquals("FILLED", execution.order().status());
+    }
+
+    /** 报告只有目标权重时，应结合组合总资产推导可执行买入金额。 */
+    @Test
+    void shouldInferReportAmountFromTargetWeightWhenBuyingFromReport() {
+        Fixture fixture = new Fixture();
+        fixture.reports.save(InvestmentAnalysisReport.builder()
+            .bizId("report-target-weight-amount")
+            .requestId("request-target-weight-amount")
+            .providerCode("OPENAI_COMPATIBLE")
+            .modelCode("openai-compatible-analysis")
+            .marketScope("CN_MAINLAND")
+            .status("SUCCEEDED")
+            .confidenceLevel("MEDIUM_CONFIDENCE")
+            .dataQualityScore(new BigDecimal("0.80"))
+            .dataQualityGate("{\"passed\":true}")
+            .investmentPlan("""
+                {"planType":"REFERENCE_ALLOCATION","actionType":"BUY","targetWeights":[{"productBizId":"product-1","targetWeight":0.05}]}
+                """)
+            .generatedAt(NOW)
+            .createdAt(NOW)
+            .build());
+
+        var execution = fixture.service.buyFromReport(ExecuteMockPlanFromReportCommand.builder()
+            .portfolioBizId("portfolio-1")
+            .reportBizId("report-target-weight-amount")
+            .idempotencyKey("target-weight-report-buy")
+            .build());
+
+        assertEquals("product-1", execution.order().productBizId());
+        assertEquals(0, new BigDecimal("1000.00000000").compareTo(execution.order().executedAmount()));
+        assertEquals("FILLED", execution.order().status());
+    }
+
     /** 自动闭环 AI 资金池应以 10W 初始现金创建，并允许当前登录用户读取和刷新估值。 */
     @Test
     void shouldExposeAutomationPoolForReadAndValuationRefresh() {
@@ -392,19 +456,19 @@ class MockPortfolioApplicationServiceTest {
 
         private InMemoryPortfolioStore() {
             save(Portfolio.builder()
-            .bizId("portfolio-1")
-            .portfolioNo("MP1")
-            .ownerUserBizId("user-1")
-            .portfolioName("模拟组合")
-            .portfolioType("SIMULATION")
-            .baseCurrency("CNY")
-            .status(1)
-            .createdAt(NOW)
-            .updatedAt(NOW)
-            .createdBy("user-1")
-            .updatedBy("user-1")
-            .deleted(0)
-            .build());
+                .bizId("portfolio-1")
+                .portfolioNo("MP1")
+                .ownerUserBizId("user-1")
+                .portfolioName("模拟组合")
+                .portfolioType("SIMULATION")
+                .baseCurrency("CNY")
+                .status(1)
+                .createdAt(NOW)
+                .updatedAt(NOW)
+                .createdBy("user-1")
+                .updatedBy("user-1")
+                .deleted(0)
+                .build());
         }
 
         @Override
