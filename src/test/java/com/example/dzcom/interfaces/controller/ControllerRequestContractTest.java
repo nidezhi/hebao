@@ -4,6 +4,7 @@ import com.example.dzcom.interfaces.controller.account.AdminUserController;
 import com.example.dzcom.interfaces.controller.account.AdminRoleController;
 import com.example.dzcom.interfaces.controller.account.AuthenticationController;
 import com.example.dzcom.interfaces.controller.account.CurrentUserController;
+import com.example.dzcom.interfaces.controller.analytics.InvestmentEvolutionAnalyticsController;
 import com.example.dzcom.interfaces.controller.ai.AiModelController;
 import com.example.dzcom.interfaces.controller.ai.AiModelBindingController;
 import com.example.dzcom.interfaces.controller.ai.AiPromptController;
@@ -23,6 +24,7 @@ import com.example.dzcom.interfaces.dto.response.account.PermissionCatalogRespon
 import com.example.dzcom.interfaces.dto.response.account.PreferenceResponse;
 import com.example.dzcom.interfaces.dto.response.account.RoleResponse;
 import com.example.dzcom.interfaces.dto.response.account.UserResponse;
+import com.example.dzcom.interfaces.dto.response.analytics.InvestmentEvolutionSummaryResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiModelResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiModelBindingResponse;
 import com.example.dzcom.interfaces.dto.response.ai.AiPromptOutputSchemaResponse;
@@ -94,6 +96,7 @@ class ControllerRequestContractTest {
         AdminRoleController.class,
         AuthenticationController.class,
         CurrentUserController.class,
+        InvestmentEvolutionAnalyticsController.class,
         AdminProductController.class,
         ProductController.class,
         DataSourceGovernanceController.class,
@@ -116,6 +119,7 @@ class ControllerRequestContractTest {
         RoleResponse.class,
         PermissionCatalogResponse.class,
         PreferenceResponse.class,
+        InvestmentEvolutionSummaryResponse.class,
         ProductResponse.class,
         ProductAttributeResponse.class,
         ProductInvestmentProfileResponse.class,

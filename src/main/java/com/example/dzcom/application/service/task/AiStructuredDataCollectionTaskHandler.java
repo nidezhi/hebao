@@ -4,6 +4,7 @@ import com.example.dzcom.application.common.exception.BusinessException;
 import com.example.dzcom.application.common.json.Jsons;
 import com.example.dzcom.application.common.service.ClockProvider;
 import com.example.dzcom.application.common.service.IdGenerator;
+import com.example.dzcom.application.dto.ai.AiModelCallAuditContext;
 import com.example.dzcom.application.dto.ai.AiModelRuntimeConfig;
 import com.example.dzcom.application.service.ai.AiJsonCompletionClient;
 import com.example.dzcom.application.service.ai.AiModelBindingApplicationService;
@@ -122,7 +123,25 @@ public class AiStructuredDataCollectionTaskHandler implements InvestmentTaskHand
             "AI_STRUCTURED_DATA_COLLECTION",
             systemPrompt(skill),
             userPrompt,
-            runtimeConfig
+            runtimeConfig,
+            AiModelCallAuditContext.builder()
+                .businessType("TASK_EVENT")
+                .businessBizId(event.eventId())
+                .businessLabel("AI结构化数据采集")
+                .taskCode(event.taskCode())
+                .eventId(event.eventId())
+                .skillBizId(skill == null ? null : skill.bizId())
+                .skillCode(skill == null ? "INTERNAL_PROMPT" : skill.skillCode())
+                .skillVersion(skill == null ? "" : skill.skillVersion())
+                .scenarioCode(binding.scenarioCode())
+                .environment(binding.environment())
+                .inputSummary(Map.of(
+                    "maxNews", maxNews,
+                    "maxProducts", maxProducts,
+                    "maxQuotes", maxQuotes,
+                    "triggerSource", event.triggerSource()
+                ))
+                .build()
         );
         long durationMs = java.time.Duration.ofNanos(System.nanoTime() - started).toMillis();
         ObjectNode root = parseRoot(content);

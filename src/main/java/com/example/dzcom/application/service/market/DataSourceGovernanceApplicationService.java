@@ -15,6 +15,7 @@ import com.example.dzcom.application.dto.market.DataSourceDiscoveryCandidateView
 import com.example.dzcom.application.dto.market.DataSourceDiscoveryView;
 import com.example.dzcom.application.dto.market.DataSourceHealthView;
 import com.example.dzcom.application.dto.market.DataSourceView;
+import com.example.dzcom.application.dto.ai.AiModelCallAuditContext;
 import com.example.dzcom.application.service.account.CurrentOperator;
 import com.example.dzcom.application.service.account.CurrentOperatorProvider;
 import com.example.dzcom.application.service.ai.AiJsonCompletionClient;
@@ -629,7 +630,23 @@ public class DataSourceGovernanceApplicationService {
             "DATA_SOURCE_COLLECTION_DISCOVERY",
             discoverySystemPrompt(skill),
             promptPreview,
-            runtimeConfig
+            runtimeConfig,
+            AiModelCallAuditContext.builder()
+                .businessType("DATA_SOURCE_DISCOVERY")
+                .businessBizId(command.collectionDirection())
+                .businessLabel("数据源发现")
+                .skillBizId(skill.bizId())
+                .skillCode(skill.skillCode())
+                .skillVersion(skill.skillVersion())
+                .scenarioCode(AiModelBindingApplicationService.DATA_SOURCE_DISCOVERY)
+                .environment(AiModelBindingApplicationService.DEFAULT_ENVIRONMENT)
+                .inputSummary(Map.of(
+                    "collectionDirection", command.collectionDirection(),
+                    "dataTypes", dataTypes,
+                    "trustLevels", trustLevels,
+                    "limit", limit
+                ))
+                .build()
         );
         if (content == null || content.isBlank()) {
             log.error(

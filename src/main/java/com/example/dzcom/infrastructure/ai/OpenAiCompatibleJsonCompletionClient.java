@@ -1,13 +1,15 @@
 package com.example.dzcom.infrastructure.ai;
 
 import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.dto.ai.AiModelCallAuditContext;
 import com.example.dzcom.application.dto.ai.AiModelRuntimeConfig;
 import com.example.dzcom.application.service.ai.AiJsonCompletionClient;
+import com.example.dzcom.application.service.ai.AiModelCallAuditApplicationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -27,12 +29,38 @@ import java.util.UUID;
 
 /** OpenAI Chat Completions 兼容 JSON 调用客户端。 */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionClient {
     private static final String PROVIDER_CODE = "OPENAI_COMPATIBLE";
 
     private final ObjectMapper objectMapper;
+    private final AiModelCallAuditApplicationService callAudits;
+
+    /**
+     * 构造不启用持久化审计的 JSON 补全客户端。
+     *
+     * <p>该构造器用于不加载审计服务的单元测试或兼容场景；生产环境应优先使用带审计服务的构造器。</p>
+     *
+     * @param objectMapper JSON 序列化组件
+     */
+    OpenAiCompatibleJsonCompletionClient(ObjectMapper objectMapper) {
+        this(objectMapper, null);
+    }
+
+    /**
+     * 构造启用持久化审计的 JSON 补全客户端。
+     *
+     * @param objectMapper JSON 序列化组件
+     * @param callAudits 模型调用审计应用服务，允许为空以兼容旧测试
+     */
+    @Autowired
+    public OpenAiCompatibleJsonCompletionClient(
+        ObjectMapper objectMapper,
+        AiModelCallAuditApplicationService callAudits
+    ) {
+        this.objectMapper = objectMapper;
+        this.callAudits = callAudits;
+    }
 
     /**
      * 判断是否支持 OpenAI 兼容 Provider。
@@ -69,10 +97,35 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         String userPrompt,
         AiModelRuntimeConfig modelConfig
     ) {
+        return completeJson(operationCode, systemPrompt, userPrompt, modelConfig, AiModelCallAuditContext.empty());
+    }
+
+    /**
+     * 调用 OpenAI 兼容接口并沉淀模型审计记录。
+     *
+     * @param operationCode 操作编码
+     * @param systemPrompt 系统提示词
+     * @param userPrompt 用户提示词
+     * @param modelConfig 模型运行时配置
+     * @param auditContext 业务审计上下文
+     * @return JSON 对象文本
+     */
+    @Override
+    public String completeJson(
+        String operationCode,
+        String systemPrompt,
+        String userPrompt,
+        AiModelRuntimeConfig modelConfig,
+        AiModelCallAuditContext auditContext
+    ) {
         validateRemoteCallable(operationCode, modelConfig);
         long startedAt = System.nanoTime();
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
         String callId = UUID.randomUUID().toString();
+        String systemPromptHash = sha256(systemPrompt);
+        String userPromptHash = sha256(userPrompt);
+        startAudit(callId, operationCode, modelConfig, endpoint, systemPromptHash, userPromptHash,
+            systemPrompt, userPrompt, auditContext);
         log.info(
             "AI JSON模型调用开始: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, systemPromptLength={}, userPromptLength={}, systemPromptHash={}, userPromptHash={}",
             callId,
@@ -89,8 +142,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             modelConfig.temperature(),
             textLength(systemPrompt),
             textLength(userPrompt),
-            sha256(systemPrompt),
-            sha256(userPrompt)
+            systemPromptHash,
+            userPromptHash
         );
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -117,6 +170,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
                 textLength(response.body())
             );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                failAudit(callId, response.statusCode(), durationMs, sha256(response.body()), response.body(),
+                    "HTTP_" + response.statusCode(), "模型HTTP调用失败");
                 log.error(
                     "AI JSON模型调用远端失败: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, responseBody={}",
                     callId,
@@ -134,6 +189,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
                         + ", body=" + limit(response.body(), 500));
             }
             String content = normalizeJsonObjectContent(extractContent(response.body(), operationCode), operationCode);
+            succeedAudit(callId, response.statusCode(), elapsedMs(startedAt), sha256(content), content,
+                Map.of("contentLength", textLength(content), "httpStatus", response.statusCode()));
             log.info(
                 "AI JSON模型调用完成: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}, contentHash={}",
                 callId,
@@ -147,6 +204,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             );
             return content;
         } catch (BusinessException exception) {
+            failAudit(callId, null, elapsedMs(startedAt), "", "",
+                "BUSINESS_EXCEPTION", exception.getMessage());
             log.error(
                 "AI JSON模型调用业务失败: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
                 callId,
@@ -160,6 +219,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            failAudit(callId, null, elapsedMs(startedAt), "", "",
+                "INTERRUPTED", "模型调用被中断");
             log.error(
                 "AI JSON模型调用被中断: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
                 callId,
@@ -171,6 +232,8 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
             );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, operationCode + "模型调用被中断");
         } catch (Exception exception) {
+            failAudit(callId, null, elapsedMs(startedAt), "", "",
+                exception.getClass().getSimpleName(), exception.getMessage());
             log.error(
                 "AI JSON模型调用异常: callId={}, operationCode={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
                 callId,
@@ -211,7 +274,13 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
         }
     }
 
-    /** 输出远程调用前置配置错误并抛出业务异常。 */
+    /**
+     * 输出远程调用前置配置错误并抛出业务异常。
+     *
+     * @param operationCode 业务操作编码
+     * @param modelConfig 模型运行时配置
+     * @param reason 不可远程调用的明确原因
+     */
     private void failRemoteCallable(String operationCode, AiModelRuntimeConfig modelConfig, String reason) {
         log.error(
             "AI JSON模型远程调用前置校验失败: operationCode={}, modelCode={}, modelVersion={}, providerCode={}, secretRef={}, reason={}",
@@ -398,6 +467,74 @@ public class OpenAiCompatibleJsonCompletionClient implements AiJsonCompletionCli
     /** 计算模型调用耗时毫秒。 */
     private long elapsedMs(long startedAt) {
         return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+    }
+
+    /**
+     * 记录模型调用开始。
+     *
+     * <p>审计服务缺失时静默跳过，用于保持历史单元测试可独立构造客户端；真实业务调用应注入
+     * {@link AiModelCallAuditApplicationService} 以保证模型调用可追踪。</p>
+     *
+     * @param callId 单次模型调用追踪标识
+     * @param operationCode 业务操作编码
+     * @param modelConfig 模型运行时配置快照
+     * @param endpoint 脱敏后的远端调用地址
+     * @param systemPromptHash 系统提示词哈希
+     * @param userPromptHash 用户提示词哈希
+     * @param systemPrompt 系统提示词原文，审计服务会截断保存
+     * @param userPrompt 用户提示词原文，审计服务会截断保存
+     * @param auditContext 业务关联上下文
+     */
+    private void startAudit(
+        String callId,
+        String operationCode,
+        AiModelRuntimeConfig modelConfig,
+        String endpoint,
+        String systemPromptHash,
+        String userPromptHash,
+        String systemPrompt,
+        String userPrompt,
+        AiModelCallAuditContext auditContext
+    ) {
+        if (callAudits != null) {
+            callAudits.start(callId, operationCode, modelConfig, endpoint, systemPromptHash, userPromptHash,
+                systemPrompt, userPrompt, auditContext);
+        }
+    }
+
+    /**
+     * 记录模型调用成功。
+     *
+     * @param callId 单次模型调用追踪标识
+     * @param httpStatus 远端 HTTP 状态
+     * @param durationMs 调用耗时毫秒
+     * @param responseHash 模型输出哈希
+     * @param responseText 模型输出原文，审计服务会截断保存
+     * @param outputSummary 可扩展输出摘要
+     */
+    private void succeedAudit(String callId, Integer httpStatus, long durationMs, String responseHash,
+                              String responseText, Map<String, Object> outputSummary) {
+        if (callAudits != null) {
+            callAudits.succeed(callId, httpStatus, durationMs, responseHash, responseText, outputSummary);
+        }
+    }
+
+    /**
+     * 记录模型调用失败。
+     *
+     * @param callId 单次模型调用追踪标识
+     * @param httpStatus 远端 HTTP 状态，未到达远端时为空
+     * @param durationMs 调用耗时毫秒
+     * @param responseHash 失败响应哈希
+     * @param responseText 失败响应原文，审计服务会截断保存
+     * @param errorCode 结构化错误编码
+     * @param errorMessage 可展示失败原因
+     */
+    private void failAudit(String callId, Integer httpStatus, long durationMs, String responseHash,
+                           String responseText, String errorCode, String errorMessage) {
+        if (callAudits != null) {
+            callAudits.fail(callId, httpStatus, durationMs, responseHash, responseText, errorCode, errorMessage);
+        }
     }
 
     /** 计算文本 SHA-256 摘要，日志只记录摘要用于关联，不记录完整 Prompt。 */

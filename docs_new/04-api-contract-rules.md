@@ -99,6 +99,26 @@
 - 契约要求：选择项必须来自真实 `InvestmentThemeSnapshot`，前端不得手填 `themeCode`；允许清空选择代表全市场分析。
 - 验收状态：2026-06-28 已补齐，真实数据可返回 `AI人工智能`、`半导体`、`黄金`，后端全量测试和前端 type-check/build 通过。
 
+#### Investment Evolution 持续进化分析
+
+- 前端使用点：`/investment-evolution` 统一分析页。
+- 后端接口：`POST /api/analytics/investment-evolution/summary`。
+- 请求字段：
+  - `sampleSize`：可选，最近样本窗口，范围 `1-100`，默认 `100`。
+- 响应字段：
+  - `sampleStatus`：`INSUFFICIENT_SAMPLE` / `EARLY_SIGNAL` / `ENOUGH_FOR_TREND`。
+  - `kpis`：顶部指标卡，包含闭环成功率、Mock 收益率、最大回撤、模型成功率、风控拒绝和反馈/回测样本。
+  - `closedLoop`：闭环样本数、成功/失败/运行中/阻断、成功率、平均质量分、门禁通过数。
+  - `portfolio`：组合数、估值点、最新收益率、最大回撤、订单事件、成交事件、换手率代理。
+  - `risk`：风控样本、通过/复核/拒绝、拒绝原因分布。
+  - `model`：模型调用样本、成功/失败、成功率、平均耗时。
+  - `feedback`：反馈样本、正负反馈、回测样本和完成数。
+  - `variants`：按 `modelCode/modelVersion + promptCode/promptVersion + skillCode/skillVersion + scenarioCode` 聚合的 A/B 归因表现。
+  - `recentRuns`：最近闭环运行摘要。
+  - `limitations`：样本不足或统计口径限制，前端必须展示，不能隐藏成确定结论。
+- 契约要求：该接口只做指标归集与归因展示，不触发闭环执行、不修改业务数据、不伪造长期胜率；样本不足时必须返回明确 `sampleStatus/limitations`。
+- 验收状态：2026-07-01 已补齐后端服务/Controller/测试和前端统一分析页，目标测试与前端 type-check/build 通过。
+
 ## 历史归档区
 
 - 旧前端接口变更见 `10-frontend-interface-changes.md`、`12-frontend-api-update-log.md`、`19-frontend-api-update-log-20260626-ai-skills.md`。

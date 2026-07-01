@@ -8,6 +8,7 @@
 
 ### 当前协作口径
 
+- **最高优先级铁律：任何新生成、修改、补齐的代码，必须先遵守对应仓库开发铁律；后端严格遵守 `03-backend-laws.md`，前端严格遵守 `02-frontend-laws.md`。铁律优先级高于功能推进、速度、临时绕过、个人习惯和历史旧实现；如不能满足，先登记 gap/更新契约，不得继续堆代码。**
 - 两个 Git 仓库保持独立：后端 `dzcom`，前端 `dzcom_web`。
 - 共享文档归档在 `dzcom/docs_new`。前端 `dzcom_web` 不再保留 md 文档，后续以后端 `dzcom/docs_new` 为准。
 - 前端历史 mock/handoff 已从前端仓库删除；如需历史，以后端 `docs_new` 已归档内容为准。
@@ -61,36 +62,24 @@
 ### 当前完成状态
 
 - 统一协作机制已建立：共享文档以 `dzcom/docs_new` 为准，前端仓库不再保存 md 事实源；后续按 contract -> backend -> frontend -> smoke -> handoff 推进。
-- 首轮联调基线已完成，后端主闭环、前端主页面和真实数据均可支撑当前产品闭环；详细页面审计见 `23-frontend-page-audit-20260628.md`，剩余问题看 `06-backend-gap-list.md`。
-- 自动闭环配置当前口径：系统默认项在 `AUTO_INVESTMENT_CLOSED_LOOP`，方案列表在 `AUTO_INVESTMENT_CLOSED_LOOP_PROFILE`，定时任务以 `scheduledConfigProfileCode` 为权威方案；前端入口为 `/config-center/system-configs` 和 `/config-center/tasks`。
-- 自动闭环方案已支持结构化高级配置：类型、风险、运行模式、数据任务、质量门禁、安全阀、Mock、Prompt、回测；后端兼容嵌套 JSON 并在运行中沉淀 `PROFILE_SNAPSHOT`。
-- 自动闭环方案下拉空白问题已修复：后端在方案种子缺失时对 `default-auto-mock` 提供只读兜底，执行侧同样可展开默认方案；前端系统配置页和任务触发弹窗会合并真实方案与当前默认方案，方案列表可独立筛选查看。
-- 自动闭环方案新增/编辑边界已修复：系统配置页点“新增方案”不再默认带出 `default-auto-mock`，新增模式下若方案编码已存在会提示从列表编辑，避免误覆盖默认方案。
-- 系统配置页信息架构已优化：页面改为左侧“配置树”父子导航，自动投资闭环下挂默认配置、生效概览、配置项列表、配置方案；右侧只展示当前节点内容，避免默认配置与列表/方案列表上下堆叠混乱。
-- 自动闭环定时任务已改为每天三次：`09:30、13:30、20:30`（Asia/Shanghai，cron=`0 30 9,13,20 * * *`）；默认 Mock 资金组合已重置为 10W CNY 现金、0 持仓、0 订单。
-- 自动闭环 Mock 执行已从“固定报告买入”升级为“组合上下文感知”：报告生成前会把 Mock 组合现金、估值、持仓和单笔上限传入模型上下文；执行时优先按 `investmentPlan.targetWeights` 再平衡，`HOLD/SKIP` 会记录无动作并继续估值/反馈，只有旧报告或明确 `BUY` 才按现金和上限收敛为单笔买入；现金不足会记录为 `MOCK_TRADE` 业务阻断，不再落入系统异常。
-- 自动闭环 Mock 样本生成已增强：`portfolioContext` 现在包含通过画像门禁的 `candidateProducts`；模型不得再因“无 productBizId”直接 HOLD。若报告仍建议 HOLD/SKIP，但组合空仓、质量达标且配置 `allowExploratoryMockBuy=true`，后端会按候选产品执行小额探索 Mock 买入，默认不超过单笔上限的 50%，用于产生可复盘样本。
-- 大模型调用埋点已增强：投资报告模型日志新增 `userPromptHash/contentHash`；通用 JSON 模型客户端新增 `callId/systemPromptHash/userPromptHash/contentHash` 和耗时/HTTP 状态，仍不记录密钥或完整 Prompt。
-- Overview 投资驾驶舱已升级为运行态 UI：指标区下方新增 LIVE RUNTIME 控制条，默认每 5 秒静默刷新，支持暂停/立即刷新；刷新时保留当前选中闭环实例，避免运行时间线跳回最新实例。
-- 本轮页面反馈已收口：Mock 组合支持删除但保护自动化 AI 资金池；Simulation 资产曲线空数据会明确提示估值历史缺失；Report Studio 左侧列表可滚动，新增 Mock 闭环上下文提醒，并展示真实 `promptSnapshot/chatSnapshot`；Overview 节点抽屉展示模型输入输出、Mock 动作、订单数、原因和组合结果等证据。
-- 报告 `chat_snapshot` 本地库错位已修复：V47 迁移改为幂等补列，当前 `dz_database.aiw_investment_analysis_report` 已存在 `chat_snapshot JSON`，自动报告 insert 不应再因 Unknown column 阻断。
-- 开发铁律已补充：Mapper 层非必要不得新增手写 SQL/XML SQL，优先 MyBatis-Plus `BaseMapper`、Service、LambdaQueryWrapper、分页和规范代码生成；见 `03-backend-laws.md`。
-- Handoff 自身瘦身规则已生效：本文只做默认入口和当前状态索引，超过阈值先压缩再追加；详细规则见 `99-context-slimming-rules.md`。
+- 首轮联调基线已完成，后端主闭环、前端主页面和真实数据均可支撑当前产品闭环；页面审计见 `23-frontend-page-audit-20260628.md`，剩余问题看 `06-backend-gap-list.md`。
+- 自动闭环当前口径：系统默认项在 `AUTO_INVESTMENT_CLOSED_LOOP`，方案列表在 `AUTO_INVESTMENT_CLOSED_LOOP_PROFILE`，定时任务以 `scheduledConfigProfileCode` 为权威方案；前端入口为 `/config-center/system-configs`、`/config-center/tasks`、`/overview`、`/simulation`、`/report-studio`、`/review-loop`。
+- 自动闭环近期核心状态：每天三次定时任务已生效；默认 Mock 资金组合为 10W CNY；报告生成会携带组合上下文和候选产品；Mock 执行支持调仓、HOLD/SKIP 无动作记录、现金不足业务阻断和探索买入样本。
+- 大模型调用审计中心已建立：`aiw_ai_model_call_audit` 与 `/api/ai/model-call-audits/list|detail` 持久化模型、Prompt、Skill、业务关联、输入输出摘要、耗时和失败上下文；前端入口 `/ai-call-audits`。
+- 最新铁律整改已完成：本次新增模型调用审计代码改为 MyBatis-Plus `selectPage` 分页和统一分页插件，不再使用 `last("limit")`；新增/改造后端方法已补业务语义 Javadoc；前端审计页使用真实记录派生的可搜索选择器，JSON 只作为辅助调试区。
+- 持续进化分析层已建立：新增 `POST /api/analytics/investment-evolution/summary`，按最近样本归集闭环成功率、Mock 收益/回撤/换手代理、风控拒绝原因、模型调用稳定性、反馈/回测样本和模型/Prompt/Skill A/B 归因；样本不足时返回 `sampleStatus/limitations`，不伪造长期结论。
+- 前端新增 `/investment-evolution` 统一分析页，入口在“投资闭环”菜单；页面只消费真实分析接口和 adapter 后的结构化 ViewModel。
+- 后端启动故障已修复：模型调用审计接入后 `MockOpenAiCompatibleInvestmentAnalysisProvider` 和 `OpenAiCompatibleJsonCompletionClient` 存在测试兼容构造器与生产构造器，Spring 曾误走无参构造路径；现已显式标记生产构造器并补启动回归测试。
+- Handoff 自身瘦身已执行：本文最新区只保留入口索引、当前有效状态和最近验证摘要；详细历史默认不读。
 
 ### 最近验证结果
 
 - 后端最近全量基线：`./mvnw -q test` 通过。
 - 前端最近全量基线：`node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；`node node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
-- 自动闭环配置/方案最近目标验证：`./mvnw -q -Dtest=InvestmentTaskManagementServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,MockPortfolioApplicationServiceTest,SystemConfigApplicationServiceTest test` 通过；前端 `vue-tsc -b`、`vite build` 通过。
-- 自动闭环方案下拉修复验证：`./mvnw -q -Dtest=SystemConfigApplicationServiceTest,InvestmentTaskManagementServiceTest test` 通过；`node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；`node node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
-- 自动闭环方案新增弹窗修复验证：`/Users/daniel/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；同 Node 路径执行 `node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
-- 系统配置页父子导航优化验证：`/Users/daniel/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；同 Node 路径执行 `node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning；本地浏览器视觉冒烟确认配置树和四个子节点可见。
-- 自动闭环三次定时与默认资金池重置验证：`./mvnw -q -DskipTests compile` 通过；`./mvnw -q -Dtest=InvestmentTaskManagementServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；当前库复查 cron 为 `0 30 9,13,20 * * *`，默认组合 `0e826d40-d827-46c9-b08f-5a9576b76616` 为 100000 CNY 现金、0 持仓、0 订单。
-- 自动闭环 Mock 组合上下文、调仓执行与 `HOLD` 无动作验证：`./mvnw -q -Dtest=AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,AutoInvestmentReportGenerationTaskHandlerTest,MockPortfolioApplicationServiceTest test` 通过；最近全量 `./mvnw -q test` 仍以前次基线为准。
-- Overview 运行态 UI 验证：`node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；`node node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning；本地 `/overview` 冒烟确认 LIVE RUNTIME、5 秒倒计时、暂停/立即刷新控件可见。
-- 本轮 Mock/报告/复盘/Overview 页面反馈验证：`./mvnw -q -Dtest=MockOpenAiCompatibleInvestmentAnalysisProviderTest,MockPortfolioApplicationServiceTest,AutoInvestmentClosedLoopOrchestrationTaskHandlerTest test` 通过；`./mvnw -q -DskipTests compile` 通过；前端 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning。
-- 报告 `chat_snapshot` 库表修复验证：执行 `V47__add_report_chat_snapshot.sql` 到当前 `dz_database` 成功；`information_schema.columns` 确认 `chat_snapshot/json` 存在；`./mvnw -q -DskipTests compile` 通过。
-- 自动闭环探索买入与模型埋点验证：`./mvnw -q -Dtest=AutoInvestmentClosedLoopOrchestrationTaskHandlerTest,MockOpenAiCompatibleInvestmentAnalysisProviderTest test` 通过；`./mvnw -q -DskipTests compile` 通过；当前库有 8 个满足 `mock_tradable=1` 且质量分 `0.65` 的候选产品。
+- 自动闭环、配置、Mock、报告、Overview、复盘等专项验证均已在对应历史归档中留短摘要；默认不再读取旧验证流水。
+- 模型调用审计中心最新整改验证：`./mvnw -q -Dtest=AiModelCallAuditApplicationServiceTest,ControllerRequestContractTest,OpenAiCompatibleJsonCompletionClientTest,MockOpenAiCompatibleInvestmentAnalysisProviderTest test` 通过；`/Users/daniel/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vue-tsc/bin/vue-tsc.js -b` 通过；同 Node 路径执行 `node_modules/vite/bin/vite.js build` 通过，仅既有 chunk size warning。
+- 持续进化分析验证：`./mvnw -q -Dtest=InvestmentEvolutionAnalyticsApplicationServiceTest,ControllerRequestContractTest test` 通过；前端 bundled Node 执行 `vue-tsc -b` 与 `vite build` 通过，仅既有 chunk size warning；`diff --check` 通过。
+- 后端启动故障验证：`./mvnw -q -Dtest=DzcomApplicationTests test` 通过，已断言核心 AI Bean 可由 Spring 装配；`./mvnw -q -Dtest=MockOpenAiCompatibleInvestmentAnalysisProviderTest,OpenAiCompatibleJsonCompletionClientTest,AiModelCallAuditApplicationServiceTest,InvestmentEvolutionAnalyticsApplicationServiceTest,ControllerRequestContractTest test` 通过；`git diff --check` 通过。`spring-boot:run` 已验证可启动并已停止，避免占用 IDEA 端口。
 - 真实浏览器/API 冒烟依赖用户在 IDEA 启动后端服务；未启动服务时不把路由/API 冒烟写成通过。
 
 ### 下一步默认动作
@@ -98,10 +87,11 @@
 用户给出一个具体功能或页面后，按以下方式开始：
 
 1. 只读取本文。
-2. 读取该任务相关的 laws/contract/gap 摘要；若是前端页面整改，读取 `23-frontend-page-audit-20260628.md` 最新结论区。
-3. 列出本次将读取的后端/前端目标文件。
-4. 先更新 contract 或 gap，再进入代码修改。
-5. 完成后把结论写回本文，并把完成过程压缩为摘要。
+2. 第一时间读取并声明本次适用的 `02-frontend-laws.md` / `03-backend-laws.md` 相关条款；铁律不满足时先补 gap 或 contract。
+3. 读取该任务相关的 contract/gap 摘要；若是前端页面整改，读取 `23-frontend-page-audit-20260628.md` 最新结论区。
+4. 列出本次将读取的后端/前端目标文件。
+5. 先更新 contract 或 gap，再进入代码修改。
+6. 完成后把结论写回本文，并把完成过程压缩为摘要。
 
 ## 当前任务模板
 

@@ -2,14 +2,17 @@ package com.example.dzcom.infrastructure.ai;
 
 import com.example.dzcom.application.command.ai.GenerateInvestmentAnalysisCommand;
 import com.example.dzcom.application.common.exception.BusinessException;
+import com.example.dzcom.application.common.json.Jsons;
+import com.example.dzcom.application.dto.ai.AiModelCallAuditContext;
 import com.example.dzcom.application.dto.ai.AiModelRuntimeConfig;
+import com.example.dzcom.application.service.ai.AiModelCallAuditApplicationService;
 import com.example.dzcom.application.service.ai.InvestmentAnalysisProvider;
 import com.example.dzcom.domain.model.ai.InvestmentAnalysisReport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +28,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * OpenAI 兼容协议投资分析 Provider。
@@ -34,7 +38,6 @@ import java.util.Map;
  * 调用失败，会记录错误日志并阻断任务。</p>
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class MockOpenAiCompatibleInvestmentAnalysisProvider
     implements InvestmentAnalysisProvider {
@@ -43,6 +46,41 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
 
     private final LocalRuleInvestmentAnalysisProvider localRuleProvider;
     private final ObjectMapper objectMapper;
+    private final AiModelCallAuditApplicationService callAudits;
+
+    /**
+     * 构造不启用持久化模型审计的 Provider。
+     *
+     * <p>该构造器保留给直接 new Provider 的单元测试；Spring 运行时使用带
+     * {@link AiModelCallAuditApplicationService} 的构造器，以保证模型调用可审计。</p>
+     *
+     * @param localRuleProvider 本地规则分析 Provider
+     * @param objectMapper JSON 组件
+     */
+    MockOpenAiCompatibleInvestmentAnalysisProvider(
+        LocalRuleInvestmentAnalysisProvider localRuleProvider,
+        ObjectMapper objectMapper
+    ) {
+        this(localRuleProvider, objectMapper, null);
+    }
+
+    /**
+     * 构造生产运行的 OpenAI 兼容投资分析 Provider。
+     *
+     * @param localRuleProvider 本地规则分析 Provider，用于生成远端调用前的可信输入基线
+     * @param objectMapper JSON 组件
+     * @param callAudits 模型调用审计服务，用于持久化输入输出摘要和业务归因
+     */
+    @Autowired
+    public MockOpenAiCompatibleInvestmentAnalysisProvider(
+        LocalRuleInvestmentAnalysisProvider localRuleProvider,
+        ObjectMapper objectMapper,
+        AiModelCallAuditApplicationService callAudits
+    ) {
+        this.localRuleProvider = localRuleProvider;
+        this.objectMapper = objectMapper;
+        this.callAudits = callAudits;
+    }
 
     /**
      * 判断是否支持 OpenAI 兼容协议模型。
@@ -169,6 +207,8 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
         String endpoint = resolveChatCompletionsUrl(modelConfig.baseUrl());
         String userPrompt = prompt(localReport, command);
         Map<String, Object> payload = requestPayload(userPrompt, modelConfig);
+        String callId = UUID.randomUUID().toString();
+        startAudit(callId, localReport, command, modelConfig, endpoint, userPrompt);
         log.info(
             "投资分析模型远端调用开始: requestId={}, modelCode={}, modelVersion={}, providerCode={}, remoteModel={}, endpoint={}, httpMethod=POST, secretRef={}, apiKeyConfigured={}, timeoutSeconds={}, maxTokens={}, temperature={}, userPromptLength={}, userPromptHash={}",
             localReport.requestId(),
@@ -209,6 +249,8 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             );
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 String failureMessage = remoteFailureMessage(response.statusCode(), response.body());
+                failAudit(callId, response.statusCode(), elapsedMs(startedAt), sha256(response.body()),
+                    response.body(), "HTTP_" + response.statusCode(), failureMessage);
                 log.error(
                     "投资分析模型远端调用失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, endpoint={}, httpMethod=POST, httpStatus={}, durationMs={}, failureMessage={}, responseBody={}",
                     localReport.requestId(),
@@ -230,6 +272,13 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
                 content,
                 buildChatSnapshot(payload, content, endpoint, response.statusCode(), elapsedMs(startedAt))
             );
+            succeedAudit(callId, response.statusCode(), elapsedMs(startedAt), sha256(content), content,
+                Map.of(
+                    "reportBizId", report.bizId(),
+                    "confidenceLevel", report.confidenceLevel(),
+                    "dataQualityScore", report.dataQualityScore(),
+                    "contentLength", textLength(content)
+                ));
             log.info(
                 "投资分析模型远端调用完成: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, contentLength={}, contentHash={}, qualityScore={}, confidenceLevel={}",
                 localReport.requestId(),
@@ -244,6 +293,8 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             );
             return report;
         } catch (BusinessException exception) {
+            failAudit(callId, null, elapsedMs(startedAt), "", "",
+                "BUSINESS_EXCEPTION", exception.getMessage());
             log.error(
                 "投资分析模型远端业务失败: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, reason={}",
                 localReport.requestId(),
@@ -256,6 +307,8 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            failAudit(callId, null, elapsedMs(startedAt), "", "",
+                "INTERRUPTED", "OpenAI兼容模型调用被中断");
             log.error(
                 "投资分析模型远端调用被中断: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}",
                 localReport.requestId(),
@@ -266,6 +319,8 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             );
             throw new BusinessException(HttpStatus.BAD_GATEWAY, "OpenAI兼容模型调用被中断");
         } catch (Exception exception) {
+            failAudit(callId, null, elapsedMs(startedAt), "", "",
+                exception.getClass().getSimpleName(), exception.getMessage());
             log.error(
                 "投资分析模型远端调用异常: requestId={}, modelCode={}, modelVersion={}, providerCode={}, durationMs={}, exceptionType={}, reason={}",
                 localReport.requestId(),
@@ -394,6 +449,120 @@ public class MockOpenAiCompatibleInvestmentAnalysisProvider
             localReport.simulatedReturn(),
             localReport.chartPayload()
         );
+    }
+
+    /**
+     * 记录投资报告模型调用开始。
+     *
+     * <p>审计上下文会把报告、闭环运行、组合上下文摘要和模型配置绑定到同一条调用流水，
+     * 便于前端从报告或闭环节点反查模型输入。</p>
+     *
+     * @param callId 单次模型调用追踪标识
+     * @param localReport 本地规则先生成的报告草稿
+     * @param command 报告生成命令
+     * @param modelConfig 模型运行时配置快照
+     * @param endpoint 脱敏后的远端调用地址
+     * @param userPrompt 发送给模型的用户提示词
+     */
+    private void startAudit(
+        String callId,
+        InvestmentAnalysisReport localReport,
+        GenerateInvestmentAnalysisCommand command,
+        AiModelRuntimeConfig modelConfig,
+        String endpoint,
+        String userPrompt
+    ) {
+        if (callAudits == null) {
+            return;
+        }
+        Map<String, Object> portfolioContext = safeJsonMap(command.portfolioContext());
+        callAudits.start(callId, "AUTO_INVESTMENT_REPORT_GENERATION", modelConfig, endpoint,
+            sha256("INVESTMENT_REPORT_SYSTEM_PROMPT"), sha256(userPrompt),
+            "你是投资辅助报告解析器，只能基于输入数据生成JSON。", userPrompt,
+            AiModelCallAuditContext.builder()
+                .businessType("INVESTMENT_REPORT")
+                .businessBizId(localReport.bizId())
+                .businessLabel("投资报告 " + localReport.bizId())
+                .reportBizId(localReport.bizId())
+                .runBizId(text(portfolioContext, "runBizId"))
+                .runNo(text(portfolioContext, "runNo"))
+                .scenarioCode("INVESTMENT_REPORT")
+                .inputSummary(reportInputSummary(localReport, command, portfolioContext))
+                .build());
+    }
+
+    /**
+     * 记录投资报告模型调用成功。
+     *
+     * @param callId 单次模型调用追踪标识
+     * @param httpStatus 远端 HTTP 状态
+     * @param durationMs 调用耗时毫秒
+     * @param responseHash 模型输出哈希
+     * @param responseText 模型输出原文，审计服务会截断保存
+     * @param outputSummary 投资建议、动作数量等可扩展输出摘要
+     */
+    private void succeedAudit(String callId, Integer httpStatus, long durationMs, String responseHash,
+                              String responseText, Map<String, Object> outputSummary) {
+        if (callAudits != null) {
+            callAudits.succeed(callId, httpStatus, durationMs, responseHash, responseText, outputSummary);
+        }
+    }
+
+    /**
+     * 记录投资报告模型调用失败。
+     *
+     * @param callId 单次模型调用追踪标识
+     * @param httpStatus 远端 HTTP 状态，未到达远端时为空
+     * @param durationMs 调用耗时毫秒
+     * @param responseHash 失败响应哈希
+     * @param responseText 失败响应原文，审计服务会截断保存
+     * @param errorCode 结构化错误编码
+     * @param errorMessage 可展示失败原因
+     */
+    private void failAudit(String callId, Integer httpStatus, long durationMs, String responseHash,
+                           String responseText, String errorCode, String errorMessage) {
+        if (callAudits != null) {
+            callAudits.fail(callId, httpStatus, durationMs, responseHash, responseText, errorCode, errorMessage);
+        }
+    }
+
+    /**
+     * 构造投资报告模型输入摘要。
+     *
+     * @param localReport 本地规则先生成的报告草稿
+     * @param command 报告生成命令
+     * @param portfolioContext Mock 组合、闭环运行和候选产品上下文
+     * @return 可被模型调用中心结构化展示的输入摘要
+     */
+    private Map<String, Object> reportInputSummary(
+        InvestmentAnalysisReport localReport,
+        GenerateInvestmentAnalysisCommand command,
+        Map<String, Object> portfolioContext
+    ) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("requestId", localReport.requestId());
+        summary.put("marketScope", localReport.marketScope());
+        summary.put("themeCode", command.themeCode());
+        summary.put("lookbackDays", command.lookbackDays());
+        summary.put("dataQualityScore", localReport.dataQualityScore());
+        summary.put("dataQualityGate", safeJsonMap(localReport.dataQualityGate()));
+        summary.put("portfolioContext", portfolioContext);
+        return summary;
+    }
+
+    /** 将 JSON 文本转为可展示摘要对象。 */
+    private Map<String, Object> safeJsonMap(String value) {
+        try {
+            return Jsons.readObjectMapOrEmpty(value);
+        } catch (Exception exception) {
+            return value == null || value.isBlank() ? Map.of() : Map.of("raw", limit(value, 1200));
+        }
+    }
+
+    /** 从摘要 Map 中读取文本字段。 */
+    private String text(Map<String, Object> value, String key) {
+        Object item = value == null ? null : value.get(key);
+        return item == null ? null : String.valueOf(item);
     }
 
     /**

@@ -151,7 +151,7 @@ public class MockPortfolioController {
         description = "逻辑删除当前用户拥有的普通模拟组合。自动闭环AI资金池不能在页面删除，历史订单和估值仍保留用于审计。"
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "删除成功"),
+        @ApiResponse(responseCode = "200", description = "删除成功", useReturnTypeSchema = true),
         @ApiResponse(responseCode = "400", description = "参数不合法或自动闭环资金池不可删除"),
         @ApiResponse(responseCode = "401", description = "未登录或会话失效"),
         @ApiResponse(responseCode = "403", description = "无权删除该模拟组合"),

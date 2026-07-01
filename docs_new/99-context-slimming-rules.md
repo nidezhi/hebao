@@ -8,6 +8,7 @@
 
 ### 默认读取规则
 
+- **开发铁律优先级高于瘦身本身：开始任何代码任务时，必须先读取并声明本次适用的 `02-frontend-laws.md` / `03-backend-laws.md` 相关条款。瘦身只能减少历史读取，不能省略铁律确认。**
 - 不允许每次任务都重新读取所有历史文档、所有 mock、所有前后端文件。
 - 当前任务只读取：
   - `00-current-handoff.md`
@@ -57,8 +58,8 @@
 一个普通前后端联动任务默认只需要：
 
 1. `dzcom/docs_new/00-current-handoff.md`
-2. `dzcom/docs_new/01-product-contract.md` 的最新结论区
-3. `dzcom/docs_new/02-frontend-laws.md` 或 `03-backend-laws.md` 的相关段落
+2. `dzcom/docs_new/02-frontend-laws.md` 或 `03-backend-laws.md` 的相关段落，且必须先声明本次适用铁律
+3. `dzcom/docs_new/01-product-contract.md` 的最新结论区
 4. `dzcom/docs_new/04-api-contract-rules.md` 的相关段落
 5. `dzcom/docs_new/06-backend-gap-list.md` 中相关 gap
 6. 本次涉及的 Controller/DTO/Service/migration/test
